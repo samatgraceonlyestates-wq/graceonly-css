@@ -1,0 +1,16 @@
+.age {
+  flex-shrink: 0;
+  font-weight: 600;
+}
+
+.neutral {
+  color: var(--fold-dusk);
+}
+
+.amber {
+  color: var(--fold-status-amber-ink);
+}
+
+.red {
+  color: var(--fold-status-red);
+}

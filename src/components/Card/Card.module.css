@@ -1,0 +1,26 @@
+.card {
+  border-radius: var(--fold-radius-card);
+  background: var(--fold-white);
+  box-shadow: var(--fold-shadow-card);
+}
+
+.padMd {
+  padding: var(--fold-space-24);
+}
+
+.padLg {
+  padding: var(--fold-space-32);
+}
+
+.padTable {
+  padding: var(--fold-space-20) var(--fold-space-24) var(--fold-space-24);
+}
+
+@media (max-width: 767px) {
+  .plainOnMobile {
+    padding: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+}

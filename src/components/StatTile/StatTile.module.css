@@ -1,0 +1,114 @@
+/* Mobile first: the compact tile from the mobile design. */
+.tile {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--fold-space-6);
+  min-width: 0;
+  padding: var(--fold-space-14);
+}
+
+.label {
+  color: var(--fold-dusk);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.fullLabel {
+  display: none;
+}
+
+.value {
+  color: var(--fold-burgundy);
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: -1px;
+  line-height: normal;
+}
+
+.green {
+  color: var(--fold-status-green-ink);
+}
+
+.amber {
+  color: var(--fold-status-amber-ink);
+}
+
+.red {
+  color: var(--fold-status-red);
+}
+
+.delta {
+  display: flex;
+  align-items: center;
+  gap: var(--fold-space-6);
+  font-size: 10px;
+}
+
+.deltaValue {
+  color: var(--fold-status-green-ink);
+  font-weight: 600;
+}
+
+.arrow {
+  display: none;
+}
+
+.comparison {
+  display: none;
+  color: var(--fold-smoke);
+}
+
+.caption {
+  color: var(--fold-smoke);
+  font-size: 12px;
+}
+
+.desktopOnly {
+  display: none;
+}
+
+@media (min-width: 768px) {
+  .tile {
+    gap: var(--fold-space-12);
+    padding: var(--fold-space-24);
+  }
+
+  .label {
+    font-size: 10px;
+  }
+
+  .fullLabel {
+    display: inline;
+  }
+
+  .shortLabel {
+    display: none;
+  }
+
+  .value {
+    font-size: 42px;
+    letter-spacing: -1.68px;
+  }
+
+  .delta {
+    font-size: 12px;
+  }
+
+  .arrow {
+    display: inline;
+    margin-right: var(--fold-space-4);
+  }
+
+  .comparison {
+    display: inline;
+    font-weight: 400;
+  }
+
+  .desktopOnly {
+    display: flex;
+  }
+}

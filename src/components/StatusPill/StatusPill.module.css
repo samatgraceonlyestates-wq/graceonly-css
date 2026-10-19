@@ -1,0 +1,37 @@
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--fold-space-6);
+  padding: var(--fold-space-4) var(--fold-space-10);
+  border-radius: var(--fold-radius-pill);
+  background: color-mix(in srgb, var(--pill-color) 12%, transparent);
+  color: var(--fold-dusk);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.dot {
+  width: var(--fold-space-6);
+  height: var(--fold-space-6);
+  border-radius: var(--fold-radius-pill);
+  background: var(--pill-color);
+}
+
+.green {
+  --pill-color: var(--fold-status-green);
+}
+
+.amber {
+  --pill-color: var(--fold-status-amber);
+}
+
+.red {
+  --pill-color: var(--fold-status-red);
+}
+
+.steel {
+  --pill-color: var(--fold-burgundy-steel);
+}

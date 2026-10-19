@@ -10,7 +10,13 @@
   --fold-canvas: #f9f8f6;
   --fold-white: #ffffff;
   --fold-status-green: #16a34a;
+  /* Ink variants exist only for status-coloured TEXT on white: the fills fail
+     AA there (green 3.30:1, amber 3.19:1); the inks pass at 5.02:1. Fills,
+     dots and tints keep the original tokens. */
+  --fold-status-green-ink: #15803d;
   --fold-status-amber: #d97706;
+  --fold-status-amber-ink: #b45309;
+  /* Red needs no ink: it already passes at 4.83:1, so red text uses this. */
   --fold-status-red: #dc2626;
 
   /* radii */
@@ -38,6 +44,7 @@
   --fold-space-18: 18px;
   --fold-space-20: 20px;
   --fold-space-24: 24px;
+  --fold-space-28: 28px;
   --fold-space-32: 32px;
   --fold-space-40: 40px;
 }

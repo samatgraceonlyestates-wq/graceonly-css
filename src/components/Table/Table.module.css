@@ -1,0 +1,31 @@
+.table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.th {
+  padding: var(--fold-space-8) var(--fold-space-16) var(--fold-space-14) 0;
+  border-bottom: 1px solid var(--fold-silver);
+  color: var(--fold-dusk);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.4px;
+  text-align: left;
+  text-transform: uppercase;
+}
+
+.row {
+  border-bottom: 1px solid var(--fold-silver);
+}
+
+.td {
+  padding: var(--fold-space-14) var(--fold-space-16) var(--fold-space-14) 0;
+  color: var(--fold-dusk);
+  font-size: 13px;
+  vertical-align: middle;
+}
+
+.th:last-child,
+.td:last-child {
+  padding-right: 0;
+}

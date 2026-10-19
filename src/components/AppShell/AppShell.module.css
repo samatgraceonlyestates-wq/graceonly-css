@@ -1,0 +1,177 @@
+/* Mobile first: plain top bar + bottom tab bar. Floating nav from 768px up. */
+.shell {
+  --tabbar-height: 56px;
+  min-height: 100vh;
+}
+
+.bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 60px;
+  padding: var(--fold-space-10) var(--fold-space-20);
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: var(--fold-space-8);
+}
+
+.logoMark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--fold-radius-8);
+  background: var(--fold-burgundy);
+  color: var(--fold-gold);
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.brandName {
+  color: var(--fold-burgundy);
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.56px;
+}
+
+.links,
+.avatarDesktop {
+  display: none;
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: var(--fold-space-10);
+}
+
+.newVisit {
+  display: flex;
+}
+
+.avatarMobile {
+  display: flex;
+}
+
+.linkList,
+.tabList {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.linkList {
+  display: flex;
+  align-items: center;
+  gap: var(--fold-space-28);
+}
+
+.link {
+  color: var(--fold-burgundy);
+  font-size: 14px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+/* Gold on white is only 2.93:1, so the active link also carries weight and an
+   underline: it is not signalled by colour alone. */
+.linkActive {
+  color: var(--fold-gold);
+  font-weight: 600;
+  text-decoration: underline;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 6px;
+}
+
+.main {
+  padding: 0 var(--fold-space-20)
+    calc(var(--tabbar-height) + var(--fold-space-24) + env(safe-area-inset-bottom));
+}
+
+/* Placeholder bottom tab bar, not in Figma (see TabBar.tsx). */
+.tabBar {
+  position: fixed;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 10;
+  padding-bottom: env(safe-area-inset-bottom);
+  border-top: 1px solid var(--fold-silver);
+  background: var(--fold-white);
+}
+
+.tabList {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+}
+
+.tab {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: var(--tabbar-height);
+  color: var(--fold-dusk);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.tabActive {
+  color: var(--fold-burgundy);
+  font-weight: 600;
+}
+
+.brand:focus-visible,
+.link:focus-visible,
+.tab:focus-visible {
+  outline: 2px solid var(--fold-gold);
+  outline-offset: 2px;
+}
+
+@media (min-width: 768px) {
+  .header {
+    padding: var(--fold-space-32) var(--fold-space-24) 0;
+  }
+
+  .bar {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: var(--fold-space-10) var(--fold-space-8) var(--fold-space-10) var(--fold-space-20);
+    border-radius: var(--fold-radius-nav);
+    background: var(--fold-white);
+    box-shadow: var(--fold-shadow-nav);
+  }
+
+  .logoMark {
+    width: 26px;
+    height: 26px;
+    border-radius: var(--fold-radius-logo);
+    font-size: 14px;
+  }
+
+  .links {
+    display: block;
+  }
+
+  .avatarDesktop {
+    display: flex;
+  }
+
+  .avatarMobile {
+    display: none;
+  }
+
+  /* 36px is the gap from the bottom of the nav to the content in Figma. */
+  .main {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 36px var(--fold-space-24) var(--fold-space-40);
+  }
+
+  .tabBar {
+    display: none;
+  }
+}

@@ -1,0 +1,18 @@
+.time {
+  flex-shrink: 0;
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+.green {
+  color: var(--fold-status-green-ink);
+}
+
+.amber {
+  color: var(--fold-status-amber-ink);
+}
+
+.red {
+  color: var(--fold-status-red);
+}

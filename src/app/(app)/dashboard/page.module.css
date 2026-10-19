@@ -1,0 +1,195 @@
+/* Mobile first (Figma 24:125). Desktop (Figma 24:2) from 768px up. */
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--fold-space-12);
+}
+
+.desktopOnly {
+  display: none;
+}
+
+.mobileOnly {
+  display: inline;
+}
+
+/* ---------- KPI row ---------- */
+
+.kpis {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--fold-space-10);
+}
+
+/* ---------- panels ---------- */
+
+.panels {
+  display: flex;
+  flex-direction: column;
+}
+
+.panelHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--fold-space-24) 0 var(--fold-space-12);
+}
+
+.panelTitle {
+  color: var(--fold-burgundy);
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: -0.6px;
+}
+
+.panelLink {
+  color: var(--fold-gold);
+  font-size: 13px;
+  text-decoration: underline;
+}
+
+.panelLink:focus-visible {
+  outline: 2px solid var(--fold-gold);
+  outline-offset: 2px;
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--fold-space-10);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* On mobile every row is its own small card. */
+.row {
+  display: flex;
+  align-items: center;
+  gap: var(--fold-space-12);
+  padding: var(--fold-space-14) var(--fold-space-16);
+  border-radius: var(--fold-radius-card);
+  background: var(--fold-white);
+  box-shadow: var(--fold-shadow-subtle);
+}
+
+.visitPerson {
+  flex: 1;
+  --person-gap: var(--fold-space-12);
+}
+
+.visitChip {
+  display: none;
+}
+
+/* ---------- complaint rows ---------- */
+
+.complaint {
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--fold-space-6);
+}
+
+.complaintTop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--fold-space-12);
+}
+
+.complaintTitle {
+  color: var(--fold-burgundy);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.age {
+  font-size: 12px;
+}
+
+.complaintMeta {
+  color: var(--fold-smoke);
+  font-size: 12px;
+}
+
+/* ---------- desktop ---------- */
+
+@media (min-width: 768px) {
+  .page {
+    gap: var(--fold-space-32);
+  }
+
+  .desktopOnly {
+    display: inline;
+  }
+
+  .mobileOnly {
+    display: none;
+  }
+
+  .kpis {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: var(--fold-space-16);
+  }
+
+  .panelHeader {
+    padding: 0;
+  }
+
+  .panelTitle {
+    font-size: 24px;
+    letter-spacing: -0.72px;
+  }
+
+  .panelLink {
+    font-size: 14px;
+  }
+
+  /* Inside the white card, rows are ruled lines rather than cards. */
+  .panel {
+    display: flex;
+    flex-direction: column;
+    gap: var(--fold-space-16);
+  }
+
+  .list {
+    gap: 0;
+  }
+
+  .row {
+    gap: var(--fold-space-14);
+    padding: var(--fold-space-14) 0;
+    border-top: 1px solid var(--fold-silver);
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+
+  .visitPerson {
+    --person-gap: var(--fold-space-14);
+  }
+
+  .visitChip {
+    display: inline-flex;
+  }
+
+  .complaint {
+    gap: var(--fold-space-6);
+  }
+}
+
+/* Two columns only where there is room; stacked below that. */
+@media (min-width: 1024px) {
+  .panels {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--fold-space-16);
+    align-items: start;
+  }
+}
+
+@media (min-width: 768px) and (max-width: 1023px) {
+  .panels {
+    gap: var(--fold-space-16);
+  }
+}

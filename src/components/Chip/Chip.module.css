@@ -1,0 +1,12 @@
+.chip {
+  display: inline-flex;
+  padding: var(--fold-space-4) var(--fold-space-10);
+  border-radius: var(--fold-radius-pill);
+  background: var(--fold-canvas);
+  color: var(--fold-dusk);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
