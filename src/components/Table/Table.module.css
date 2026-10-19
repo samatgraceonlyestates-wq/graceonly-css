@@ -1,5 +1,7 @@
+/* Desktop table (Figma 26:26 / 32:52). Fixed layout so per-column widths hold. */
 .table {
   width: 100%;
+  table-layout: fixed;
   border-collapse: collapse;
 }
 
@@ -18,7 +20,10 @@
   border-bottom: 1px solid var(--fold-silver);
 }
 
+/* Rows are at least 40px of content plus the 14px padding either side
+   (Figma's visitor / staff cell is 40px tall). */
 .td {
+  height: calc(40px + var(--fold-space-14) * 2);
   padding: var(--fold-space-14) var(--fold-space-16) var(--fold-space-14) 0;
   color: var(--fold-dusk);
   font-size: 13px;
@@ -28,4 +33,51 @@
 .th:last-child,
 .td:last-child {
   padding-right: 0;
+}
+
+/* Mobile: every row is its own card (Figma 26:147 / 32:168). */
+@media (max-width: 767px) {
+  .table {
+    display: block;
+  }
+
+  /* Header row stays in the accessibility tree but is not shown. */
+  .thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+
+  .tbody {
+    display: flex;
+    flex-direction: column;
+    gap: var(--table-card-gap, var(--fold-space-10));
+  }
+
+  .row {
+    display: grid;
+    align-items: center;
+    column-gap: var(--fold-space-12);
+    row-gap: var(--fold-space-10);
+    padding: var(--table-card-pad-y, var(--fold-space-14)) var(--table-card-pad-x, var(--fold-space-16));
+    border-bottom: 0;
+    border-radius: var(--fold-radius-card);
+    background: var(--fold-white);
+    box-shadow: var(--fold-shadow-subtle);
+  }
+
+  .td {
+    display: block;
+    height: auto;
+    min-width: 0;
+    padding: 0;
+  }
+
+  .hideOnMobile {
+    display: none;
+  }
 }

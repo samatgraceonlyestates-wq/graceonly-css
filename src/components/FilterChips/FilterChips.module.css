@@ -1,0 +1,64 @@
+/* Mobile first (Figma 26:155): 11px label, 10px count. Desktop from 768px. */
+.list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--fold-space-8);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.chip {
+  display: flex;
+  align-items: center;
+  gap: var(--fold-space-6);
+  padding: 7px var(--fold-space-12);
+  border: 1px solid var(--fold-silver);
+  border-radius: var(--fold-radius-pill);
+  background: var(--fold-white);
+}
+
+.label {
+  color: var(--fold-burgundy);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+/* Figma's smoke count is 2.75:1 on white and fails AA, so --fold-dusk. */
+.count {
+  color: var(--fold-dusk);
+  font-size: 10px;
+}
+
+.selected {
+  border-color: var(--fold-burgundy);
+  background: var(--fold-burgundy);
+}
+
+.selected .label {
+  color: var(--fold-white);
+}
+
+/* Figma's gold count on burgundy is 3.70:1 and fails AA, so white. */
+.selected .count {
+  color: var(--fold-white);
+}
+
+@media (min-width: 768px) {
+  .list {
+    gap: var(--fold-space-10);
+  }
+
+  .chip {
+    gap: var(--fold-space-8);
+    padding: var(--fold-space-8) var(--fold-space-14);
+  }
+
+  .label {
+    font-size: 12px;
+  }
+
+  .count {
+    font-size: 11px;
+  }
+}

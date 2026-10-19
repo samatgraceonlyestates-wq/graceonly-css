@@ -1,0 +1,83 @@
+/* Mobile first (Figma 26:147). Desktop (Figma 26:2) from 768px up. */
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--fold-space-10);
+}
+
+/* One person cell per row: 32px avatar with the sub line on mobile, 36px
+   avatar and no sub line on desktop (the Type column carries it there). */
+.person {
+  --avatar-size: 32px;
+  --avatar-font: 13px;
+  --person-sub-display: block;
+}
+
+/* Chip and time text that differ by breakpoint. */
+.desktopInline {
+  display: none;
+}
+
+.mobileInline {
+  display: inline;
+}
+
+/* Mobile card: person and elapsed on top; chip, check-in time and the
+   Check out button along the bottom. Type and Status are hidden here. */
+@media (max-width: 767px) {
+  .row {
+    grid-template-columns: auto 1fr auto;
+    grid-template-areas:
+      "person person time"
+      "chip when action";
+  }
+
+  .cellPerson {
+    grid-area: person;
+  }
+
+  .cellTime {
+    grid-area: time;
+    justify-self: end;
+  }
+
+  .cellChip {
+    grid-area: chip;
+  }
+
+  .cellWhen {
+    grid-area: when;
+    justify-self: end;
+    color: var(--fold-dusk);
+    font-size: 11px;
+  }
+
+  .cellAction {
+    grid-area: action;
+    justify-self: end;
+  }
+}
+
+@media (min-width: 768px) {
+  .page {
+    gap: var(--fold-space-24);
+  }
+
+  .person {
+    --avatar-size: 36px;
+    --avatar-font: 14px;
+    --person-sub-display: none;
+  }
+
+  .mobileInline {
+    display: none;
+  }
+
+  .desktopInline {
+    display: inline;
+  }
+
+  .cellAction {
+    text-align: right;
+  }
+}

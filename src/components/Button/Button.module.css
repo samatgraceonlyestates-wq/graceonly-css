@@ -4,13 +4,16 @@
   justify-content: center;
   border: 0;
   border-radius: var(--fold-radius-pill);
-  background: var(--fold-burgundy);
-  box-shadow: var(--fold-shadow-subtle);
-  color: var(--fold-white);
   font: inherit;
   font-weight: 600;
   white-space: nowrap;
   cursor: pointer;
+}
+
+.primary {
+  background: var(--fold-burgundy);
+  box-shadow: var(--fold-shadow-subtle);
+  color: var(--fold-white);
 }
 
 .default {
@@ -21,6 +24,15 @@
 .compact {
   padding: var(--fold-space-12) var(--fold-space-20);
   font-size: 13px;
+}
+
+.rowAction {
+  min-height: 32px;
+  padding: 0 var(--fold-space-14);
+  border: 1.5px solid var(--fold-burgundy-steel);
+  background: var(--fold-white);
+  color: var(--fold-burgundy-steel);
+  font-size: 12px;
 }
 
 .button:focus-visible {

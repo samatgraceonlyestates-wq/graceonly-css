@@ -1,29 +1,37 @@
+/* Size comes from --avatar-size and --avatar-font. The fixed sizes set them
+   on the element itself; "responsive" sets nothing, so an ancestor can set
+   them per breakpoint (fallback 36px / 14px). */
 .avatar {
   display: inline-flex;
   flex-shrink: 0;
   align-items: center;
   justify-content: center;
+  width: var(--avatar-size, 36px);
+  height: var(--avatar-size, 36px);
   border-radius: var(--fold-radius-pill);
+  font-size: var(--avatar-font, 14px);
   font-weight: 700;
   line-height: 1;
 }
 
+.size32 {
+  --avatar-size: 32px;
+  --avatar-font: 13px;
+}
+
 .size36 {
-  width: 36px;
-  height: 36px;
-  font-size: 14px;
+  --avatar-size: 36px;
+  --avatar-font: 14px;
 }
 
 .size40 {
-  width: 40px;
-  height: 40px;
-  font-size: 15px;
+  --avatar-size: 40px;
+  --avatar-font: 15px;
 }
 
 .size72 {
-  width: 72px;
-  height: 72px;
-  font-size: 30px;
+  --avatar-size: 72px;
+  --avatar-font: 30px;
 }
 
 .soft {

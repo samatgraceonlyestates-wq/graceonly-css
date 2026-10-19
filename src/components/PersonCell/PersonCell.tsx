@@ -6,14 +6,18 @@ import styles from "./PersonCell.module.css";
 type Props = {
   name: string;
   sub?: ReactNode;
-  // The avatar-to-text gap defaults to 12px; a caller can set --person-gap.
+  size?: 32 | 36 | "responsive"; // passed straight through to Avatar
+  // A caller's className can set custom properties on this element:
+  //   --person-gap          avatar-to-text gap (default 12px)
+  //   --person-sub-display  "none" hides the sub line at a breakpoint
+  //   --avatar-size / --avatar-font  when size="responsive"
   className?: string;
 };
 
-export function PersonCell({ name, sub, className }: Props) {
+export function PersonCell({ name, sub, size = 36, className }: Props) {
   return (
     <div className={cx(styles.person, className)}>
-      <Avatar name={name} />
+      <Avatar name={name} size={size} />
       <div className={styles.text}>
         <span className={styles.name}>{name}</span>
         {sub ? <span className={styles.sub}>{sub}</span> : null}

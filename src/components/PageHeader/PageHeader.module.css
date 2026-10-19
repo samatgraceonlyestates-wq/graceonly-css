@@ -1,4 +1,4 @@
-/* Mobile first (40px title); 64px from 768px up, as in the desktop frames. */
+/* Mobile first (36px title, one size for every screen); 64px from 768px up. */
 .header {
   display: flex;
   align-items: flex-end;
@@ -24,9 +24,9 @@
 
 .title {
   color: var(--fold-burgundy);
-  font-size: 40px;
+  font-size: 36px;
   font-weight: 700;
-  letter-spacing: -1.6px;
+  letter-spacing: -1.44px;
   line-height: 0.9;
 }
 

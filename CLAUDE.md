@@ -33,7 +33,7 @@ properties and never hardcode a hex anywhere else.
 --fold-burgundy-steel:  #9f6672   /* secondary/outline buttons, borders */
 --fold-gold:            #b8921f   /* accent: links, logo mark, highlights */
 --fold-dusk:            #7a525e   /* body text, labels */
---fold-smoke:           #ae969b   /* placeholder text, muted */
+--fold-smoke:           #ae969b   /* PLACEHOLDER text only (see rule below) */
 --fold-silver:          #d9cdd0   /* borders, table rules */
 --fold-mist:            #ede4e1   /* avatar and panel fills */
 --fold-canvas:          #f9f8f6   /* page background, input fills, chips */
@@ -51,6 +51,11 @@ amber is TEXT on white (elapsed timer, KPI deltas, complaint age). Fills,
 dots and pill tints keep the original tokens. Red needs no ink: it already
 passes at 4.83:1, so red text uses --fold-status-red. The Figma file should
 be updated to add the two ink colours to match.
+
+GLOBAL RULE: --fold-smoke is for PLACEHOLDER text only (today: the login
+input placeholders). It is 2.75:1 on white and fails AA. Any text that
+carries real information (sub lines, captions, comparison text, times,
+counts) uses --fold-dusk (6.57:1), whatever the Figma file says.
 
 There is NO dark mode. The page background is canvas; surfaces are white.
 
@@ -96,15 +101,29 @@ Table rows: 14px vertical padding, 16px column gap, 1px silver bottom rule.
     login     16px text, 24px/14px padding, full width (login submit only;
               16px stops iOS zooming the page on focus)
 - Button, row action: white fill, 1.5px burgundy-steel border,
-  burgundy-steel text, 12px semibold, 32px tall, pill.
+  burgundy-steel text (4.55:1 on white), 12px semibold, 32px tall, pill.
+  Built; used for "Check out" (03) and later "Open →" (06).
 - Input: canvas fill, 1px silver border, 48px tall, pill, 16px text,
   smoke placeholder. Label above it in 10px uppercase dusk.
 - Chip / tag: canvas fill, 10px uppercase dusk label, pill, 10px/4px.
 - Status pill: dot + 10px uppercase label, pill, 10px/4px. HUGS its
   content; never stretches to fill a table column (Figma's stretch is an
   auto-layout side effect).
+- Filter chips (FilterChips): white fill, 1px silver border, burgundy
+  label, --fold-dusk count (Figma's smoke is 2.75:1). Selected is burgundy
+  fill with a white label and a WHITE count (Figma's gold count on burgundy
+  is 3.70:1, below AA). STATIC for now: read-only counts, no pointer
+  cursor, no hover. Counts are computed from the data.
+- Tables stack into cards below 768px (the 03 and 08 mobile designs both do
+  this; never a horizontal scroll). The table primitives supply the card
+  chrome and hide the header row; each screen sets the grid areas and marks
+  cells that do not appear on mobile. 08's cards are denser (14/12 padding,
+  8px gap): override --table-card-pad-x, --table-card-pad-y and
+  --table-card-gap.
+- Mobile page titles are 36px on every screen (one size, no prop). 08's
+  mobile frame draws 32px; it uses 36px.
 - Avatar: circle (--fold-radius-pill). 36px mist fill with burgundy
-  initial in lists; solid burgundy with gold initial for the signed-in user
+  initial in lists; 32px in mobile cards; solid burgundy with gold initial for the signed-in user
   (36px mobile top bar, 40px nav) and the visit-detail hero (72px).
 - Card: white, 12px radius, card shadow.
 - Floating nav (login): white, 24px radius, nav shadow, 24px/14px padding,
@@ -157,6 +176,21 @@ do not mirror the defect in CSS.
   (ink), over 72 hours red. Sample raised-at times must agree.
 - Timers tick from the browser clock, which can be wrong. TODO: the server
   already sends its render time (asOf); use it to correct client drift.
+  All timers (ElapsedTime, ComplaintAge, VisitStatus) share ONE interval via
+  src/lib/useNow.ts; never add a per-component setInterval.
+- Visit status is derived from elapsed time, never stored: on track under
+  10 minutes, long 10 to 30, overdue over 30 (VisitStatus).
+- The visit list lives once in sampleData.ts (getVisitsSample). The
+  dashboard shows the first five; 03 shows all seven. Each visit carries a
+  short and a long reason label.
+- "Check out" (03) renders enabled and is wired to nothing, with a TODO;
+  it has no backend yet.
+- Design colours that do not survive a contrast check, so far: status
+  fills as text (green 3.30, amber 3.19; fixed by the ink tokens), smoke as
+  text (2.75; fixed by the global smoke rule, informational text is dusk),
+  the selected filter chip's gold count on burgundy (3.70; now white), and
+  gold as text (2.93; the active nav link keeps gold but adds weight and an
+  underline).
 
 ## Screens — all eight exist in Figma, desktop + mobile
 
