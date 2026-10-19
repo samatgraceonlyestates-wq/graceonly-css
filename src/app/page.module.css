@@ -1,0 +1,8 @@
+﻿.page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--fold-space-16);
+  text-align: center;
+}

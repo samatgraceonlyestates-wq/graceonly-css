@@ -1,0 +1,37 @@
+﻿:root {
+  /* colour */
+  --fold-burgundy: #800020;
+  --fold-burgundy-steel: #9f6672;
+  --fold-gold: #b8921f;
+  --fold-dusk: #7a525e;
+  --fold-smoke: #ae969b;
+  --fold-silver: #d9cdd0;
+  --fold-mist: #ede4e1;
+  --fold-canvas: #f9f8f6;
+  --fold-white: #ffffff;
+  --fold-status-green: #16a34a;
+  --fold-status-amber: #d97706;
+  --fold-status-red: #dc2626;
+
+  /* radii */
+  --fold-radius-sm: 4px;
+  --fold-radius-logo: 7px;
+  --fold-radius-card: 12px;
+  --fold-radius-avatar: 18px;
+  --fold-radius-nav: 24px;
+  --fold-radius-pill: 9999px;
+
+  /* shadows */
+  --fold-shadow-subtle: 0 1px 4px rgba(128, 0, 32, 0.1);
+  --fold-shadow-nav: 0 6px 16px rgba(128, 0, 32, 0.12);
+  --fold-shadow-card: 0 9px 25px rgba(128, 0, 32, 0.12);
+
+  /* spacing */
+  --fold-space-4: 4px;
+  --fold-space-6: 6px;
+  --fold-space-8: 8px;
+  --fold-space-12: 12px;
+  --fold-space-16: 16px;
+  --fold-space-24: 24px;
+  --fold-space-32: 32px;
+}
