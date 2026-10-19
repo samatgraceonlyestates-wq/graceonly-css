@@ -16,6 +16,7 @@
   /* radii */
   --fold-radius-sm: 4px;
   --fold-radius-logo: 7px;
+  --fold-radius-8: 8px;
   --fold-radius-card: 12px;
   --fold-radius-avatar: 18px;
   --fold-radius-nav: 24px;
@@ -30,8 +31,13 @@
   --fold-space-4: 4px;
   --fold-space-6: 6px;
   --fold-space-8: 8px;
+  --fold-space-10: 10px;
   --fold-space-12: 12px;
+  --fold-space-14: 14px;
   --fold-space-16: 16px;
+  --fold-space-18: 18px;
+  --fold-space-20: 20px;
   --fold-space-24: 24px;
   --fold-space-32: 32px;
+  --fold-space-40: 40px;
 }

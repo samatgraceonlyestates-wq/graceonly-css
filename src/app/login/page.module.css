@@ -1,0 +1,335 @@
+﻿/* Mobile first (Figma 23:50, 390 wide). Desktop (Figma 23:2) from 768px up.
+   Off-scale lengths (5, 10, 20, 40, 84 ...) are taken straight from Figma. */
+
+.page {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+
+/* ---------- brand + nav ---------- */
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: var(--fold-space-8);
+  height: 60px;
+  padding: var(--fold-space-20) var(--fold-space-24);
+}
+
+.navWrap {
+  display: none;
+}
+
+.logoMark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--fold-radius-8);
+  background: var(--fold-burgundy);
+  color: var(--fold-gold);
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.brandName {
+  color: var(--fold-burgundy);
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.56px;
+}
+
+/* ---------- hero ---------- */
+
+.hero {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--fold-space-12);
+  padding: var(--fold-space-40) var(--fold-space-24) 0;
+}
+
+/* Leftover height above and below the card. The 128:113 ratio puts the card
+   top at y=400 on Figma's 390x844 frame; on shorter screens both shrink and
+   the card stays fully on screen. */
+.spaceTop {
+  flex: 128 1 0;
+  min-height: 0;
+}
+
+.spaceBottom {
+  flex: 113 1 0;
+  min-height: var(--fold-space-12);
+}
+
+.tag {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--fold-space-6);
+  /* 5px is a literal in Figma (the mobile tag is the desktop tag scaled ~0.83),
+     not a scale step, so it is deliberately not a token. */
+  padding: 5px var(--fold-space-10);
+  border: 1px solid var(--fold-silver);
+  border-radius: var(--fold-radius-pill);
+  background: var(--fold-white);
+  color: var(--fold-burgundy);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.9px;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.tagDot {
+  width: 5px;
+  height: 5px;
+  border-radius: var(--fold-radius-pill);
+  background: var(--fold-gold);
+}
+
+.tagTextDesktop {
+  display: none;
+}
+
+.headline {
+  color: var(--fold-burgundy);
+  font-size: 42px;
+  font-weight: 700;
+  line-height: 0.95;
+  letter-spacing: -1.68px;
+}
+
+.headline span {
+  display: block;
+}
+
+.lede {
+  max-width: 342px;
+  font-size: 15px;
+  line-height: 1.41;
+}
+
+.ledeExtra {
+  display: none;
+}
+
+/* ---------- card ---------- */
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--fold-space-12);
+  width: 100%;
+  padding: var(--fold-space-24) var(--fold-space-20);
+  border-radius: var(--fold-radius-card);
+  background: var(--fold-white);
+  box-shadow: var(--fold-shadow-card);
+}
+
+.cardTitle {
+  color: var(--fold-burgundy);
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: -0.6px;
+}
+
+.cardTitleDesktop {
+  display: none;
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--fold-space-12);
+}
+
+.label {
+  color: var(--fold-dusk);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+}
+
+.input {
+  width: 100%;
+  height: 44px;
+  padding: 0 var(--fold-space-14);
+  border: 1px solid var(--fold-silver);
+  border-radius: var(--fold-radius-pill);
+  background: var(--fold-canvas);
+  color: var(--fold-dusk);
+  font: inherit;
+  /* Keep at 16px: iOS zooms the page on focus for anything smaller (Figma's 15px is wrong here). */
+  font-size: 16px;
+}
+
+.input::placeholder {
+  color: var(--fold-smoke);
+  opacity: 1;
+}
+
+.submit {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  padding: var(--fold-space-14) var(--fold-space-24);
+  border: 0;
+  border-radius: var(--fold-radius-pill);
+  background: var(--fold-burgundy);
+  box-shadow: var(--fold-shadow-subtle);
+  color: var(--fold-white);
+  font: inherit;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.forgot {
+  align-self: flex-start;
+  color: var(--fold-gold);
+  font-size: 13px;
+  text-decoration: underline;
+}
+
+.input:focus-visible,
+.submit:focus-visible,
+.forgot:focus-visible {
+  outline: 2px solid var(--fold-gold);
+  outline-offset: 2px;
+}
+
+/* ---------- desktop ---------- */
+
+@media (min-width: 768px) {
+  .page {
+    display: block;
+    padding-bottom: 96px;
+  }
+
+  .spaceTop,
+  .spaceBottom {
+    display: none;
+  }
+
+  .brand {
+    display: none;
+  }
+
+  .navWrap {
+    display: flex;
+    justify-content: center;
+    padding: var(--fold-space-32) var(--fold-space-16) 0;
+  }
+
+  .nav {
+    display: flex;
+    align-items: center;
+    gap: var(--fold-space-24);
+    padding: var(--fold-space-14) var(--fold-space-24);
+    border-radius: var(--fold-radius-nav);
+    background: var(--fold-white);
+    box-shadow: var(--fold-shadow-nav);
+  }
+
+  .navLogo {
+    display: flex;
+    align-items: center;
+    gap: var(--fold-space-8);
+  }
+
+  .logoMark {
+    width: 26px;
+    height: 26px;
+    border-radius: var(--fold-radius-logo);
+    font-size: 14px;
+  }
+
+  .hero {
+    align-items: center;
+    gap: var(--fold-space-24);
+    padding: 84px var(--fold-space-24) 0;
+    text-align: center;
+  }
+
+  .tag {
+    gap: var(--fold-space-8);
+    padding: var(--fold-space-6) var(--fold-space-12);
+    box-shadow: var(--fold-shadow-subtle);
+    font-size: 10px;
+    letter-spacing: 1px;
+  }
+
+  .tagDot {
+    width: var(--fold-space-6);
+    height: var(--fold-space-6);
+  }
+
+  .tagTextDesktop {
+    display: inline;
+  }
+
+  .tagTextMobile {
+    display: none;
+  }
+
+  .headline {
+    font-size: 100px;
+    line-height: 0.91;
+    letter-spacing: -5px;
+  }
+
+  .lede {
+    max-width: 560px;
+    font-size: 18px;
+    letter-spacing: -0.54px;
+  }
+
+  .ledeExtra {
+    display: inline;
+  }
+
+  .card {
+    max-width: 440px;
+    min-height: 400px;
+    /* Figma has a 16px spacer frame between lede and card, plus the flex gap. */
+    margin-top: calc(var(--fold-space-16) + var(--fold-space-24));
+    padding: var(--fold-space-32);
+    gap: var(--fold-space-16);
+    text-align: left;
+  }
+
+  .cardTitle {
+    font-size: 24px;
+    letter-spacing: -0.72px;
+  }
+
+  .cardTitleDesktop {
+    display: inline;
+  }
+
+  .cardTitleMobile {
+    display: none;
+  }
+
+  .form {
+    gap: var(--fold-space-16);
+  }
+
+  .input {
+    height: 48px;
+    /* Figma puts the text 19px from the outer edge: 18px padding + 1px border. */
+    padding: 0 var(--fold-space-18);
+  }
+
+  .forgot {
+    font-size: 14px;
+  }
+}
