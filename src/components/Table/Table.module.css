@@ -1,7 +1,11 @@
-/* Desktop table (Figma 26:26 / 32:52). Fixed layout so per-column widths hold. */
+/* Desktop table (Figma 26:26 / 32:52). Fixed layout so per-column widths hold.
+   A screen whose card can be narrower than its columns sets --table-layout: auto
+   on the table: under `fixed`, explicit column widths that add up to more than
+   the card make the TABLE wider than the card (its row rules and last column
+   spill out); under `auto` the columns share the card and can never exceed it. */
 .table {
   width: 100%;
-  table-layout: fixed;
+  table-layout: var(--table-layout, fixed);
   border-collapse: collapse;
 }
 

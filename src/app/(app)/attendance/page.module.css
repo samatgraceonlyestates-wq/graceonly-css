@@ -121,9 +121,24 @@
   font-size: 12px;
 }
 
-/* No avatars in this table, so rows are text height (16px) plus padding. */
+/* No avatars in this table, so rows are text height (16px) plus padding.
+   --table-layout: auto, NOT the Table's default `fixed`. Figma draws the columns
+   at fixed x positions (Day 0, Clock in 196, Clock out 322, Duration 458, Status
+   584) inside a 568px-wide card, so its Status column already sits OUTSIDE the
+   card. Copied as fixed pixel widths they total 584px; in the desktop two-column
+   layout the card is only 432 to 543px inside, `fixed` obeys the widths, the
+   table becomes 584px and its row rules run out of the card (and the Status
+   column collapses to nothing). With `auto` the columns share whatever the card
+   has. Only the Day column keeps a width (196px, on its header cell). */
 .weekTable {
   --table-cell-min-height: 16px;
+  --table-layout: auto;
+}
+
+/* The times, the duration and the status pill never wrap; the day name may, when
+   the card is at its narrowest. Two classes so it beats the Table's cell styles. */
+.row .nowrap {
+  white-space: nowrap;
 }
 
 /* On mobile the day cell carries the whole row: a dot and the day on the left,
@@ -275,7 +290,9 @@
 @media (min-width: 1024px) {
   .body {
     display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    /* Figma 31:27 / 31:77: the week card is 616px and the totals 568px (a 616:568
+       split, not two equal halves), which gives the table 48px more room. */
+    grid-template-columns: minmax(0, 616fr) minmax(0, 568fr);
     align-items: start;
   }
 }

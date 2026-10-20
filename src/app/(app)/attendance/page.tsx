@@ -278,9 +278,9 @@ export default async function MyAttendancePage({
             <TableHead>
               <TableRow>
                 <TableHeaderCell width="196px">Day</TableHeaderCell>
-                <TableHeaderCell width="126px">Clock in</TableHeaderCell>
-                <TableHeaderCell width="136px">Clock out</TableHeaderCell>
-                <TableHeaderCell width="126px">Duration</TableHeaderCell>
+                <TableHeaderCell>Clock in</TableHeaderCell>
+                <TableHeaderCell>Clock out</TableHeaderCell>
+                <TableHeaderCell>Duration</TableHeaderCell>
                 <TableHeaderCell>Status</TableHeaderCell>
               </TableRow>
             </TableHead>
@@ -304,14 +304,16 @@ export default async function MyAttendancePage({
                     </span>
                     <span className={styles.summary}>{row.summary}</span>
                   </TableCell>
-                  <TableCell hideOnMobile className={cx(row.late && styles.late)}>
+                  <TableCell hideOnMobile className={cx(styles.nowrap, row.late && styles.late)}>
                     {row.clockIn}
                   </TableCell>
-                  <TableCell hideOnMobile>{row.clockOut}</TableCell>
-                  <TableCell hideOnMobile className={styles.strong}>
+                  <TableCell hideOnMobile className={styles.nowrap}>
+                    {row.clockOut}
+                  </TableCell>
+                  <TableCell hideOnMobile className={cx(styles.nowrap, styles.strong)}>
                     {row.duration}
                   </TableCell>
-                  <TableCell hideOnMobile>
+                  <TableCell hideOnMobile className={styles.nowrap}>
                     {row.pill ? (
                       <StatusPill tone={row.pill.tone}>{row.pill.label}</StatusPill>
                     ) : (

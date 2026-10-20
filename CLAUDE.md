@@ -308,7 +308,8 @@ do not mirror the defect in CSS.
   (silver, "nothing to report yet"); Duration plusMs (a running total that
   ticks with the open shift); StatTile value and caption accept a live
   readout, and captions show on mobile except on dense tiles; Table
-  --table-cell-min-height (default 40px).
+  --table-cell-min-height (default 40px); Table --table-layout (default fixed;
+  auto when a card can be narrower than its fixed columns, see the divergences).
 - More extension points, added for 06: StatusPill size="badge" (dot-less
   count) and onDark (white pill on burgundy); ComplaintAge until (a resolved
   case's age freezes at resolvedAt, neutral) and --complaint-age-weight (size
@@ -344,6 +345,12 @@ of fidelity. Recorded so nobody "fixes" them back:
   silver label on a silver fill (invisible, and unlike 08, which uses steel):
   drift, corrected here; the Figma file should be fixed at source.
 - 07's mobile week card is 24px padded (the shared Card), not Figma's 20px.
+- 07's week table is FLUID (Table --table-layout: auto), not Figma's fixed pixel
+  columns. Figma 31:2 draws the Status column at x=584 inside a 568px inner
+  width, i.e. OUTSIDE its own card; copied as fixed widths (584px in total) the
+  table overflowed the card and its row rules ran out into the gap beside the
+  totals. Only the Day column keeps a width (196px). The body grid is also Figma's
+  616:568 split (31:27 / 31:77), not two equal halves. Fix the Figma file at source.
 
 ## Decisions (owner)
 
