@@ -375,11 +375,9 @@ export type ReleaseReason = (typeof RELEASE_REASONS)[number];
 /** UNAVAILABLE cannot appear in a 200: any undecidable purchase makes the whole response a 503. */
 export type ReleaseReasonInAnswer = Exclude<ReleaseReason, "UNAVAILABLE">;
 
-// Exactly six slots, always all present, in this order. OTHER is NOT a slot.
-// Labels come from the portal (for example "Deed of Assignment", "Provisional
-// Survey Plan", "Receipt of Payment", "Purchase Agreement", "Initial Allocation
-// Letter"); the contract gives none for CERTIFICATE_OF_OCCUPANCY, so none is
-// hardcoded here.
+// Exactly six slots, always all present, in this order. OTHER is NOT a slot: on
+// a purchase it is a separate optional `other` key (see the documents section),
+// and it is not a valid release-check documentType.
 export const DOCUMENT_TYPES = [
   "DEED_OF_ASSIGNMENT",
   "SURVEY_PLAN",
@@ -389,6 +387,44 @@ export const DOCUMENT_TYPES = [
   "CERTIFICATE_OF_OCCUPANCY",
 ] as const;
 export type DocumentType = (typeof DOCUMENT_TYPES)[number];
+
+/** The seven types an UNATTACHED document can have: the six slots, then OTHER. */
+export const UNATTACHED_DOCUMENT_TYPES = [...DOCUMENT_TYPES, "OTHER"] as const;
+export type UnattachedDocumentType = (typeof UNATTACHED_DOCUMENT_TYPES)[number];
+
+/** The portal's labels, for reference. The payload carries its own label on every entry. */
+export const DOCUMENT_LABELS: Record<UnattachedDocumentType, string> = {
+  DEED_OF_ASSIGNMENT: "Deed of Assignment",
+  SURVEY_PLAN: "Provisional Survey Plan",
+  RECEIPT: "Receipt of Payment",
+  CONTRACT_OF_SALE: "Purchase Agreement",
+  ACKNOWLEDGMENT_LETTER: "Initial Allocation Letter",
+  CERTIFICATE_OF_OCCUPANCY: "C of O Copy",
+  OTHER: "Other",
+};
+
+// Where a client's profile came from. Closed: exactly these two values.
+//
+//   IMPORTED       the profile came from the historical data migration.
+//   PORTAL_SIGNUP  a normal signup-created profile.
+//
+// READ THIS BEFORE SHOWING EITHER FIELD AT A DESK:
+//  - IMPORTED PERSISTS after the client claims the profile and signs in. So
+//    `origin` does NOT say whether they have a login; `hasLogin` does. Never
+//    infer "has not signed up" from IMPORTED.
+//  - For IMPORTED, `since` is the day the RECORD WAS IMPORTED, NOT the day the
+//    person became a client. Do not label it "client since". Say "on file since"
+//    and, for IMPORTED, treat it as unknown as to when they actually bought.
+export const ON_FILE_ORIGINS = ["IMPORTED", "PORTAL_SIGNUP"] as const;
+export type OnFileOrigin = (typeof ON_FILE_ORIGINS)[number];
+
+export interface OnFile {
+  /** "YYYY-MM-DD", formatted in SQL. A string, never a timestamp. See the note above on what it means. */
+  since: string;
+  origin: OnFileOrigin;
+}
+
+const parseOnFile = object({ since: str, origin: oneOf(ON_FILE_ORIGINS) });
 
 const purchaseStatus = oneOf(PURCHASE_STATUSES);
 const purchaseKind = oneOf(PURCHASE_KINDS);
@@ -577,8 +613,8 @@ export interface ClientCandidate {
   matchedParty: string | null;
   match: Match;
   hasLogin: boolean;
-  /** `since` is "YYYY-MM-DD", formatted in SQL. A string, never a timestamp. */
-  onFile: { since: string; origin: string }; // origin seen: PORTAL_SIGNUP (vocabulary not in the contract)
+  /** When and how the profile came to be: read the note on OnFileOrigin before showing it. */
+  onFile: OnFile;
   /** Masked by the portal, for example "l***3@g****.com". */
   emailHint: string | null;
   /** Live first, then oldest first. May include cancelled ones. */
@@ -604,7 +640,7 @@ const parseClientSearch = enveloped(
         matchedParty: nullable(str),
         match: oneOf(MATCHES),
         hasLogin: bool,
-        onFile: object({ since: str, origin: str }),
+        onFile: parseOnFile,
         emailHint: nullable(str),
         purchases: list(object({ estate: str, estateName: str, label: str, status: purchaseStatus })),
         purchaseCount: nonNegativeInt,
@@ -641,7 +677,7 @@ export interface ClientSummary {
   displayName: string;
   parties: string[];
   hasLogin: boolean;
-  onFile: { since: string; origin: string };
+  onFile: OnFile;
   emailHint: string | null;
   /** Live first, then oldest first. */
   purchases: ClientPurchase[];
@@ -658,7 +694,7 @@ const parseClientSummary = enveloped(
     displayName: str,
     parties: list(str),
     hasLogin: bool,
-    onFile: object({ since: str, origin: str }),
+    onFile: parseOnFile,
     emailHint: nullable(str),
     purchases: list(
       object({
@@ -685,10 +721,9 @@ export function getClientSummary(clientId: string): Promise<PortalResult<ClientS
 // ----- GET /clients/{id}/documents  (issued document types) -----------------
 //
 // Each purchase carries exactly six slots, always all present, in the order of
-// DOCUMENT_TYPES (the parser enforces it). OTHER is not a slot: the portal
-// sends it as a separate optional `other` key. TODO: its placement and shape
-// are not in the contract given to us, so it is NOT read here (extra keys are
-// ignored). Do not add a guess; get the shape first.
+// DOCUMENT_TYPES (the parser enforces it). OTHER is not a slot: it sits on the
+// purchase as a separate `other` key, beside `documents`, and is ABSENT
+// entirely (not null) when the purchase has no OTHER document.
 
 export interface ClientDocumentSlot {
   type: DocumentType;
@@ -699,26 +734,51 @@ export interface ClientDocumentSlot {
   latestIssuedOn: string | null;
 }
 
+/** Documents of type OTHER on one purchase. No type, label or issued field. */
+export interface ClientOtherDocuments {
+  /** At least 1. */
+  count: number;
+  /** "YYYY-MM-DD" (SQL-formatted string). Always present here. */
+  latestIssuedOn: string;
+}
+
+export interface ClientDocumentsPurchase {
+  purchaseId: string;
+  kind: PurchaseKind;
+  label: string;
+  estate: string;
+  estateName: string;
+  status: PurchaseStatus;
+  /** Exactly six, in DOCUMENT_TYPES order. */
+  documents: ClientDocumentSlot[];
+  /** Absent (not null) when the purchase has no OTHER document. */
+  other?: ClientOtherDocuments;
+}
+
+/**
+ * A document held for the client but attached to NO purchase (its purchaseId is
+ * null: never set, or nulled when a purchase row went away). Only types that
+ * exist appear, in UNATTACHED_DOCUMENT_TYPES order.
+ *
+ * NOT COVERED BY RELEASE-CHECK. The release gate works per purchase, so an
+ * unattached document is outside it. A desk reading this list must NOT assume
+ * these documents are gated, checked or cleared for release.
+ */
+export interface ClientUnattachedDocument {
+  type: UnattachedDocumentType;
+  label: string; // "Other" for OTHER
+  count: number;
+  /** "YYYY-MM-DD" (SQL-formatted string). */
+  latestIssuedOn: string;
+}
+
 export interface ClientDocuments {
   clientId: string;
   /** Always false today. */
   receiptsActive: false;
-  purchases: {
-    purchaseId: string;
-    kind: PurchaseKind;
-    label: string;
-    estate: string;
-    estateName: string;
-    status: PurchaseStatus;
-    /** Exactly six, in DOCUMENT_TYPES order. */
-    documents: ClientDocumentSlot[];
-  }[];
-  /**
-   * Issued documents not attached to any purchase. Its shape was read off one
-   * live response and is NOT in the contract: `type` is a plain string because
-   * its vocabulary is not given.
-   */
-  unattached: { type: string; label: string; count: number; latestIssuedOn: string }[];
+  purchases: ClientDocumentsPurchase[];
+  /** [] when there are none. Outside the release gate: see ClientUnattachedDocument. */
+  unattached: ClientUnattachedDocument[];
 }
 
 const parseDocumentSlots: Parser<ClientDocumentSlot[]> = (raw, path) => {
@@ -731,22 +791,46 @@ const parseDocumentSlots: Parser<ClientDocumentSlot[]> = (raw, path) => {
   return slots;
 };
 
+const parseOtherDocuments = object({ count: positiveInt, latestIssuedOn: str });
+
+const parseDocumentsPurchase: Parser<ClientDocumentsPurchase> = (raw, path) => {
+  const base = object({
+    purchaseId: str,
+    kind: purchaseKind,
+    label: str,
+    estate: str,
+    estateName: str,
+    status: purchaseStatus,
+    documents: parseDocumentSlots,
+  })(raw, path);
+  const other = asRecord(raw, path).other;
+  // Absent, never null: a null here fails as "expected an object".
+  return other === undefined ? base : { ...base, other: parseOtherDocuments(other, `${path}.other`) };
+};
+
+const parseUnattached: Parser<ClientUnattachedDocument[]> = (raw, path) => {
+  const entries = list(
+    object({
+      type: oneOf(UNATTACHED_DOCUMENT_TYPES),
+      label: str,
+      count: positiveInt,
+      latestIssuedOn: str,
+    }),
+  )(raw, path);
+  // Each type at most once, in the portal's order.
+  const order = entries.map((entry) => UNATTACHED_DOCUMENT_TYPES.indexOf(entry.type));
+  if (order.some((position, index) => index > 0 && position <= order[index - 1])) {
+    return mismatch(path, `each type once, in order (${UNATTACHED_DOCUMENT_TYPES.join(", ")})`);
+  }
+  return entries;
+};
+
 const parseClientDocuments = enveloped(
   object({
     clientId: str,
     receiptsActive: literal(false),
-    purchases: list(
-      object({
-        purchaseId: str,
-        kind: purchaseKind,
-        label: str,
-        estate: str,
-        estateName: str,
-        status: purchaseStatus,
-        documents: parseDocumentSlots,
-      }),
-    ),
-    unattached: list(object({ type: str, label: str, count: nonNegativeInt, latestIssuedOn: str })),
+    purchases: list(parseDocumentsPurchase),
+    unattached: parseUnattached,
   }),
 );
 
