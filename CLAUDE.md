@@ -386,9 +386,7 @@ of fidelity. Recorded so nobody "fixes" them back:
   `attendance.clock_in_requires_desk_device` (value `false`). When the reception
   computer is bought and registered as a DESK device, setting it to `true` is how
   phone clock-in gets refused: an UPDATE of that row, no code change, no
-  migration. NOTHING READS IT YET. Setting keys may be dotted namespaces
-  (`attendance.clock_in_requires_desk_device`); the older keys are not (a
-  possible later tidy, not needed).
+  migration. NOTHING READS IT YET.
 
 ## Database
 
@@ -402,8 +400,29 @@ is in `db/README.md`. Nothing has been applied to the cPanel server.
 `db/pg10-proof.sql` is all the migrations joined into one file to carry to the
 PG10 server. It is GENERATED (`npm run db:proof`) and is NOT a migration: never
 put it in `db/migrations/`, never edit it, and regenerate it (and commit both)
-after ANY migration edit. `npm run db:proof:check` fails if it is stale.
+after ANY change to `db/migrations/` (a new file; or an edit, which is only
+allowed before the first server apply). `npm run db:proof:check` fails if it is stale.
 
+- MIGRATIONS ARE APPEND-ONLY. AFTER THE NEXT SERVER APPLY, `db/migrations/` IS
+  APPEND-ONLY WITH NO EXCEPTIONS: a change to the schema is a NEW numbered
+  migration, never an edit to an applied one. Applied history is what the
+  server ran; rewriting it makes the files lie about the database. ONE
+  exception was made, once, and is closed: `005_attendance.sql` was edited
+  (the `setting` key format and the four seeded keys) after it had been applied
+  to the server but before the schema carried anything: no application
+  connected to it, it held no data, nothing read it, and it was being dropped and
+  re-applied anyway. Fixing it at the source also left `009` purely additive,
+  with no `DROP CONSTRAINT`/`ADD CONSTRAINT` of the same name (the construct in
+  it most likely to trouble PG10). The exception does not repeat.
+- SETTING KEYS are `<domain>.<name>`: exactly one dot, lower snake case within
+  each part, and the domain is the area of the app the setting governs
+  (`attendance`, later `visits`, `complaints`, ...). Enforced by
+  `setting_key_format_check`, so a flat key such as `late_after_local` is
+  rejected. Current keys: `attendance.late_after_local`,
+  `attendance.weekly_target_minutes`, `attendance.monthly_target_minutes`,
+  `attendance.office_ip_allowlist`, `attendance.clock_in_requires_desk_device`.
+  A setting is read by the application; a dropdown list is not a setting, it is
+  a lookup table.
 - UUID primary keys come from `crypto.randomUUID()` in the app; no DEFAULT,
   because `gen_random_uuid()` does not exist on 10. Only `audit_log` uses an
   identity column.

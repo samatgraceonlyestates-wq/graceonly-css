@@ -100,7 +100,8 @@ npm run db:proof          # (re)generate db/pg10-proof.sql
 npm run db:proof:check    # exit 1 if it is stale
 ```
 
-**Regenerate it after ANY edit to a migration, and commit both together.** A
+**Regenerate it after ANY change to `db/migrations/` (a new migration, or an edit
+before the first server apply), and commit both together.** A
 stale proof file is worse than none: it would test something other than what you
 ship. `db:proof:check` catches it.
 

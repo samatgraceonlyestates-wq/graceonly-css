@@ -24,11 +24,11 @@
 --   002_staff_auth.sql               lines   166 -   254
 --   003_visits.sql                   lines   256 -   414
 --   004_enquiries.sql                lines   416 -   463
---   005_attendance.sql               lines   465 -   561
---   006_audit_log.sql                lines   563 -   604
---   007_handovers.sql                lines   606 -   693
---   008_case_links.sql               lines   695 -   776
---   009_attendance_device.sql        lines   778 -   855
+--   005_attendance.sql               lines   465 -   566
+--   006_audit_log.sql                lines   568 -   609
+--   007_handovers.sql                lines   611 -   698
+--   008_case_links.sql               lines   700 -   781
+--   009_attendance_device.sql        lines   783 -   853
 -- ============================================================================
 \set ON_ERROR_STOP on
 \echo '>>> applying 001_foundation.sql'
@@ -537,8 +537,12 @@ CREATE TRIGGER leave_touch_updated_at
 
 -- Small configuration the application reads. Dropdown lists are NOT here: they
 -- are lookup tables with foreign keys.
+--
+-- A key is <domain>.<name>: exactly one dot, lower snake case on each side, and
+-- the domain is the area of the app the setting governs (attendance, visits, ...).
 CREATE TABLE setting (
-  key        text PRIMARY KEY CONSTRAINT setting_key_format_check CHECK (key ~ '^[a-z][a-z0-9_]*$'),
+  key        text PRIMARY KEY CONSTRAINT setting_key_format_check
+             CHECK (key ~ '^[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$'),
   value      jsonb NOT NULL,
   updated_by uuid REFERENCES staff (id),
   updated_at timestamptz NOT NULL DEFAULT now()
@@ -551,12 +555,13 @@ CREATE TRIGGER setting_touch_updated_at
 INSERT INTO setting (key, value) VALUES
   -- Office-local wall-clock time after which a clock-in is late. The design's
   -- rule is 09:15. Compared in Africa/Lagos.
-  ('late_after_local', '"09:15"'),
+  ('attendance.late_after_local', '"09:15"'),
   -- PLACEHOLDERS (07's targets: 40h a week, 160h a month), in minutes.
-  ('weekly_target_minutes',  '2400'),
-  ('monthly_target_minutes', '9600'),
-  -- Office network egress addresses. Empty = no IP check yet.
-  ('office_ip_allowlist', '[]');
+  ('attendance.weekly_target_minutes',  '2400'),
+  ('attendance.monthly_target_minutes', '9600'),
+  -- Office network egress addresses, for the clock-in network check. Empty = no
+  -- IP check yet.
+  ('attendance.office_ip_allowlist', '[]');
 
 COMMIT;
 \echo '>>> applying 006_audit_log.sql'
@@ -782,7 +787,8 @@ COMMIT;
 -- phones, so a clock-in can happen from anywhere. That is NOT blocked, because
 -- the hardware does not exist. It is RECORDED and made visible (screen 08 must
 -- mark a clock-in made from a PERSONAL device), and the setting seeded below is
--- the switch for tightening it later. 005 is not edited: this file ALTERs it.
+-- the switch for tightening it later. This file only ADDS to attendance_record
+-- (ALTER TABLE ... ADD); it does not rewrite anything.
 --
 -- The device ids (clock_in_device_id, clock_out_device_id) already exist from 005.
 -- This adds the KIND of each device, as a SNAPSHOT.
@@ -834,14 +840,6 @@ ALTER TABLE attendance_record
 ALTER TABLE attendance_record
   ADD CONSTRAINT attendance_no_device_needs_correction_reason_check
     CHECK (clock_in_device_id IS NOT NULL OR correction_reason IS NOT NULL);
-
--- setting keys may now be namespaced with dots (attendance.clock_in_requires_...).
--- Same constraint name as in 005, widened: every existing key still matches, and
--- a dot must sit between two non-empty lower-case words.
-ALTER TABLE setting
-  DROP CONSTRAINT setting_key_format_check,
-  ADD CONSTRAINT setting_key_format_check
-    CHECK (key ~ '^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)*$');
 
 -- The tightening switch. false = clocking in from any device is allowed (and
 -- recorded, with its kind). When the reception computer is bought and registered

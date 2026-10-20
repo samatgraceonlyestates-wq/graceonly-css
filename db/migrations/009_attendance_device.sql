@@ -5,7 +5,8 @@
 -- phones, so a clock-in can happen from anywhere. That is NOT blocked, because
 -- the hardware does not exist. It is RECORDED and made visible (screen 08 must
 -- mark a clock-in made from a PERSONAL device), and the setting seeded below is
--- the switch for tightening it later. 005 is not edited: this file ALTERs it.
+-- the switch for tightening it later. This file only ADDS to attendance_record
+-- (ALTER TABLE ... ADD); it does not rewrite anything.
 --
 -- The device ids (clock_in_device_id, clock_out_device_id) already exist from 005.
 -- This adds the KIND of each device, as a SNAPSHOT.
@@ -57,14 +58,6 @@ ALTER TABLE attendance_record
 ALTER TABLE attendance_record
   ADD CONSTRAINT attendance_no_device_needs_correction_reason_check
     CHECK (clock_in_device_id IS NOT NULL OR correction_reason IS NOT NULL);
-
--- setting keys may now be namespaced with dots (attendance.clock_in_requires_...).
--- Same constraint name as in 005, widened: every existing key still matches, and
--- a dot must sit between two non-empty lower-case words.
-ALTER TABLE setting
-  DROP CONSTRAINT setting_key_format_check,
-  ADD CONSTRAINT setting_key_format_check
-    CHECK (key ~ '^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)*$');
 
 -- The tightening switch. false = clocking in from any device is allowed (and
 -- recorded, with its kind). When the reception computer is bought and registered

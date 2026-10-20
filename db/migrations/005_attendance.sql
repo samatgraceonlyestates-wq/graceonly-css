@@ -73,8 +73,12 @@ CREATE TRIGGER leave_touch_updated_at
 
 -- Small configuration the application reads. Dropdown lists are NOT here: they
 -- are lookup tables with foreign keys.
+--
+-- A key is <domain>.<name>: exactly one dot, lower snake case on each side, and
+-- the domain is the area of the app the setting governs (attendance, visits, ...).
 CREATE TABLE setting (
-  key        text PRIMARY KEY CONSTRAINT setting_key_format_check CHECK (key ~ '^[a-z][a-z0-9_]*$'),
+  key        text PRIMARY KEY CONSTRAINT setting_key_format_check
+             CHECK (key ~ '^[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$'),
   value      jsonb NOT NULL,
   updated_by uuid REFERENCES staff (id),
   updated_at timestamptz NOT NULL DEFAULT now()
@@ -87,11 +91,12 @@ CREATE TRIGGER setting_touch_updated_at
 INSERT INTO setting (key, value) VALUES
   -- Office-local wall-clock time after which a clock-in is late. The design's
   -- rule is 09:15. Compared in Africa/Lagos.
-  ('late_after_local', '"09:15"'),
+  ('attendance.late_after_local', '"09:15"'),
   -- PLACEHOLDERS (07's targets: 40h a week, 160h a month), in minutes.
-  ('weekly_target_minutes',  '2400'),
-  ('monthly_target_minutes', '9600'),
-  -- Office network egress addresses. Empty = no IP check yet.
-  ('office_ip_allowlist', '[]');
+  ('attendance.weekly_target_minutes',  '2400'),
+  ('attendance.monthly_target_minutes', '9600'),
+  -- Office network egress addresses, for the clock-in network check. Empty = no
+  -- IP check yet.
+  ('attendance.office_ip_allowlist', '[]');
 
 COMMIT;
