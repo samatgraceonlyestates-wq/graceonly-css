@@ -13,25 +13,30 @@ BEGIN;
 
 CREATE TABLE staff (
   id                    uuid PRIMARY KEY,
-  email                 text NOT NULL CHECK (email = btrim(email) AND position('@' in email) > 1),
-  full_name             text NOT NULL CHECK (btrim(full_name) <> ''),
+  email                 text NOT NULL
+    CONSTRAINT staff_email_format_check CHECK (email = btrim(email) AND position('@' in email) > 1),
+  full_name             text NOT NULL
+    CONSTRAINT staff_full_name_not_blank_check CHECK (btrim(full_name) <> ''),
   -- Free text for now: screen 08's filter chips are derived from the data, in
   -- order of first appearance.
-  department            text NOT NULL CHECK (btrim(department) <> ''),
+  department            text NOT NULL
+    CONSTRAINT staff_department_not_blank_check CHECK (btrim(department) <> ''),
   password_hash         text NOT NULL,
   must_change_password  boolean NOT NULL DEFAULT false,
-  password_failed_count integer NOT NULL DEFAULT 0 CHECK (password_failed_count >= 0),
+  password_failed_count integer NOT NULL DEFAULT 0
+    CONSTRAINT staff_password_failed_count_nonneg_check CHECK (password_failed_count >= 0),
   password_locked_until timestamptz,
   -- The PIN is only accepted on a registered desk device (an application rule).
   pin_hash              text,
-  pin_failed_count      integer NOT NULL DEFAULT 0 CHECK (pin_failed_count >= 0),
+  pin_failed_count      integer NOT NULL DEFAULT 0
+    CONSTRAINT staff_pin_failed_count_nonneg_check CHECK (pin_failed_count >= 0),
   pin_locked_until      timestamptz,
   -- Staff are never deleted: visits and attendance point at them forever.
   is_active             boolean NOT NULL DEFAULT true,
   deactivated_at        timestamptz,
   created_at            timestamptz NOT NULL DEFAULT now(),
   updated_at            timestamptz NOT NULL DEFAULT now(),
-  CHECK (is_active = (deactivated_at IS NULL))
+  CONSTRAINT staff_active_matches_deactivated_check CHECK (is_active = (deactivated_at IS NULL))
 );
 
 CREATE UNIQUE INDEX staff_email_lower_key ON staff (lower(email));
@@ -54,9 +59,11 @@ CREATE TABLE staff_role (
 -- and clock-in allowed). PERSONAL = someone's own machine.
 CREATE TABLE device (
   id            uuid PRIMARY KEY,
-  label         text NOT NULL CHECK (btrim(label) <> ''),
-  kind          text NOT NULL CHECK (kind IN ('DESK', 'PERSONAL')),
-  token_hash    text NOT NULL UNIQUE,
+  label         text NOT NULL
+    CONSTRAINT device_label_not_blank_check CHECK (btrim(label) <> ''),
+  kind          text NOT NULL
+    CONSTRAINT device_kind_valid_check CHECK (kind IN ('DESK', 'PERSONAL')),
+  token_hash    text NOT NULL CONSTRAINT device_token_hash_key UNIQUE,
   registered_by uuid NOT NULL REFERENCES staff (id),
   created_at    timestamptz NOT NULL DEFAULT now(),
   revoked_at    timestamptz
@@ -66,13 +73,13 @@ CREATE TABLE session (
   id           uuid PRIMARY KEY,
   staff_id     uuid NOT NULL REFERENCES staff (id),
   device_id    uuid REFERENCES device (id),
-  token_hash   text NOT NULL UNIQUE,
+  token_hash   text NOT NULL CONSTRAINT session_token_hash_key UNIQUE,
   ip           inet,
   created_at   timestamptz NOT NULL DEFAULT now(),
   last_seen_at timestamptz NOT NULL DEFAULT now(),
   expires_at   timestamptz NOT NULL,
   revoked_at   timestamptz,
-  CHECK (expires_at > created_at)
+  CONSTRAINT session_expires_after_created_check CHECK (expires_at > created_at)
 );
 
 CREATE INDEX session_staff_idx ON session (staff_id);

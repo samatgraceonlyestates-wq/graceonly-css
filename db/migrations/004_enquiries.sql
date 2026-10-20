@@ -15,8 +15,10 @@ CREATE TABLE enquiry (
   visit_id     uuid NOT NULL,
   visitor_id   uuid NOT NULL,
   topic_code   text NOT NULL REFERENCES enquiry_topic (code),
-  summary      text NOT NULL CHECK (btrim(summary) <> ''),
-  status       text NOT NULL DEFAULT 'OPEN' CHECK (status IN ('OPEN', 'CLOSED')),
+  summary      text NOT NULL
+    CONSTRAINT enquiry_summary_not_blank_check CHECK (btrim(summary) <> ''),
+  status       text NOT NULL DEFAULT 'OPEN'
+    CONSTRAINT enquiry_status_valid_check CHECK (status IN ('OPEN', 'CLOSED')),
   assigned_to  uuid REFERENCES staff (id),
   opened_by    uuid NOT NULL REFERENCES staff (id),
   opened_at    timestamptz NOT NULL DEFAULT now(),
@@ -25,10 +27,14 @@ CREATE TABLE enquiry (
   outcome_note text,
   created_at   timestamptz NOT NULL DEFAULT now(),
   updated_at   timestamptz NOT NULL DEFAULT now(),
-  FOREIGN KEY (visit_id, visitor_id) REFERENCES visit (id, visitor_id),
-  CHECK ((status = 'CLOSED') = (closed_at IS NOT NULL)),
-  CHECK ((status = 'CLOSED') = (closed_by IS NOT NULL)),
-  CHECK (closed_at IS NULL OR closed_at >= opened_at)
+  CONSTRAINT enquiry_visit_is_non_client_fkey
+    FOREIGN KEY (visit_id, visitor_id) REFERENCES visit (id, visitor_id),
+  CONSTRAINT enquiry_closed_at_matches_status_check
+    CHECK ((status = 'CLOSED') = (closed_at IS NOT NULL)),
+  CONSTRAINT enquiry_closed_by_matches_status_check
+    CHECK ((status = 'CLOSED') = (closed_by IS NOT NULL)),
+  CONSTRAINT enquiry_closed_after_opened_check
+    CHECK (closed_at IS NULL OR closed_at >= opened_at)
 );
 
 CREATE INDEX enquiry_open_idx ON enquiry (opened_at) WHERE status = 'OPEN';

@@ -26,7 +26,7 @@ BEGIN;
 -- DOCUMENT_LABELS). The PRD's starter list used different names; the portal's
 -- are authoritative. A new type is an INSERT.
 CREATE TABLE document_type (
-  code       text PRIMARY KEY CHECK (code ~ '^[A-Z][A-Z0-9_]*$'),
+  code       text PRIMARY KEY CONSTRAINT document_type_code_format_check CHECK (code ~ '^[A-Z][A-Z0-9_]*$'),
   label      text NOT NULL,
   is_active  boolean NOT NULL DEFAULT true,
   sort_order integer NOT NULL DEFAULT 0,
@@ -50,8 +50,9 @@ CREATE TABLE handover (
   -- The portal's purchase id the documents belong to, opaque. NULL when the
   -- handover is not tied to one purchase.
   portal_purchase_id text,
-  gate_answer        text NOT NULL CHECK (gate_answer IN
-    ('CHECKED_ALLOWED', 'CHECKED_BLOCKED', 'GATE_OFF', 'UNAVAILABLE', 'NOT_GATED')),
+  gate_answer        text NOT NULL
+    CONSTRAINT handover_gate_answer_valid_check CHECK (gate_answer IN
+      ('CHECKED_ALLOWED', 'CHECKED_BLOCKED', 'GATE_OFF', 'UNAVAILABLE', 'NOT_GATED')),
   -- The requestId of the portal call that gave the answer, so the portal's owner
   -- can find it. NULL only when no call was made or none returned one.
   gate_request_id    text,
@@ -65,7 +66,8 @@ CREATE INDEX handover_released_idx ON handover (released_at);
 CREATE TABLE handover_item (
   handover_id        uuid NOT NULL REFERENCES handover (id),
   document_type_code text NOT NULL REFERENCES document_type (code),
-  quantity           integer NOT NULL CHECK (quantity > 0),
+  quantity           integer NOT NULL
+    CONSTRAINT handover_item_quantity_positive_check CHECK (quantity > 0),
   PRIMARY KEY (handover_id, document_type_code)
 );
 

@@ -26,9 +26,12 @@ CREATE TABLE attendance_record (
   correction_reason    text,
   created_at           timestamptz NOT NULL DEFAULT now(),
   updated_at           timestamptz NOT NULL DEFAULT now(),
-  CHECK (clock_out_at IS NULL OR clock_out_at >= clock_in_at),
-  CHECK ((entered_by IS NULL) = (correction_reason IS NULL)),
-  CHECK (correction_reason IS NULL OR btrim(correction_reason) <> '')
+  CONSTRAINT attendance_clock_out_after_in_check
+    CHECK (clock_out_at IS NULL OR clock_out_at >= clock_in_at),
+  CONSTRAINT attendance_correction_reason_matches_entered_by_check
+    CHECK ((entered_by IS NULL) = (correction_reason IS NULL)),
+  CONSTRAINT attendance_correction_reason_not_blank_check
+    CHECK (correction_reason IS NULL OR btrim(correction_reason) <> '')
 );
 
 -- One open shift per person. "At most one record per Lagos day" is an
@@ -58,7 +61,7 @@ CREATE TABLE leave (
   created_by  uuid NOT NULL REFERENCES staff (id),
   created_at  timestamptz NOT NULL DEFAULT now(),
   updated_at  timestamptz NOT NULL DEFAULT now(),
-  CHECK (ends_on >= starts_on)
+  CONSTRAINT leave_ends_on_or_after_starts_check CHECK (ends_on >= starts_on)
 );
 
 CREATE INDEX leave_staff_idx ON leave (staff_id, starts_on);
@@ -71,7 +74,7 @@ CREATE TRIGGER leave_touch_updated_at
 -- Small configuration the application reads. Dropdown lists are NOT here: they
 -- are lookup tables with foreign keys.
 CREATE TABLE setting (
-  key        text PRIMARY KEY CHECK (key ~ '^[a-z][a-z0-9_]*$'),
+  key        text PRIMARY KEY CONSTRAINT setting_key_format_check CHECK (key ~ '^[a-z][a-z0-9_]*$'),
   value      jsonb NOT NULL,
   updated_by uuid REFERENCES staff (id),
   updated_at timestamptz NOT NULL DEFAULT now()

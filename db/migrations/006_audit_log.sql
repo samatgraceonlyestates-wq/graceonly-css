@@ -15,13 +15,17 @@ CREATE TABLE audit_log (
   at             timestamptz NOT NULL DEFAULT now(),
   -- NULL = the system itself (for example an auto-close).
   actor_staff_id uuid REFERENCES staff (id),
-  entity         text NOT NULL CHECK (btrim(entity) <> ''),
+  entity         text NOT NULL
+    CONSTRAINT audit_log_entity_not_blank_check CHECK (btrim(entity) <> ''),
   entity_id      text NOT NULL,
-  action         text NOT NULL CHECK (action IN ('CREATE', 'UPDATE', 'DELETE')),
+  action         text NOT NULL
+    CONSTRAINT audit_log_action_valid_check CHECK (action IN ('CREATE', 'UPDATE', 'DELETE')),
   before         jsonb,
   after          jsonb,
-  CHECK (action = 'CREATE' OR before IS NOT NULL),
-  CHECK (action = 'DELETE' OR after IS NOT NULL)
+  CONSTRAINT audit_log_before_required_unless_create_check
+    CHECK (action = 'CREATE' OR before IS NOT NULL),
+  CONSTRAINT audit_log_after_required_unless_delete_check
+    CHECK (action = 'DELETE' OR after IS NOT NULL)
 );
 
 CREATE INDEX audit_log_entity_idx ON audit_log (entity, entity_id, at);

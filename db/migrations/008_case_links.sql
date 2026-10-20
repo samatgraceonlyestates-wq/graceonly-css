@@ -19,12 +19,15 @@ CREATE TABLE visit_case_link (
   id               uuid PRIMARY KEY,
   visit_id         uuid NOT NULL,
   portal_client_id uuid NOT NULL,
-  portal_case_id   text NOT NULL CHECK (btrim(portal_case_id) <> ''),
-  kind             text NOT NULL CHECK (kind IN ('RAISED_HERE', 'DISCUSSED')),
+  portal_case_id   text NOT NULL
+    CONSTRAINT visit_case_link_case_id_not_blank_check CHECK (btrim(portal_case_id) <> ''),
+  kind             text NOT NULL
+    CONSTRAINT visit_case_link_kind_valid_check CHECK (kind IN ('RAISED_HERE', 'DISCUSSED')),
   linked_by        uuid NOT NULL REFERENCES staff (id),
   linked_at        timestamptz NOT NULL DEFAULT now(),
-  FOREIGN KEY (visit_id, portal_client_id) REFERENCES visit (id, portal_client_id),
-  UNIQUE (visit_id, portal_case_id)
+  CONSTRAINT visit_case_link_visit_is_client_fkey
+    FOREIGN KEY (visit_id, portal_client_id) REFERENCES visit (id, portal_client_id),
+  CONSTRAINT visit_case_link_visit_case_key UNIQUE (visit_id, portal_case_id)
 );
 
 CREATE INDEX visit_case_link_case_idx ON visit_case_link (portal_case_id);
@@ -45,18 +48,25 @@ CREATE TABLE case_request (
   -- The portal's dispute type code (its vocabulary, not ours: no foreign key).
   -- REALTOR_CONDUCT is record-only on the portal and can never be read back by a
   -- CSS key, so CSS must never raise one.
-  type_code          text NOT NULL CHECK (type_code ~ '^[A-Z][A-Z0-9_]*$'
-                                          AND type_code <> 'REALTOR_CONDUCT'),
+  type_code          text NOT NULL,
   portal_purchase_id text,
-  state              text NOT NULL DEFAULT 'PENDING' CHECK (state IN ('PENDING', 'CONFIRMED', 'FAILED')),
+  state              text NOT NULL DEFAULT 'PENDING'
+    CONSTRAINT case_request_state_valid_check CHECK (state IN ('PENDING', 'CONFIRMED', 'FAILED')),
   portal_case_id     text,
   requested_by       uuid NOT NULL REFERENCES staff (id),
   requested_at       timestamptz NOT NULL DEFAULT now(),
   settled_at         timestamptz,
   updated_at         timestamptz NOT NULL DEFAULT now(),
-  FOREIGN KEY (visit_id, portal_client_id) REFERENCES visit (id, portal_client_id),
-  CHECK ((state = 'CONFIRMED') = (portal_case_id IS NOT NULL)),
-  CHECK ((state = 'PENDING') = (settled_at IS NULL))
+  CONSTRAINT case_request_visit_is_client_fkey
+    FOREIGN KEY (visit_id, portal_client_id) REFERENCES visit (id, portal_client_id),
+  CONSTRAINT case_request_type_code_format_check
+    CHECK (type_code ~ '^[A-Z][A-Z0-9_]*$'),
+  CONSTRAINT case_request_not_realtor_conduct_check
+    CHECK (type_code <> 'REALTOR_CONDUCT'),
+  CONSTRAINT case_request_case_id_matches_confirmed_check
+    CHECK ((state = 'CONFIRMED') = (portal_case_id IS NOT NULL)),
+  CONSTRAINT case_request_settled_at_matches_pending_check
+    CHECK ((state = 'PENDING') = (settled_at IS NULL))
 );
 
 -- The double-submit guard: one live request per visit, type and purchase.

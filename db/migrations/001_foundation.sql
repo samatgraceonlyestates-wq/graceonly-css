@@ -43,7 +43,7 @@ $$;
 -- Staff roles. Roles are enforced in the application (no row-level security).
 -- ---------------------------------------------------------------------------
 CREATE TABLE role (
-  code       text PRIMARY KEY CHECK (code ~ '^[A-Z][A-Z0-9_]*$'),
+  code       text PRIMARY KEY CONSTRAINT role_code_format_check CHECK (code ~ '^[A-Z][A-Z0-9_]*$'),
   label      text NOT NULL,
   created_at timestamptz NOT NULL DEFAULT now()
 );
@@ -61,7 +61,7 @@ INSERT INTO role (code, label) VALUES
 -- endpoints only, so a Realtor is a non-client here until it exposes more.
 -- ---------------------------------------------------------------------------
 CREATE TABLE visitor_type (
-  code          text PRIMARY KEY CHECK (code ~ '^[A-Z][A-Z0-9_]*$'),
+  code          text PRIMARY KEY CONSTRAINT visitor_type_code_format_check CHECK (code ~ '^[A-Z][A-Z0-9_]*$'),
   label         text NOT NULL,
   portal_lookup boolean NOT NULL DEFAULT false,
   is_active     boolean NOT NULL DEFAULT true,
@@ -80,7 +80,7 @@ INSERT INTO visitor_type (code, label, portal_lookup, sort_order) VALUES
 -- Visit reasons: the five chips on screen 04 (the PRD's list).
 -- ---------------------------------------------------------------------------
 CREATE TABLE visit_reason (
-  code       text PRIMARY KEY CHECK (code ~ '^[A-Z][A-Z0-9_]*$'),
+  code       text PRIMARY KEY CONSTRAINT visit_reason_code_format_check CHECK (code ~ '^[A-Z][A-Z0-9_]*$'),
   label      text NOT NULL,
   is_active  boolean NOT NULL DEFAULT true,
   sort_order integer NOT NULL DEFAULT 0,
@@ -100,7 +100,7 @@ INSERT INTO visit_reason (code, label, sort_order) VALUES
 -- comes from the original mockup's "B. Umeh, commission query".
 -- ---------------------------------------------------------------------------
 CREATE TABLE enquiry_topic (
-  code       text PRIMARY KEY CHECK (code ~ '^[A-Z][A-Z0-9_]*$'),
+  code       text PRIMARY KEY CONSTRAINT enquiry_topic_code_format_check CHECK (code ~ '^[A-Z][A-Z0-9_]*$'),
   label      text NOT NULL,
   is_active  boolean NOT NULL DEFAULT true,
   sort_order integer NOT NULL DEFAULT 0,
@@ -115,7 +115,7 @@ INSERT INTO enquiry_topic (code, label, sort_order) VALUES
 -- Leave kinds. Leave is minimal: dates and a kind. PLACEHOLDER SEED.
 -- ---------------------------------------------------------------------------
 CREATE TABLE leave_kind (
-  code       text PRIMARY KEY CHECK (code ~ '^[A-Z][A-Z0-9_]*$'),
+  code       text PRIMARY KEY CONSTRAINT leave_kind_code_format_check CHECK (code ~ '^[A-Z][A-Z0-9_]*$'),
   label      text NOT NULL,
   is_active  boolean NOT NULL DEFAULT true,
   sort_order integer NOT NULL DEFAULT 0,

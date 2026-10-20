@@ -96,17 +96,18 @@ To drop the whole database instead, connect as a superuser:
 
 ## Things to know when writing code against it
 
-- **Database errors carry row data.** A constraint violation's `DETAIL` prints
-  the failing row, which can include `client_name_logged`. Catch `pg` errors,
-  map them to a fixed message, and never log or show `error.detail`,
-  `error.message` for a row error, or `error.where`. (CLAUDE.md: no client data
-  in an error message.)
+- **Database errors carry row data, so they never leave the database layer.** A
+  constraint violation's `DETAIL` prints the failing row, which can include
+  `client_name_logged`. The rule (never log, return or show a `pg` error's
+  message, detail, hint or constraint; map by constraint name to a fixed message)
+  is in CLAUDE.md, "Database". Read it before writing any query code.
 - **`updated_at` and `now()`.** `now()` is the time the transaction started, so
   a row inserted and updated in the same transaction has equal `created_at` and
   `updated_at`. That is normal.
-- **Constraint names.** Unnamed `CHECK`s get generic names (`visit_check5`).
-  Map errors by constraint name in one place, and name a check when you add one
-  the application needs to recognise.
+- **Constraint names.** Every CHECK, UNIQUE and composite FOREIGN KEY is named in
+  the migration (`<table>_<rule>_check`). A name is part of the application's
+  contract with the error mapping: name every constraint you add, and change a
+  name only together with the mapping.
 - **Append-only tables** (`audit_log`, `visit_event`, `handover`,
   `handover_item`) reject UPDATE, DELETE and TRUNCATE with a trigger. The
   trigger does not stop the table's owner from dropping it, so on the server the
