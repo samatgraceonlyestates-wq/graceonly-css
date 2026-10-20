@@ -356,6 +356,13 @@ of fidelity. Recorded so nobody "fixes" them back:
 ## Working rules
 
 - Never commit secrets. The portal service key lives in the environment.
+  - The variables are CSS_PORTAL_BASE_URL and CSS_PORTAL_SERVICE_KEY (the key
+    is `<id>.<secret>`). NOTE: the portal repo's key-generation script labels
+    the same value CSS_PORTAL_KEY. The two repos use different names; copy
+    the VALUE, not the name. Mixing them up cost a debugging round.
+  - src/lib/portal.ts is the only module that calls the portal; it is
+    server-only. `npm run portal:health` and `npm run portal:try -- search
+    <name>` (read-only, one GET each) exercise it; neither prints the key.
 - Never run destructive git commands. Stage by explicit path, never
   `git add -A` and never `git add .`.
   - Ask before adding a dependency.
