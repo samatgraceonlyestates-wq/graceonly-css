@@ -10,7 +10,7 @@ import { StatTile } from "@/components/StatTile/StatTile";
 import { StatusPill } from "@/components/StatusPill/StatusPill";
 import { cx } from "@/lib/cx";
 import { getClockParts, greetingForHour } from "@/lib/format";
-import { getDashboardSample } from "@/lib/sampleData";
+import { disputeTypeText, getDashboardSample } from "@/lib/sampleData";
 import styles from "./page.module.css";
 
 export const metadata: Metadata = {
@@ -122,11 +122,11 @@ export default function DashboardPage() {
             {complaints.map((complaint) => (
               <li key={complaint.id} className={cx(styles.row, styles.complaint)}>
                 <div className={styles.complaintTop}>
-                  <span className={styles.complaintTitle}>{complaint.title}</span>
+                  <span className={styles.complaintTitle}>{complaint.subject}</span>
                   <ComplaintAge raisedAt={complaint.raisedAt} asOf={asOf} className={styles.age} />
                 </div>
                 <p className={styles.complaintMeta}>
-                  {complaint.raisedBy} · {complaint.team}
+                  {complaint.clientName} · {disputeTypeText(complaint)}
                 </p>
               </li>
             ))}

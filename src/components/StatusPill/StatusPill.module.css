@@ -37,6 +37,35 @@
   }
 }
 
+/* A count badge (Figma 29:9): no dot, small padding, no tracking. */
+.badge {
+  gap: 0;
+  padding: 1px var(--fold-space-8);
+  letter-spacing: 0;
+}
+
+.badge .dot {
+  display: none;
+}
+
+@media (min-width: 768px) {
+  .badge {
+    padding: 2px var(--fold-space-8);
+  }
+}
+
+@media (max-width: 767px) {
+  .badge {
+    padding: 1px 7px;
+    font-size: 9px;
+  }
+}
+
+/* White pill for a burgundy surface; the label stays dusk (6.57:1 on white). */
+.onDark {
+  background: var(--fold-white);
+}
+
 /* Just the dot: no tint, no padding. */
 .dotOnly {
   gap: 0;

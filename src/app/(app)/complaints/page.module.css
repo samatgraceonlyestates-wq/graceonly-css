@@ -1,0 +1,181 @@
+/* Mobile first (Figma 29:62). Desktop (Figma 29:2) from 768px up. */
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--fold-space-10);
+}
+
+.desktopInline {
+  display: none;
+}
+
+.mobileInline {
+  display: inline;
+}
+
+.empty {
+  padding: var(--fold-space-24) 0;
+  color: var(--fold-dusk);
+  font-size: 13px;
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--fold-space-12);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* Rail colour by age (unresolved), resolved or withdrawn. Fills, not text. */
+.red {
+  --rail-color: var(--fold-status-red);
+}
+
+.amber {
+  --rail-color: var(--fold-status-amber);
+}
+
+.neutral {
+  --rail-color: var(--fold-silver);
+}
+
+.green {
+  --rail-color: var(--fold-status-green);
+}
+
+/* Every complaint is one grid, so the age sits on the title row and the action
+   on the bottom row at both breakpoints with no duplicated markup. */
+.card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    "head age"
+    "desc desc"
+    "meta action";
+  align-items: center;
+  column-gap: var(--fold-space-12);
+  row-gap: var(--fold-space-8);
+}
+
+.rail {
+  display: none;
+}
+
+/* The mobile card: white, 12px radius, a 4px rail down the left edge. Two
+   classes so it beats the shared Card's flat-on-mobile chrome. */
+@media (max-width: 767px) {
+  .list .card {
+    padding: var(--fold-space-16);
+    border-left: 4px solid var(--rail-color);
+    border-radius: var(--fold-radius-card);
+    background: var(--fold-white);
+    box-shadow: var(--fold-shadow-subtle);
+  }
+}
+
+.head {
+  grid-area: head;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--fold-space-6);
+  min-width: 0;
+}
+
+.title {
+  color: var(--fold-burgundy);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--fold-space-6);
+}
+
+/* Size by className; weight by the ComplaintAge variable. */
+.age {
+  grid-area: age;
+  justify-self: end;
+  font-size: 13px;
+}
+
+.description {
+  grid-area: desc;
+  color: var(--fold-dusk);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.meta {
+  grid-area: meta;
+  color: var(--fold-dusk);
+  font-size: 11px;
+}
+
+.action {
+  grid-area: action;
+  justify-self: end;
+}
+
+@media (min-width: 768px) {
+  .page {
+    gap: var(--fold-space-24);
+  }
+
+  .desktopInline {
+    display: inline;
+  }
+
+  .mobileInline {
+    display: none;
+  }
+
+  .card {
+    grid-template-columns: 4px minmax(0, 1fr) auto;
+    grid-template-areas:
+      "rail head age"
+      "rail desc action"
+      "rail meta action";
+    column-gap: var(--fold-space-20);
+  }
+
+  .rail {
+    display: block;
+    grid-area: rail;
+    align-self: center;
+    height: 60px;
+    border-radius: 2px;
+    background: var(--rail-color);
+  }
+
+  .head {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--fold-space-10);
+  }
+
+  .title {
+    font-size: 18px;
+    letter-spacing: -0.54px;
+  }
+
+  .chips {
+    gap: var(--fold-space-10);
+  }
+
+  .age {
+    --complaint-age-weight: 700;
+    font-size: 22px;
+    letter-spacing: -0.66px;
+  }
+
+  .description {
+    font-size: 13px;
+    line-height: normal;
+  }
+}

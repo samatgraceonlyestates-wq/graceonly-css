@@ -9,7 +9,11 @@ type Props = {
   // neutral (silver) is for "nothing to report yet", e.g. not clocked in.
   tone: "green" | "amber" | "red" | "steel" | "neutral";
   // large: the shift pill on the clock card (11px text, 8px dot, 12/6 padding).
-  size?: "default" | "large";
+  // badge: a dot-less count (the tab counts): 10px text, 8/2 padding, 9px and
+  // 7/1 on mobile.
+  size?: "default" | "large" | "badge";
+  // A white pill for a dark (burgundy) surface, e.g. the selected tab.
+  onDark?: boolean;
   // Only the dot, for a tight row on mobile. The label stays for screen readers.
   dotOnly?: boolean;
   // Below 768px: drop the dot and shrink to 9px text, for short labels
@@ -31,6 +35,7 @@ const TONE = {
 export function StatusPill({
   tone,
   size = "default",
+  onDark = false,
   dotOnly = false,
   compactOnMobile = false,
   children,
@@ -42,6 +47,8 @@ export function StatusPill({
         styles.pill,
         TONE[tone],
         size === "large" && styles.large,
+        size === "badge" && styles.badge,
+        onDark && styles.onDark,
         dotOnly && styles.dotOnly,
         compactOnMobile && styles.compactOnMobile,
         className,

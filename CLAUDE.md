@@ -14,9 +14,14 @@ repo, separate database from the client portal.
    the portal; a complaint resolved in either app shows resolved in both.
 3. A non-client gets an ENQUIRY, logged in CSS's own log. A non-client
    never gets a complaint case.
-4. The portal API that CSS reads is READ-ONLY and authenticated with a
-   service key sent in the X-Service-Key header. CSS never touches the
-   portal database directly.
+4. CSS talks to the portal only through its API, never its database, and
+   every call carries the service key in the X-Service-Key header.
+   - The five BUILT endpoints are read-only: health, client search, client
+     summary, client documents, release-check. CSS never writes through them
+     and never touches the portal database directly.
+   - The CASE endpoints read AND write: create, message, start, ask,
+     resolve, escalate. They are DESIGNED in sections 5.4, 6.1 and 6.4 but
+     NONE is built yet, so rule 2 describes intent, not current behaviour.
 5. Every screen is designed for desktop AND mobile. Both are in Figma.
    Responsive is a requirement, not a later pass — the visit log and the
    staff attendance screens above all.
@@ -185,6 +190,55 @@ do not mirror the defect in CSS.
   short and a long reason label.
 - "Check out" (03) renders enabled and is wired to nothing, with a TODO;
   it has no backend yet. Same for "Export timesheet" (08).
+- Complaint queue (06) lives at /complaints. Complaints are the PORTAL's
+  data. The sample rows mirror the portal's `disputes` row (id, referenceNo
+  shown as CASE-0001, clientId, clientName, raisedByRole CLIENT|ADMIN, channel
+  PORTAL|PHONE|WHATSAPP|IN_PERSON|EMAIL, typeCode and label, subject,
+  description, status OPEN|IN_PROGRESS|AWAITING_CLIENT|RESOLVED|WITHDRAWN,
+  version, raisedAt, lastClientReplyAt, resolvedAt, resolutionNote,
+  escalated), not the mockup's shape. clientName is ASSUMED: the list
+  endpoint's response shape is not specified. NONE of the case endpoints are
+  built yet; only the five read-only CLIENT endpoints exist. The TODO for the
+  portal read is at getComplaintsSample (the data boundary).
+- Writes to the portal (resolving a case) will be POST
+  /support-cases/{id}/actions, with a resolution note and the row's version
+  for compare-and-set. They go to the PORTAL, never to a CSS table, through
+  the case endpoints (rule 4), which read AND write but are not built yet.
+  06 has NO "Mark resolved" control: a
+  one-click control in a list would be a lie. "Open →" renders unwired (TODO)
+  until the complaint detail screen exists (not among the eight, undesigned).
+- Complaint types are the PORTAL's ten SEEDED dispute_types, mirrored exactly
+  in DISPUTE_TYPES (sampleData.ts): ISSUE kind PAYMENT_NOT_REFLECTED,
+  WRONG_AMOUNT_CHARGED, DOCUMENT_ISSUE, BOUNDARY_OR_ENCROACHMENT,
+  REALTOR_CONDUCT; QUESTION kind DOCUMENT_RELEASE_CHASE,
+  DOCUMENTATION_FEE_QUERY, ESTATE_TIMELINE, PLOT_OR_ALLOCATION, OTHER. A new
+  type is an INSERT in the portal's dispute_types table, not a migration.
+  `kind` (ISSUE or QUESTION) is a real field and is carried on every row.
+- The type labels are CLIENT-FACING wording ("Chasing or speeding up my
+  documents", "A question about my plot or allocation"): the portal shows
+  them to clients, so at a staff desk they read oddly. Do NOT rewrite them;
+  they are the portal's data. Different staff-facing wording, if ever wanted,
+  is a later decision and a MAPPING on top, not an edit to these.
+  TODO: PAYMENT_NOT_REFLECTED's label is still pending, so the UI shows its
+  code until the exact text arrives (disputeTypeText).
+- Every type targets a PURCHASE except REALTOR_CONDUCT and OTHER, which target
+  nothing; a sample row carries purchaseId only when its type targets one
+  (the field name is ASSUMED). NEVER add a REALTOR_CONDUCT case: that type is
+  record-only and can never be read back by a CSS key (the sample types make
+  it a compile error). A complaint belongs to a CLIENT; a non-client (the
+  mockup's "B. Umeh, commission query") gets an ENQUIRY, not a case, so that
+  card is not in the sample. The mockup's "Assigned to" and project/team
+  lines have no field in the disputes row and are not shown.
+- 06's tabs are the portal's real statuses: Open, In progress, Awaiting
+  client, Resolved, All (WITHDRAWN only under All, with its own pill). They
+  are real server-filtered links (?status=), local to 06 (no other screen has
+  tabs), with counts computed from the data. Badges are a 12% tint with a
+  dusk number, white on the selected burgundy tab. Escalated is shown as a
+  pill with no control. In-progress, awaiting and resolved views are
+  undesigned and reuse the open card; the rail follows age (the 24h / 72h
+  rule) for unresolved cases, green for resolved, silver for withdrawn.
+- The dashboard's complaints are the SAME portal-shaped list (the open ones,
+  oldest first), so the dashboard and 06 cannot disagree.
 - Attendance register (08) lives at /attendance/register and is ADMIN-ONLY;
   the role gate is a TODO (roles are not built). The nav's "Attendance" link
   stays on /attendance (07, a person's own attendance).
@@ -225,7 +279,7 @@ do not mirror the defect in CSS.
   its own clock. The clock says "Friday, 16 October 2026" (a Friday), but the
   table runs "Monday 13 ... Thursday 16 ... Friday 17 (today)".
 - 07's week total, month total and the percentage all tick with the open
-  shift (Duration plusMs, DurationShare, on the shared interval). Targets
+  shift (Duration plusMs, TargetPercent, on the shared interval). Targets
   (40h, 160h) and the earlier-weeks month base are placeholders. Late days
   is counted from the week. The mobile frame shows only the week total (in
   the card title); Month total and Late days are kept, stacked under the
@@ -252,6 +306,10 @@ do not mirror the defect in CSS.
   ticks with the open shift); StatTile value and caption accept a live
   readout, and captions show on mobile except on dense tiles; Table
   --table-cell-min-height (default 40px).
+- More extension points, added for 06: StatusPill size="badge" (dot-less
+  count) and onDark (white pill on burgundy); ComplaintAge until (a resolved
+  case's age freezes at resolvedAt, neutral) and --complaint-age-weight (size
+  by className, as before).
 - Table has exactly TWO mobile layouts, chosen by mobileLayout: "cards"
   (03, 08) and "rules" (07's week list: ruled rows inside one card). If a
   THIRD mobile layout is ever needed, stop and tell the owner: the primitive

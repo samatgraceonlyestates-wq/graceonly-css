@@ -1,6 +1,6 @@
 .age {
   flex-shrink: 0;
-  font-weight: 600;
+  font-weight: var(--complaint-age-weight, 600);
 }
 
 .neutral {

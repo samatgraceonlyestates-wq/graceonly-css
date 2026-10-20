@@ -3,7 +3,7 @@ import type { Metadata } from "next";
 import { Button } from "@/components/Button/Button";
 import { Card } from "@/components/Card/Card";
 import { Duration } from "@/components/Duration/Duration";
-import { DurationShare } from "@/components/DurationShare/DurationShare";
+import { TargetPercent } from "@/components/TargetPercent/TargetPercent";
 import { LiveClock } from "@/components/LiveClock/LiveClock";
 import { PageHeader } from "@/components/PageHeader/PageHeader";
 import { StatTile } from "@/components/StatTile/StatTile";
@@ -179,7 +179,7 @@ export default async function MyAttendancePage({
     );
   const share = (closedBase: number, targetMs: number): ReactNode =>
     openSince ? (
-      <DurationShare since={openSince} asOf={asOf} plusMs={closedBase} targetMs={targetMs} />
+      <TargetPercent since={openSince} asOf={asOf} plusMs={closedBase} targetMs={targetMs} />
     ) : (
       `${Math.round((closedBase / targetMs) * 100)}%`
     );

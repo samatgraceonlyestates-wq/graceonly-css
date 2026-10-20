@@ -1,0 +1,50 @@
+/* Mobile first (Figma 29:68): 11px label, 12/7 padding. Desktop (29:6): 13px, 16/10. */
+.list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--fold-space-8);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.tab {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px var(--fold-space-12);
+  border: 1px solid var(--fold-silver);
+  border-radius: var(--fold-radius-pill);
+  background: var(--fold-white);
+}
+
+.label {
+  color: var(--fold-burgundy);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.selected {
+  border-color: var(--fold-burgundy);
+  background: var(--fold-burgundy);
+}
+
+.selected .label {
+  color: var(--fold-white);
+}
+
+.tab:focus-visible {
+  outline: 2px solid var(--fold-gold);
+  outline-offset: 2px;
+}
+
+@media (min-width: 768px) {
+  .tab {
+    gap: var(--fold-space-10);
+    padding: var(--fold-space-10) var(--fold-space-16);
+  }
+
+  .label {
+    font-size: 13px;
+  }
+}
