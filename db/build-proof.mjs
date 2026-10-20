@@ -78,7 +78,7 @@ function header(ranges) {
     "--",
     ...ranges.map(
       ({ name, first, last }) =>
-        `--   ${name.padEnd(24)} lines ${String(first).padStart(5)} - ${String(last).padStart(5)}`,
+        `--   ${name.padEnd(32)} lines ${String(first).padStart(5)} - ${String(last).padStart(5)}`,
     ),
     "-- ============================================================================",
     "\\set ON_ERROR_STOP on",

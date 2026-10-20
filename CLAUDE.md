@@ -241,7 +241,9 @@ do not mirror the defect in CSS.
   oldest first), so the dashboard and 06 cannot disagree.
 - Attendance register (08) lives at /attendance/register and is ADMIN-ONLY;
   the role gate is a TODO (roles are not built). The nav's "Attendance" link
-  stays on /attendance (07, a person's own attendance).
+  stays on /attendance (07, a person's own attendance). TODO when it reads real
+  data: it must visibly mark clock-ins from a PERSONAL device (see Decisions);
+  the sample data has no device kind yet.
 - 08's date control is a STATIC label. Figma draws "◀ Fri 16 Oct 2026 ▶" as
   one text layer with no component and no prototype link (0 interactions in
   either frame). It is rendered without the arrows, since arrows would
@@ -360,6 +362,33 @@ of fidelity. Recorded so nobody "fixes" them back:
 - Enquiries (a non-client's, rule 3) are OPEN or CLOSED. No further workflow.
 - Keep the `device` table (registered desk machines) and
   `handover.gate_answer`.
+- NO PIN FLOW IS BUILT, and no PIN screen. There is no front-desk computer yet
+  (it has not been bought), so there is no trusted desk device to validate a PIN
+  on. Staff authenticate by PASSWORD ONLY, from their own phones. `staff.pin_hash`
+  and the `device` table stay in the schema, unused and empty, ready for the
+  reception laptop. Do not build a PIN screen until that device exists.
+- ATTENDANCE IS RECORDED, NOT BLOCKED, FROM ANY DEVICE. Because staff log in
+  from their own phones, a clock-in can happen from anywhere, including bed.
+  That is not blocked (the hardware does not exist); it is RECORDED and made
+  VISIBLE. `attendance_record` stores the id and a SNAPSHOT of the KIND (DESK or
+  PERSONAL) of the device that clocked in and of the device that clocked out
+  (they can differ). The kind is a snapshot, not a live lookup, so relabelling a
+  device later never rewrites history (same reason as `visit.client_name_logged`).
+  A record with no clock-in device must be a manual entry carrying a
+  `correction_reason`, so a missing device cannot pass for a real clock-in.
+- SCREEN 08 (Attendance Register) MUST VISIBLY MARK any clock-in whose recorded
+  device kind is PERSONAL. Not hidden, not blocked, not styled as an error:
+  visible, so a manager reading the register knows which entries mean "was in
+  the office" and which do not. The exact treatment is a later design question;
+  the requirement is that it cannot be invisible. The same goes for a clock-out
+  from a PERSONAL device, and for a manual entry (no device, has a reason).
+- THE TIGHTENING SWITCH is the `setting` row
+  `attendance.clock_in_requires_desk_device` (value `false`). When the reception
+  computer is bought and registered as a DESK device, setting it to `true` is how
+  phone clock-in gets refused: an UPDATE of that row, no code change, no
+  migration. NOTHING READS IT YET. Setting keys may be dotted namespaces
+  (`attendance.clock_in_requires_desk_device`); the older keys are not (a
+  possible later tidy, not needed).
 
 ## Database
 
@@ -370,7 +399,7 @@ extension. They have been applied to the LOCAL dev database only (PostgreSQL 18)
 and have NOT been run on a PostgreSQL 10 server: a local pass proves syntax and
 logic, not PG10 compatibility. How to create, apply and reset the local database
 is in `db/README.md`. Nothing has been applied to the cPanel server.
-`db/pg10-proof.sql` is the eight migrations joined into one file to carry to the
+`db/pg10-proof.sql` is all the migrations joined into one file to carry to the
 PG10 server. It is GENERATED (`npm run db:proof`) and is NOT a migration: never
 put it in `db/migrations/`, never edit it, and regenerate it (and commit both)
 after ANY migration edit. `npm run db:proof:check` fails if it is stale.
@@ -423,8 +452,10 @@ after ANY migration edit. `npm run db:proof:check` fails if it is stale.
   search queries; complaints or their messages; derived values (elapsed time,
   visit status, attendance state, durations, totals, KPIs); plaintext
   passwords or tokens (hashes only); staff phone, address or salary.
-- Attendance proves that someone AUTHENTICATED at a registered device or office
-  network, not that they were physically present. Label it so.
+- Attendance proves that someone AUTHENTICATED (by password, today from their own
+  phone), not that they were physically present. Label it so. The device KIND
+  recorded on each clock-in (see Decisions) is what tells a manager whether an
+  entry can mean "was in the office".
 - TODO (portal owner): the create-case endpoint should accept CSS's idempotency
   key (`case_request.id`), record a `source_ref` (the CSS visit id) and offer a
   dedupe lookup of a client's open cases. Until then `008_case_links` is inert.

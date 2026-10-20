@@ -90,7 +90,7 @@ To drop the whole database instead, connect as a superuser:
 ## One file for the server: `pg10-proof.sql`
 
 To apply the schema on a machine that is awkward to reach, `db/pg10-proof.sql` is
-the eight migrations joined into a single file, verbatim and in filename order.
+all the migrations joined into a single file, verbatim and in filename order.
 It is **generated, and it is not a ninth migration**: it lives in `db/`, never in
 `db/migrations/`, and must never be applied on top of the migrations (it
 contains them). Do not edit it.
