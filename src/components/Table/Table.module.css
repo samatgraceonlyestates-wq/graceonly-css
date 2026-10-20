@@ -23,7 +23,7 @@
 /* Rows are at least 40px of content plus the 14px padding either side
    (Figma's visitor / staff cell is 40px tall). */
 .td {
-  height: calc(40px + var(--fold-space-14) * 2);
+  height: calc(var(--table-cell-min-height, 40px) + var(--fold-space-14) * 2);
   padding: var(--fold-space-14) var(--fold-space-16) var(--fold-space-14) 0;
   color: var(--fold-dusk);
   font-size: 13px;
@@ -79,5 +79,20 @@
 
   .hideOnMobile {
     display: none;
+  }
+
+  /* Second mobile layout: ruled rows inside one surrounding card (07). The
+     two-class selectors beat the card chrome above. */
+  .rules .tbody {
+    gap: 0;
+  }
+
+  .rules .row {
+    display: block;
+    padding: var(--fold-space-10) 0;
+    border-top: 1px solid var(--fold-silver);
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
   }
 }

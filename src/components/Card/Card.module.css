@@ -12,6 +12,16 @@
   padding: var(--fold-space-32);
 }
 
+.padXl {
+  padding: var(--fold-space-24);
+}
+
+@media (min-width: 768px) {
+  .padXl {
+    padding: var(--fold-space-40);
+  }
+}
+
 .padTable {
   padding: var(--fold-space-20) var(--fold-space-24) var(--fold-space-24);
 }

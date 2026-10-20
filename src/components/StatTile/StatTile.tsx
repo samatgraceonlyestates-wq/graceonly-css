@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { Card } from "@/components/Card/Card";
 import { cx } from "@/lib/cx";
 import type { Direction } from "@/lib/sampleData";
@@ -8,12 +9,12 @@ type Tone = "burgundy" | "green" | "amber" | "red";
 type Props = {
   label: string;
   shortLabel?: string; // used on mobile when the full label is too long
-  value: number | string;
+  value: ReactNode; // a number, or a live readout such as <Duration />
+  caption?: ReactNode; // shown on mobile too, except on dense tiles
+  dot?: boolean; // a dot in the tone colour beside the number, desktop only
   tone?: Tone;
   delta?: { direction: Direction; text: string };
   comparison?: string; // "vs yesterday", hidden on mobile like the design
-  caption?: string; // desktop only
-  dot?: boolean; // a dot in the tone colour beside the number, desktop only
   dense?: boolean; // tighter padding and smaller number (attendance register)
   desktopOnly?: boolean;
 };

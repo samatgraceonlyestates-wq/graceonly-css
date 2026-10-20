@@ -87,7 +87,7 @@ Shadows (all tinted burgundy, never grey):
   nav     0 6px 16px rgba(128,0,32,0.12)
   card    0 9px 25px rgba(128,0,32,0.12)
 
-Spacing scale: 4 · 6 · 8 · 10 · 12 · 14 · 16 · 18 · 20 · 24 · 28 · 32 · 40
+Spacing scale: 4 · 6 · 8 · 10 · 12 · 14 · 16 · 18 · 20 · 24 · 28 · 32 · 36 · 40
 (all are --fold-space-N tokens; 2px and 3px gaps and paddings stay literal)
 Card padding 32px; table card 20px top / 24px sides / 24px bottom.
 Table rows: 14px vertical padding, 16px column gap, 1px silver bottom rule.
@@ -204,6 +204,34 @@ do not mirror the defect in CSS.
   times of day therefore move with now, and the sample's late line moves
   with them (same offset from the day's start as 09:15 has from 10:42), so
   the "after HH:MM" caption is computed. Real data uses the fixed 09:15 rule.
+- My Attendance (07) lives at /attendance (the nav's "Attendance" link). Its
+  shift has THREE states, derived by shiftState from one record (clock-in and
+  clock-out): not clocked in, on shift, shift complete. Figma draws only
+  on-shift; the other two reuse the same layout and are undesigned. No break
+  state exists. The lede copy is per state: the design's "Clock in to start
+  the day..." line is the not-clocked-in one; "You're on shift..." and
+  "You've clocked out for today..." are new. Clock in / Clock out render
+  enabled and wired to nothing (TODO, no backend); a complete shift has no
+  action.
+- 07's record for today is the SAME one 08 shows for the same person (Sam
+  Okonkwo): one source in sampleData.ts. TODO: /attendance?scenario=
+  not-clocked-in|on-shift|complete is a SAMPLE-ONLY preview switch so all
+  three states can be seen; the other two deliberately disagree with 08. It
+  is honoured only when NODE_ENV !== "production"; a production build never
+  reads the query string. Remove it when auth and a backend exist.
+- 07's week rows are the real Mon to Fri of the current week, computed from
+  the calendar: earlier days are sample history, today is live, later days
+  are empty. NOTE: the Figma frame's week table is off by one day against
+  its own clock. The clock says "Friday, 16 October 2026" (a Friday), but the
+  table runs "Monday 13 ... Thursday 16 ... Friday 17 (today)".
+- 07's week total, month total and the percentage all tick with the open
+  shift (Duration plusMs, DurationShare, on the shared interval). Targets
+  (40h, 160h) and the earlier-weeks month base are placeholders. Late days
+  is counted from the week. The mobile frame shows only the week total (in
+  the card title); Month total and Late days are kept, stacked under the
+  week card, like the other mobile omissions.
+- The big clock (LiveClock) reads the shared useNow at minute granularity; it
+  is the one use of the 100px display type (56px, capped at 14.3vw, on mobile).
 - 08's department filters are derived from the staff data, in order of first
   appearance (so HR appears, unlike the design), with computed counts. They
   are static (counts only, a TODO) and shown on mobile, wrapping, although
@@ -217,6 +245,17 @@ do not mirror the defect in CSS.
   --table-card-pad-x/-pad-y/-gap/-col-gap on an ancestor of the table.
   Screen CSS that overrides a shared cell's colour or size uses `.row .x`
   (two classes) so it wins regardless of stylesheet order.
+- More extension points, added for 07: Card padding="xl" (40px, 24px on
+  mobile); Button size="large" (the clock in / out action); StatusPill
+  size="large", dotOnly (dot plus screen-reader label) and tone="neutral"
+  (silver, "nothing to report yet"); Duration plusMs (a running total that
+  ticks with the open shift); StatTile value and caption accept a live
+  readout, and captions show on mobile except on dense tiles; Table
+  --table-cell-min-height (default 40px).
+- Table has exactly TWO mobile layouts, chosen by mobileLayout: "cards"
+  (03, 08) and "rules" (07's week list: ruled rows inside one card). If a
+  THIRD mobile layout is ever needed, stop and tell the owner: the primitive
+  is wrong, not short of another flag.
 - Design colours that do not survive a contrast check, so far: status
   fills as text (green 3.30, amber 3.19; fixed by the ink tokens), smoke as
   text (2.75; fixed by the global smoke rule, informational text is dusk),
@@ -240,6 +279,10 @@ of fidelity. Recorded so nobody "fixes" them back:
 - Informational text is --fold-dusk, never --fold-smoke; the selected filter
   chip's count is white, not gold; status text on white uses the ink tokens.
 - The design's "◀ date ▶" is rendered static, without the arrows.
+- "On leave" is burgundy-steel everywhere. Figma's 07 draws it silver, a
+  silver label on a silver fill (invisible, and unlike 08, which uses steel):
+  drift, corrected here; the Figma file should be fixed at source.
+- 07's mobile week card is 24px padded (the shared Card), not Figma's 20px.
 
 ## Screens — all eight exist in Figma, desktop + mobile
 

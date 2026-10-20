@@ -26,6 +26,20 @@
   font-size: 13px;
 }
 
+.large {
+  width: 100%;
+  padding: var(--fold-space-16) var(--fold-space-24);
+  font-size: 15px;
+}
+
+@media (min-width: 768px) {
+  .large {
+    width: auto;
+    padding: var(--fold-space-20) var(--fold-space-36);
+    font-size: 18px;
+  }
+}
+
 .rowAction {
   min-height: 32px;
   padding: 0 var(--fold-space-14);

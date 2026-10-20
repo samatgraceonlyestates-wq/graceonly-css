@@ -168,7 +168,7 @@
   .main {
     max-width: 1200px;
     margin: 0 auto;
-    padding: 36px var(--fold-space-24) var(--fold-space-40);
+    padding: var(--fold-space-36) var(--fold-space-24) var(--fold-space-40);
   }
 
   .tabBar {

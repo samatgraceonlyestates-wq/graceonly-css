@@ -1,0 +1,281 @@
+/* Mobile first (Figma 31:90). Desktop (Figma 31:2) from 768px up. */
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--fold-space-10);
+}
+
+.desktopInline {
+  display: none;
+}
+
+.mobileInline {
+  display: inline;
+}
+
+/* ---------- the clock card ---------- */
+
+.clock {
+  display: flex;
+  flex-direction: column;
+  gap: var(--fold-space-16);
+}
+
+.clockLeft {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--fold-space-16);
+}
+
+/* 56px on a 390 screen, scaling down on narrower ones so it cannot overflow. */
+.time {
+  color: var(--fold-burgundy);
+  font-size: min(56px, 14.3vw);
+  font-weight: 700;
+  letter-spacing: -2.5px;
+  line-height: normal;
+  white-space: nowrap;
+}
+
+.date {
+  display: none;
+}
+
+.clockRight {
+  display: flex;
+  flex-direction: column;
+  gap: var(--fold-space-16);
+}
+
+.io {
+  display: flex;
+  gap: var(--fold-space-32);
+}
+
+.block {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  min-width: 0;
+}
+
+.blockLabel {
+  color: var(--fold-dusk);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+}
+
+.blockValue {
+  color: var(--fold-burgundy);
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.66px;
+  white-space: nowrap;
+}
+
+/* An empty time: dusk, not Figma's smoke. */
+.blockValue.muted {
+  color: var(--fold-dusk);
+}
+
+.blockSub {
+  color: var(--fold-dusk);
+  font-size: 10px;
+}
+
+/* ---------- week card ---------- */
+
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--fold-space-10);
+}
+
+.week {
+  display: flex;
+  flex-direction: column;
+  gap: var(--fold-space-12);
+}
+
+.weekHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.weekTitle {
+  color: var(--fold-burgundy);
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: -0.54px;
+}
+
+.range {
+  display: none;
+  color: var(--fold-dusk);
+  font-size: 12px;
+}
+
+/* No avatars in this table, so rows are text height (16px) plus padding. */
+.weekTable {
+  --table-cell-min-height: 16px;
+}
+
+/* On mobile the day cell carries the whole row: a dot and the day on the left,
+   the clock-in time and duration on the right. */
+.dot {
+  display: inline-flex;
+}
+
+.dayLabel {
+  display: flex;
+  align-items: center;
+  gap: var(--fold-space-10);
+}
+
+.dayName {
+  color: var(--fold-burgundy);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+/* Later days and "not yet": dusk and regular. Two classes so they win. */
+.dayName.upcoming {
+  color: var(--fold-dusk);
+  font-weight: 400;
+}
+
+.summary {
+  color: var(--fold-dusk);
+  font-size: 12px;
+}
+
+@media (max-width: 767px) {
+  .row .cellDay {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+}
+
+/* `.row .x` (two classes) so these beat the Table's own cell styles. */
+.row .strong {
+  color: var(--fold-burgundy);
+  font-weight: 600;
+}
+
+/* A late clock-in time: amber ink, since it is text on white. */
+.row .late {
+  color: var(--fold-status-amber-ink);
+}
+
+/* ---------- totals ---------- */
+
+.totals {
+  display: flex;
+  flex-direction: column;
+  gap: var(--fold-space-10);
+}
+
+/* ---------- desktop ---------- */
+
+@media (min-width: 768px) {
+  .page {
+    gap: var(--fold-space-24);
+  }
+
+  .desktopInline {
+    display: inline;
+  }
+
+  .mobileInline {
+    display: none;
+  }
+
+  .clock {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .clockLeft {
+    gap: var(--fold-space-10);
+  }
+
+  .time {
+    font-size: 100px;
+    letter-spacing: -5px;
+    line-height: 0.91;
+  }
+
+  .date {
+    display: block;
+    color: var(--fold-dusk);
+    font-size: 18px;
+    letter-spacing: -0.54px;
+  }
+
+  .clockRight {
+    align-items: flex-end;
+    gap: var(--fold-space-24);
+  }
+
+  .block {
+    flex: none;
+    align-items: flex-end;
+    gap: var(--fold-space-4);
+  }
+
+  .blockValue {
+    font-size: 32px;
+    letter-spacing: -0.96px;
+  }
+
+  .blockSub {
+    font-size: 11px;
+  }
+
+  .body {
+    gap: var(--fold-space-16);
+  }
+
+  .week {
+    gap: var(--fold-space-16);
+  }
+
+  .weekTitle {
+    font-size: 24px;
+    letter-spacing: -0.72px;
+  }
+
+  .range {
+    display: inline;
+  }
+
+  .dot,
+  .summary {
+    display: none;
+  }
+
+  .dayName {
+    font-size: 14px;
+  }
+
+  .totals {
+    gap: var(--fold-space-16);
+  }
+}
+
+/* Two columns only where there is room; stacked below that. */
+@media (min-width: 1024px) {
+  .body {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: start;
+  }
+}

@@ -20,6 +20,30 @@
   background: var(--pill-color);
 }
 
+/* The shift pill on the clock card (Figma 31:9): 12/6 padding, 8px dot. */
+.large {
+  gap: var(--fold-space-8);
+  padding: var(--fold-space-6) var(--fold-space-12);
+}
+
+.large .dot {
+  width: var(--fold-space-8);
+  height: var(--fold-space-8);
+}
+
+@media (min-width: 768px) {
+  .large {
+    font-size: 11px;
+  }
+}
+
+/* Just the dot: no tint, no padding. */
+.dotOnly {
+  gap: 0;
+  padding: 0;
+  background: none;
+}
+
 @media (max-width: 767px) {
   .compactOnMobile {
     padding: 3px var(--fold-space-8);
@@ -45,4 +69,8 @@
 
 .steel {
   --pill-color: var(--fold-burgundy-steel);
+}
+
+.neutral {
+  --pill-color: var(--fold-silver);
 }

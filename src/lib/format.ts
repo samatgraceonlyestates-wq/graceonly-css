@@ -19,6 +19,19 @@ export function getClockParts(now: Date) {
   };
 }
 
+// Monday is 0 ... Sunday is 6, in the office time zone.
+export function weekdayIndexMonFirst(now: Date): number {
+  const short = new Intl.DateTimeFormat("en-US", { timeZone: TIME_ZONE, weekday: "short" }).format(now);
+  return ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].indexOf(short);
+}
+
+export const NO_TIME = "— : —";
+
+// "08:47" (24-hour) for an ISO timestamp, or the empty-time placeholder.
+export function timeOfDay(iso: string | null): string {
+  return iso ? getClockParts(new Date(iso)).time24 : NO_TIME;
+}
+
 export function greetingForHour(hour: number): string {
   if (hour < 12) return "Good morning";
   if (hour < 17) return "Good afternoon";

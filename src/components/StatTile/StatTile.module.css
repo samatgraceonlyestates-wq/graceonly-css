@@ -94,7 +94,6 @@
 }
 
 .caption {
-  display: none;
   color: var(--fold-dusk);
   font-size: 12px;
 }
@@ -112,6 +111,11 @@
 .dense .value {
   font-size: 24px;
   letter-spacing: -0.72px;
+}
+
+/* Dense tiles drop the caption on mobile (the 08 mobile frame has none). */
+.dense .caption {
+  display: none;
 }
 
 @media (min-width: 768px) {
@@ -155,7 +159,7 @@
     font-weight: 400;
   }
 
-  .caption {
+  .dense .caption {
     display: block;
   }
 

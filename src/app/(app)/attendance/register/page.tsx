@@ -23,7 +23,7 @@ import {
 } from "@/components/Table/Table";
 import { cx } from "@/lib/cx";
 import { attendanceState, type AttendanceState } from "@/lib/attendance";
-import { getClockParts } from "@/lib/format";
+import { getClockParts, timeOfDay } from "@/lib/format";
 import { getAttendanceSample, type SampleStaff } from "@/lib/sampleData";
 import styles from "./page.module.css";
 
@@ -34,8 +34,6 @@ export const metadata: Metadata = {
 // Live front-desk state: render per request, never at build time.
 export const dynamic = "force-dynamic";
 
-const NO_TIME = "— : —";
-
 // Long labels on desktop, short ones in the mobile cards (Figma 32:168).
 const STATUS = {
   present: { tone: "green", long: "Present", short: "OK" },
@@ -43,10 +41,6 @@ const STATUS = {
   absent: { tone: "red", long: "Absent", short: "Absent" },
   leave: { tone: "steel", long: "On leave", short: "Leave" },
 } as const;
-
-function timeOfDay(iso: string | null): string {
-  return iso ? getClockParts(new Date(iso)).time24 : NO_TIME;
-}
 
 function mobileSub(staff: SampleStaff, state: AttendanceState, asOf: string): ReactNode {
   const clockIn = timeOfDay(staff.clockInAt);
