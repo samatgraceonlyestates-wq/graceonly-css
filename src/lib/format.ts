@@ -56,3 +56,11 @@ export function formatAge(ms: number): string {
   if (hours > 0) return `${hours}h`;
   return `${minutes}m`;
 }
+
+// The first name for a greeting or a button ("Check in Lara"). A leading title
+// ("Mrs.", "Dr.") is skipped. A one-word name is returned as it is.
+export function firstName(name: string): string {
+  const words = name.trim().split(/\s+/).filter(Boolean);
+  const first = words[0] ?? "";
+  return words.length > 1 && first.endsWith(".") ? words[1] : first;
+}

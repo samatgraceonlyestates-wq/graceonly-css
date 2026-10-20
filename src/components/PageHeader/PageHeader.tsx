@@ -6,7 +6,8 @@ import styles from "./PageHeader.module.css";
 //   --page-header-eyebrow-gap  space under the eyebrow (6px mobile, 10px desktop)
 //   --page-header-lede-gap     space above the lede (6px mobile, 10px desktop)
 type Props = {
-  eyebrow: ReactNode;
+  // Optional: a screen with no eyebrow in its design (04) simply omits it.
+  eyebrow?: ReactNode;
   title: ReactNode;
   lede?: ReactNode;
   // "sm": 12px on mobile, 15px on desktop, no tracking (attendance register).
@@ -29,7 +30,7 @@ export function PageHeader({
   return (
     <header className={cx(styles.header, className)}>
       <div className={styles.text}>
-        <p className={styles.eyebrow}>{eyebrow}</p>
+        {eyebrow ? <p className={styles.eyebrow}>{eyebrow}</p> : null}
         <h1 className={styles.title}>{title}</h1>
         {lede ? (
           <p

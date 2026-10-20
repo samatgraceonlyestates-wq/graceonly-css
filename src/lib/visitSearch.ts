@@ -18,7 +18,10 @@
 //
 // Nothing here carries a portal error body: messages are fixed text, and
 // `code` and `requestId` are the portal's own identifiers, not client data.
-import type { ClientCandidate, PortalError, PortalResult, ClientSearch } from "./portal.ts";
+import type { ClientCandidate, ClientSearch, PortalResult } from "./portal.ts";
+import { describeFailure, type FailureCause } from "./portalProblem.ts";
+
+export type { FailureCause };
 
 export type VisitSearchOutcome =
   | {
@@ -33,8 +36,6 @@ export type VisitSearchOutcome =
   | { kind: "rate_limited"; message: string; retryAfterSeconds: number | null }
   | { kind: "failure"; cause: FailureCause; message: string; code: string | null; requestId: string | null };
 
-export type FailureCause = "unauthorized" | "forbidden" | "unavailable" | "network" | "timeout" | "config" | "unexpected";
-
 /** Before the first submit. The form's initial state. */
 export type VisitSearchState = { kind: "idle" } | VisitSearchOutcome;
 
@@ -47,37 +48,6 @@ export const GUIDANCE_MESSAGE = {
 } as const;
 
 export const RATE_LIMITED_MESSAGE = "Too many searches just now. Try again in a moment.";
-
-const FAILURE_MESSAGE: Record<FailureCause, string> = {
-  unauthorized: "The portal rejected CSS's key. Tell an admin; searching will not work until it is fixed.",
-  forbidden: "CSS is not allowed to search clients. Tell an admin.",
-  unavailable: "The portal is unavailable right now. Tell an admin if it carries on.",
-  network: "Could not reach the portal. Check the connection, then tell an admin if it carries on.",
-  timeout: "The portal took too long to answer. Tell an admin if it carries on.",
-  config: "CSS is not set up to reach the portal. Tell an admin.",
-  unexpected: "The portal sent something CSS did not expect. Tell an admin.",
-};
-
-function failureCause(error: PortalError): FailureCause {
-  switch (error.kind) {
-    case "unauthorized":
-      return "unauthorized";
-    case "forbidden":
-      return "forbidden";
-    case "unavailable":
-      return "unavailable";
-    case "network":
-      return "network";
-    case "timeout":
-      return "timeout";
-    case "config":
-      return "config";
-    default:
-      // not_found, conflict, an unexpected status, a body of the wrong shape,
-      // or a 400 that is not one of the two query codes.
-      return "unexpected";
-  }
-}
 
 /** Turns what portal.ts returned for a search into the one state the UI renders. */
 export function classifySearch(query: string, result: PortalResult<ClientSearch>): VisitSearchOutcome {
@@ -101,6 +71,5 @@ export function classifySearch(query: string, result: PortalResult<ClientSearch>
     return { kind: "rate_limited", message: RATE_LIMITED_MESSAGE, retryAfterSeconds: error.retryAfterSeconds };
   }
 
-  const cause = failureCause(error);
-  return { kind: "failure", cause, message: FAILURE_MESSAGE[cause], code: error.code, requestId: error.requestId };
+  return { kind: "failure", ...describeFailure(error) };
 }

@@ -1,0 +1,28 @@
+/* UNVERIFIED AGAINST FIGMA (27:2 / 27:59). Mobile first; desktop from 768px. */
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--fold-space-10);
+}
+
+.desktopInline {
+  display: none;
+}
+
+.mobileInline {
+  display: inline;
+}
+
+@media (min-width: 768px) {
+  .page {
+    gap: var(--fold-space-24);
+  }
+
+  .desktopInline {
+    display: inline;
+  }
+
+  .mobileInline {
+    display: none;
+  }
+}

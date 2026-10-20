@@ -1,0 +1,186 @@
+/* UNVERIFIED AGAINST FIGMA (27:2 / 27:59). Mobile first; desktop from 768px. */
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--fold-space-20);
+}
+
+/* ---------- lookup ---------- */
+
+.lookup {
+  display: flex;
+  flex-direction: column;
+  gap: var(--fold-space-8);
+}
+
+.lookupRow {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--fold-space-10);
+}
+
+.lookupField {
+  flex: 1;
+}
+
+/* Two classes so it beats the shared Button's own height on any stylesheet order. */
+.lookupRow .lookupButton {
+  flex-shrink: 0;
+  height: 44px;
+}
+
+.hint {
+  color: var(--fold-dusk);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+/* ---------- notices ---------- */
+
+.results {
+  display: flex;
+  flex-direction: column;
+  gap: var(--fold-space-12);
+  min-width: 0;
+}
+
+.results:empty {
+  display: none;
+}
+
+.candidates {
+  display: flex;
+  flex-direction: column;
+  gap: var(--fold-space-12);
+}
+
+/* A 4px rail down the left, like a complaint card. The rail is a fill; the
+   text stays dusk and burgundy. */
+.notice {
+  padding: var(--fold-space-14) var(--fold-space-16);
+  border-left: 4px solid var(--rail-color);
+  border-radius: var(--fold-radius-card);
+  background: var(--fold-white);
+  box-shadow: var(--fold-shadow-subtle);
+}
+
+.info {
+  --rail-color: var(--fold-burgundy-steel);
+}
+
+.guidance {
+  --rail-color: var(--fold-silver);
+}
+
+.limited {
+  --rail-color: var(--fold-status-amber);
+}
+
+.failure {
+  --rail-color: var(--fold-status-red);
+}
+
+.noticeTitle {
+  margin-bottom: var(--fold-space-4);
+  color: var(--fold-burgundy);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.noticeText {
+  color: var(--fold-dusk);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+/* ---------- candidates ---------- */
+
+.details {
+  display: flex;
+  flex-direction: column;
+  gap: var(--fold-space-4);
+}
+
+.detailLine {
+  display: block;
+  color: var(--fold-dusk);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.purchases {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--fold-space-6);
+  margin-top: var(--fold-space-4);
+}
+
+/* ---------- result card ---------- */
+
+.result {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--fold-space-12);
+}
+
+.resultText {
+  flex: 1;
+  min-width: 0;
+}
+
+.resultName {
+  color: var(--fold-burgundy);
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.resultMeta {
+  margin-top: var(--fold-space-4);
+  color: var(--fold-dusk);
+  font-size: 13px;
+}
+
+/* Mobile: the pills wrap onto their own line under the name. */
+.resultPills {
+  display: flex;
+  flex-basis: 100%;
+  flex-wrap: wrap;
+  gap: var(--fold-space-8);
+}
+
+/* Two classes: full width at every size (the shared large button is auto-width
+   on desktop). */
+.form .checkIn {
+  width: 100%;
+}
+
+@media (min-width: 768px) {
+  .form {
+    gap: var(--fold-space-24);
+  }
+
+  .lookupRow .lookupButton {
+    height: 48px;
+  }
+
+  .result {
+    gap: var(--fold-space-16);
+  }
+
+  .resultPills {
+    flex-basis: auto;
+    justify-content: flex-end;
+  }
+
+  .resultName {
+    font-size: 18px;
+    letter-spacing: -0.54px;
+  }
+}
+
+.checkInForm {
+  display: flex;
+  flex-direction: column;
+  gap: var(--fold-space-12);
+}

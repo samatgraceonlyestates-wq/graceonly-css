@@ -13,6 +13,8 @@ type Props = {
   size?: "default" | "compact" | "large"; // primary only
   href?: string;
   type?: "button" | "submit";
+  // Native disabled (buttons only, not links): dimmed, no pointer, not focusable.
+  disabled?: boolean;
   className?: string;
   children: ReactNode;
 };
@@ -24,6 +26,7 @@ export function Button({
   size = "default",
   href,
   type = "button",
+  disabled = false,
   className,
   children,
 }: Props) {
@@ -44,7 +47,7 @@ export function Button({
   }
 
   return (
-    <button type={type} className={classes}>
+    <button type={type} className={classes} disabled={disabled}>
       {children}
     </button>
   );
