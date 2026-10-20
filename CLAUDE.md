@@ -184,13 +184,62 @@ do not mirror the defect in CSS.
   dashboard shows the first five; 03 shows all seven. Each visit carries a
   short and a long reason label.
 - "Check out" (03) renders enabled and is wired to nothing, with a TODO;
-  it has no backend yet.
+  it has no backend yet. Same for "Export timesheet" (08).
+- Attendance register (08) lives at /attendance/register and is ADMIN-ONLY;
+  the role gate is a TODO (roles are not built). The nav's "Attendance" link
+  stays on /attendance (07, a person's own attendance).
+- 08's date control is a STATIC label. Figma draws "◀ Fri 16 Oct 2026 ▶" as
+  one text layer with no component and no prototype link (0 interactions in
+  either frame). It is rendered without the arrows, since arrows would
+  promise a day stepper; a real stepper needs a date in the route and
+  per-date data. On mobile the date is the line under the title.
+- Attendance state is derived, never stored: on leave, else absent (no
+  clock-in), else late (clock-in after the late-after instant, 09:15 in the
+  design), else present. The KPI tiles are counted from the data. Sample
+  data has 24 staff (9 from the design, 15 placeholders) so the totals are
+  19 / 3 / 1 / 1; durations tick on the shared interval (Duration).
+- The sample attendance day is ANCHORED TO now, like the visits list: each
+  clock-in is now minus its design duration, so every duration equals the
+  design's and none is ever in the future or clamped to 0h 00m. Clock-in
+  times of day therefore move with now, and the sample's late line moves
+  with them (same offset from the day's start as 09:15 has from 10:42), so
+  the "after HH:MM" caption is computed. Real data uses the fixed 09:15 rule.
+- 08's department filters are derived from the staff data, in order of first
+  appearance (so HR appears, unlike the design), with computed counts. They
+  are static (counts only, a TODO) and shown on mobile, wrapping, although
+  the mobile frame omits the row: an admin on a phone keeps the breakdown.
+  Same omission class as the missing mobile nav and complaints panel.
+- Extension points on shared components (use these, never fork):
+  StatusPill compactOnMobile (dot-less 9px, short labels); StatTile dense
+  and dot; PageHeader ledeSize="sm", className, --page-header-eyebrow-gap and
+  --page-header-lede-gap; PersonCell --person-name-size, --person-sub-size,
+  --person-sub-display, --person-gap; Avatar size="responsive"; Table
+  --table-card-pad-x/-pad-y/-gap/-col-gap on an ancestor of the table.
+  Screen CSS that overrides a shared cell's colour or size uses `.row .x`
+  (two classes) so it wins regardless of stylesheet order.
 - Design colours that do not survive a contrast check, so far: status
   fills as text (green 3.30, amber 3.19; fixed by the ink tokens), smoke as
   text (2.75; fixed by the global smoke rule, informational text is dusk),
   the selected filter chip's gold count on burgundy (3.70; now white), and
   gold as text (2.93; the active nav link keeps gold but adds weight and an
   underline).
+
+## Deliberate divergences from Figma
+
+Where our tokens and the design conflict, our tokens win: one screen's card
+looking different from every other card costs more than a couple of pixels
+of fidelity. Recorded so nobody "fixes" them back:
+
+- Stat tiles keep --fold-radius-card (12px) and the card shadow. 08's mobile
+  frame draws a 10px radius and the subtle shadow; no such radius token
+  exists.
+- PageHeader keeps the shared 20/16 mobile padding. 08's mobile frame draws
+  16/12.
+- Mobile page titles are 36px everywhere (08's frame draws 32px).
+- Mobile inputs are 16px, not 15px (iOS zoom on focus).
+- Informational text is --fold-dusk, never --fold-smoke; the selected filter
+  chip's count is white, not gold; status text on white uses the ink tokens.
+- The design's "◀ date ▶" is rendered static, without the arrows.
 
 ## Screens — all eight exist in Figma, desktop + mobile
 

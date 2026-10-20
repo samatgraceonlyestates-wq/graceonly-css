@@ -11,8 +11,9 @@ import styles from "./Table.module.css";
 //   - give TableRow a className that sets grid-template-columns/areas,
 //   - give TableCell a className that sets grid-area,
 //   - mark cells that do not appear on mobile with hideOnMobile.
-// Card padding and gap come from --table-card-pad-x, --table-card-pad-y and
-// --table-card-gap (defaults 16, 14, 10), so a denser screen can override them.
+// Card padding and gaps come from --table-card-pad-x, --table-card-pad-y,
+// --table-card-gap (between cards) and --table-card-col-gap (between cells in a
+// card); defaults 16, 14, 10 and 12, so a denser screen can override them.
 // Explicit roles keep table semantics when the elements stop being display:table.
 
 export function Table({ className, ...rest }: ComponentPropsWithoutRef<"table">) {

@@ -20,6 +20,17 @@
   background: var(--pill-color);
 }
 
+@media (max-width: 767px) {
+  .compactOnMobile {
+    padding: 3px var(--fold-space-8);
+    font-size: 9px;
+  }
+
+  .compactOnMobile .dot {
+    display: none;
+  }
+}
+
 .green {
   --pill-color: var(--fold-status-green);
 }

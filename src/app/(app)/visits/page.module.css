@@ -45,7 +45,8 @@
     grid-area: chip;
   }
 
-  .cellWhen {
+  /* `.row .cellWhen` (two classes) so the 11px beats the Table's own 13px. */
+  .row .cellWhen {
     grid-area: when;
     justify-self: end;
     color: var(--fold-dusk);

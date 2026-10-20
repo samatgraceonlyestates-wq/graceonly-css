@@ -61,7 +61,7 @@
   .row {
     display: grid;
     align-items: center;
-    column-gap: var(--fold-space-12);
+    column-gap: var(--table-card-col-gap, var(--fold-space-12));
     row-gap: var(--fold-space-10);
     padding: var(--table-card-pad-y, var(--fold-space-14)) var(--table-card-pad-x, var(--fold-space-16));
     border-bottom: 0;

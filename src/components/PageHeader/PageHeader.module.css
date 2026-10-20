@@ -1,20 +1,20 @@
 /* Mobile first (36px title, one size for every screen); 64px from 768px up. */
 .header {
   display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: var(--fold-space-16);
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--fold-space-12);
   padding: var(--fold-space-20) 0 var(--fold-space-16);
 }
 
 .text {
   display: flex;
   flex-direction: column;
-  gap: var(--fold-space-6);
   min-width: 0;
 }
 
 .eyebrow {
+  margin-bottom: var(--page-header-eyebrow-gap, var(--fold-space-6));
   color: var(--fold-dusk);
   font-size: 10px;
   font-weight: 600;
@@ -31,9 +31,15 @@
 }
 
 .lede {
+  margin-top: var(--page-header-lede-gap, var(--fold-space-6));
   color: var(--fold-dusk);
   font-size: 15px;
   line-height: 1.41;
+}
+
+.ledeSm {
+  font-size: 12px;
+  line-height: normal;
 }
 
 .ledeHiddenOnMobile {
@@ -41,16 +47,22 @@
 }
 
 .actions {
-  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--fold-space-10);
 }
 
 @media (min-width: 768px) {
   .header {
+    flex-direction: row;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: var(--fold-space-16);
     padding: 0;
   }
 
-  .text {
-    gap: var(--fold-space-10);
+  .eyebrow {
+    margin-bottom: var(--page-header-eyebrow-gap, var(--fold-space-10));
   }
 
   .title {
@@ -60,12 +72,22 @@
   }
 
   .lede {
+    margin-top: var(--page-header-lede-gap, var(--fold-space-10));
     font-size: 18px;
     letter-spacing: -0.54px;
     line-height: normal;
   }
 
+  .ledeSm {
+    font-size: 15px;
+    letter-spacing: 0;
+  }
+
   .ledeHiddenOnMobile {
     display: block;
+  }
+
+  .actions {
+    flex-shrink: 0;
   }
 }

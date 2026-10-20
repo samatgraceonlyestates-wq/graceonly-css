@@ -10,6 +10,8 @@ type Props = {
   // A caller's className can set custom properties on this element:
   //   --person-gap          avatar-to-text gap (default 12px)
   //   --person-sub-display  "none" hides the sub line at a breakpoint
+  //   --person-name-size / --person-sub-size  text sizes (default 14px, and
+  //                         12px / 11px on mobile)
   //   --avatar-size / --avatar-font  when size="responsive"
   className?: string;
 };

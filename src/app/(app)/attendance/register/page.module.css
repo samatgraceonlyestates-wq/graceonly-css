@@ -1,0 +1,133 @@
+/* Mobile first (Figma 32:168). Desktop (Figma 32:2) from 768px up. */
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--fold-space-10);
+}
+
+/* PageHeader spacing for this screen: 4px under the eyebrow and above the
+   sub line on mobile; 20px under the eyebrow and 4px above the sub line on desktop. */
+.header {
+  --page-header-eyebrow-gap: var(--fold-space-4);
+  --page-header-lede-gap: var(--fold-space-4);
+}
+
+.desktopInline {
+  display: none;
+}
+
+.mobileInline {
+  display: inline;
+}
+
+/* The date is a static label: on mobile it is the line under the title instead. */
+.datePill {
+  display: none;
+  padding: var(--fold-space-10) var(--fold-space-16);
+  border: 1px solid var(--fold-silver);
+  border-radius: var(--fold-radius-pill);
+  background: var(--fold-white);
+  color: var(--fold-burgundy);
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/* ---------- KPI row: four across, dense ---------- */
+
+.kpis {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--fold-space-10);
+}
+
+/* ---------- staff cards (mobile) ---------- */
+
+/* Denser than the visit cards (Figma 32:190): 14/12 padding, 8px between cards,
+   10px between cells. Set on the wrapper so the tbody inherits them too. */
+.tableWrap {
+  --table-card-pad-x: var(--fold-space-14);
+  --table-card-pad-y: var(--fold-space-12);
+  --table-card-gap: var(--fold-space-8);
+  --table-card-col-gap: var(--fold-space-10);
+}
+
+/* One person cell per row: 32px avatar and a sub line with 13px / 10px text on
+   mobile; 36px avatar, 14px name and no sub line on desktop. */
+.person {
+  --avatar-size: 32px;
+  --avatar-font: 13px;
+  --person-gap: var(--fold-space-10);
+  --person-name-size: 13px;
+  --person-sub-size: 10px;
+  --person-sub-display: block;
+}
+
+@media (max-width: 767px) {
+  .row {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas: "person status";
+  }
+
+  .cellPerson {
+    grid-area: person;
+  }
+
+  .cellStatus {
+    grid-area: status;
+    justify-self: end;
+  }
+}
+
+/* ---------- desktop ---------- */
+
+/* `.row .x` (two classes) so these beat the Table's own cell colour no matter
+   which stylesheet loads first. */
+.row .strong {
+  color: var(--fold-burgundy);
+  font-weight: 600;
+}
+
+/* Missing times and the 0h 00m / ON LEAVE text: dusk, not Figma's smoke. */
+.row .muted {
+  color: var(--fold-dusk);
+}
+
+/* Late clock-in time: amber ink, since it is text on white. */
+.row .late {
+  color: var(--fold-status-amber-ink);
+}
+
+@media (min-width: 768px) {
+  .page {
+    gap: var(--fold-space-20);
+  }
+
+  .header {
+    --page-header-eyebrow-gap: var(--fold-space-20);
+  }
+
+  .desktopInline {
+    display: inline;
+  }
+
+  .mobileInline {
+    display: none;
+  }
+
+  .datePill {
+    display: inline-flex;
+  }
+
+  .kpis {
+    gap: var(--fold-space-16);
+  }
+
+  .person {
+    --avatar-size: 36px;
+    --avatar-font: 14px;
+    --person-gap: var(--fold-space-12);
+    --person-name-size: 14px;
+    --person-sub-display: none;
+  }
+}

@@ -21,6 +21,12 @@
   display: none;
 }
 
+.valueRow {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--fold-space-10);
+}
+
 .value {
   color: var(--fold-burgundy);
   font-size: 26px;
@@ -39,6 +45,31 @@
 
 .red {
   color: var(--fold-status-red);
+}
+
+/* The dot is a fill, not text, so it uses the plain status tokens. */
+.dot {
+  display: none;
+  width: 12px;
+  height: 12px;
+  border-radius: var(--fold-radius-pill);
+  background: var(--stat-dot);
+}
+
+.dotBurgundy {
+  --stat-dot: var(--fold-burgundy);
+}
+
+.dotGreen {
+  --stat-dot: var(--fold-status-green);
+}
+
+.dotAmber {
+  --stat-dot: var(--fold-status-amber);
+}
+
+.dotRed {
+  --stat-dot: var(--fold-status-red);
 }
 
 .delta {
@@ -63,12 +94,24 @@
 }
 
 .caption {
+  display: none;
   color: var(--fold-dusk);
   font-size: 12px;
 }
 
 .desktopOnly {
   display: none;
+}
+
+/* Dense (attendance register, Figma 32:177): mobile 12/10 padding, 24px number. */
+.dense {
+  gap: 2px;
+  padding: var(--fold-space-10) var(--fold-space-12);
+}
+
+.dense .value {
+  font-size: 24px;
+  letter-spacing: -0.72px;
 }
 
 @media (min-width: 768px) {
@@ -94,6 +137,10 @@
     letter-spacing: -1.68px;
   }
 
+  .dot {
+    display: block;
+  }
+
   .delta {
     font-size: 12px;
   }
@@ -108,7 +155,23 @@
     font-weight: 400;
   }
 
+  .caption {
+    display: block;
+  }
+
   .desktopOnly {
     display: flex;
+  }
+
+  /* Dense desktop: 20/24 padding, 8px gap, tighter line height for the dot. */
+  .dense {
+    gap: var(--fold-space-8);
+    padding: var(--fold-space-20) var(--fold-space-24);
+  }
+
+  .dense .value {
+    font-size: 42px;
+    letter-spacing: -1.68px;
+    line-height: 0.9;
   }
 }
