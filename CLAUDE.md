@@ -342,6 +342,112 @@ of fidelity. Recorded so nobody "fixes" them back:
   drift, corrected here; the Figma file should be fixed at source.
 - 07's mobile week card is 24px padded (the shared Card), not Figma's 20px.
 
+## Decisions (owner)
+
+- THE FEE GATE IS THE PORTAL'S, AND ONLY THE PORTAL'S. The PRD's FR-3.6 (an
+  Admin PIN plus a reason overrides a release block) does NOT exist in CSS and
+  must not be built. CSS reports what release-check told it and never
+  overrides it. An admin who wants to release does it in the portal, where it
+  is audited. Reason: the gate is what stops unpaid documentation fees being
+  handed over, and a desk-level override makes it not a gate. The same
+  thinking is why "unknown, do not release" is the answer while the gate is
+  off, and why `handover.gate_answer` only ever records what the portal said.
+- Stack: PostgreSQL via the plain `pg` driver, with SQL migration files. NO
+  Prisma, NO Supabase (no Supabase Auth, no RLS), NO Tailwind. Roles are
+  enforced in the application. Ask before any dependency beyond `pg` itself.
+- Leave stays in CSS, minimal: dates and a kind (`leave`). Screen 08's ON LEAVE
+  reads it.
+- Enquiries (a non-client's, rule 3) are OPEN or CLOSED. No further workflow.
+- Keep the `device` table (registered desk machines) and
+  `handover.gate_answer`.
+
+## Database
+
+SQL migrations live in `db/migrations/`, applied in filename order, one logical
+group per file, each in its own transaction. They target PostgreSQL 10.23 (end
+of life, so plan an upgrade; they run unchanged on later versions) and need no
+extension. They have been applied to the LOCAL dev database only (PostgreSQL 18)
+and have NOT been run on a PostgreSQL 10 server: a local pass proves syntax and
+logic, not PG10 compatibility. How to create, apply and reset the local database
+is in `db/README.md`. Nothing has been applied to the cPanel server.
+
+- UUID primary keys come from `crypto.randomUUID()` in the app; no DEFAULT,
+  because `gen_random_uuid()` does not exist on 10. Only `audit_log` uses an
+  identity column.
+- Every time is `timestamptz` and defaults to `now()` (the database is the one
+  clock). Office zone is Africa/Lagos: compute day boundaries with
+  `AT TIME ZONE 'Africa/Lagos'`; never store a local timestamp. The only `date`
+  columns are leave days.
+- No generated columns (12+) and no ENUM types (adding a value cannot run in a
+  transaction before 12). Controlled lists are lookup tables with foreign
+  keys; a new value is an INSERT, not a migration.
+- Triggers use `EXECUTE PROCEDURE` (`EXECUTE FUNCTION` is 11+).
+- Append-only tables (`audit_log`, `visit_event`, `handover`,
+  `handover_item`) are guarded by a trigger AND must be granted to the
+  application role without UPDATE, DELETE or TRUNCATE (a deployment step).
+- There is NO client table. A visit stores `portal_client_id` and
+  `client_name_logged` only. The name is the ONE deliberate copy of portal data
+  (a signature in a visitor book): it is never refreshed, and screen 05 shows
+  the live portal name.
+- Composite foreign keys enforce rules 2 and 3 in the database: an `enquiry`
+  can only belong to a non-client's visit, and `visit_case_link` and
+  `case_request` can only belong to a client's.
+- NEVER STORED: any portal client data (email, balances, fee status, purchases,
+  estate, document lists, case content, status or age); raw portal responses;
+  search queries; complaints or their messages; derived values (elapsed time,
+  visit status, attendance state, durations, totals, KPIs); plaintext
+  passwords or tokens (hashes only); staff phone, address or salary.
+- Attendance proves that someone AUTHENTICATED at a registered device or office
+  network, not that they were physically present. Label it so.
+- TODO (portal owner): the create-case endpoint should accept CSS's idempotency
+  key (`case_request.id`), record a `source_ref` (the CSS visit id) and offer a
+  dedupe lookup of a client's open cases. Until then `008_case_links` is inert.
+
+## Scope against the PRD ("CSS PRD.docx")
+
+The PRD is the original spec. It and the built screens diverge in three ways.
+This is the honest scope picture; update it as items are built or dropped.
+
+PRD requirements the eight screens do NOT cover (six; none is built):
+
+1. Document release: recording a handover (6.2, FR-3.1 to 3.5) and its history.
+   Schema exists (`007_handovers`). The gate is the portal's (see Decisions).
+2. Complaint lodging and the admin workflow (6.3, FR-2): lodge mid-visit,
+   status moves, internal notes, reply to the complainant, and the emails to
+   admin. 06 is a read-only list. These go through the portal's case endpoints
+   (not built); who sends the emails is undecided now that the portal owns
+   complaints.
+3. Onboarding Assist (6.4, FR-5): the side-pane portal sign-up and the signup
+   webhook. The portal exposes no phone number and has no such webhook.
+4. Acting on visits (6.1, 6.5, FR-1): Check in, Check out, the 15-minute edit
+   window, adding notes, a final note at check-out. The buttons exist and are
+   wired to nothing.
+5. Looking back and reporting (FR-1, FR-6): a Completed visits history (03 is
+   Active only), visitor frequency, document volumes, CSV export.
+6. Super Admin (FR-7): user management, dropdown management, the audit log
+   viewer, and the four-role model (only login exists).
+
+Built but NOT in the PRD: STAFF ATTENDANCE, all of it (07 My Attendance, 08
+Attendance Register, clock in/out, departments, leave, the 09:15 late rule,
+hour targets, the timesheet export). Schema: `005_attendance`.
+
+PRD points that CONFLICT with settled decisions (not followed):
+
+1. Complaints in CSS tables (Complaint, ComplaintMessage). The portal owns
+   them (rule 2); CSS has no complaint tables.
+2. PortalSnapshot caching balances on disk. CSS never caches client data to
+   disk, and the portal refuses property balance and receipt on purpose. The
+   only money is the documentation fee.
+3. The fee-gate override with an Admin PIN (FR-3.6). Not built, by decision.
+
+Also not followed: phone-based lookup and reconciliation (the portal has no
+phone number; lookup is by name), Realtor lookup (the portal has client
+endpoints only, so a Realtor is a non-client here), the PRD's complaint
+categories and three statuses (the portal's ten types and five statuses
+apply), the PRD's stack (Supabase, Prisma, Tailwind, Vercel, dark mode,
+Playfair and Poppins), and "Existing" versus "New" as visitor types (that is
+`visit.lookup_outcome`).
+
 ## Screens — all eight exist in Figma, desktop + mobile
 
 01 Login                      23:2   / mobile 23:50
@@ -368,4 +474,5 @@ of fidelity. Recorded so nobody "fixes" them back:
   - Commit messages carry NO Co-Authored-By line (owner's decision). This
     overrides any tool default. Earlier commits up to 9d5ffb4 have one; they
     are left as they are (history is not rewritten).
-  - Ask before adding a dependency.
+  - Ask before adding a dependency. `pg` is the one approved database
+    dependency (see Decisions); nothing beyond it without asking.
