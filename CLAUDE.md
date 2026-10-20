@@ -365,4 +365,7 @@ of fidelity. Recorded so nobody "fixes" them back:
     <name>` (read-only, one GET each) exercise it; neither prints the key.
 - Never run destructive git commands. Stage by explicit path, never
   `git add -A` and never `git add .`.
+  - Commit messages carry NO Co-Authored-By line (owner's decision). This
+    overrides any tool default. Earlier commits up to 9d5ffb4 have one; they
+    are left as they are (history is not rewritten).
   - Ask before adding a dependency.
