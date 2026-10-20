@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { PageHeader } from "@/components/PageHeader/PageHeader";
+import { requireSession } from "@/lib/auth";
 import { NewVisitForm } from "./NewVisitForm";
 import styles from "./page.module.css";
 
@@ -13,7 +14,8 @@ export const metadata: Metadata = {
 // The lookup talks to the portal per request: never render at build time.
 export const dynamic = "force-dynamic";
 
-export default function NewVisitPage() {
+export default async function NewVisitPage() {
+  await requireSession();
   return (
     <div className={styles.page}>
       <PageHeader

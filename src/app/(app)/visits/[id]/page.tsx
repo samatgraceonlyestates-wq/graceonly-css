@@ -19,6 +19,7 @@ import { Avatar } from "@/components/Avatar/Avatar";
 import { Card } from "@/components/Card/Card";
 import { ElapsedTime } from "@/components/ElapsedTime/ElapsedTime";
 import { Notice } from "@/components/Notice/Notice";
+import { requireSession } from "@/lib/auth";
 import { getVisitDetailSample } from "@/lib/sampleData";
 import { loadVisitDetail } from "@/lib/visitDetail";
 import { CheckOutAction } from "./CheckOutAction";
@@ -34,6 +35,8 @@ export const metadata: Metadata = {
 export const dynamic = "force-dynamic";
 
 export default async function VisitDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  // The session first: nothing is asked of the portal for someone who is not in.
+  await requireSession();
   const { id } = await params;
   const now = new Date();
   const asOf = now.toISOString();

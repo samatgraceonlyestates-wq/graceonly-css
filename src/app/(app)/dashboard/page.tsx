@@ -8,6 +8,7 @@ import { PageHeader } from "@/components/PageHeader/PageHeader";
 import { PersonCell } from "@/components/PersonCell/PersonCell";
 import { StatTile } from "@/components/StatTile/StatTile";
 import { StatusPill } from "@/components/StatusPill/StatusPill";
+import { requireSession } from "@/lib/auth";
 import { cx } from "@/lib/cx";
 import { getClockParts, greetingForHour } from "@/lib/format";
 import { disputeTypeText, getDashboardSample } from "@/lib/sampleData";
@@ -20,7 +21,8 @@ export const metadata: Metadata = {
 // Live front-desk state: render per request, never at build time.
 export const dynamic = "force-dynamic";
 
-export default function DashboardPage() {
+export default async function DashboardPage() {
+  await requireSession();
   const now = new Date();
   const { asOf, user, stats, visits, complaints } = getDashboardSample(now);
   const clock = getClockParts(now);

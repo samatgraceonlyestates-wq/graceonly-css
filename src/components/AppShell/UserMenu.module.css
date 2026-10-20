@@ -1,0 +1,61 @@
+/* PLACEHOLDER (not in Figma). Tokens only. */
+.menu {
+  position: relative;
+}
+
+.trigger {
+  display: flex;
+  border-radius: var(--fold-radius-pill);
+  list-style: none;
+  cursor: pointer;
+}
+
+/* Safari draws its own marker unless it is removed here too. */
+.trigger::-webkit-details-marker {
+  display: none;
+}
+
+.trigger:focus-visible,
+.signOut:focus-visible {
+  outline: 2px solid var(--fold-gold);
+  outline-offset: 2px;
+}
+
+.panel {
+  position: absolute;
+  top: calc(100% + var(--fold-space-8));
+  right: 0;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  gap: var(--fold-space-10);
+  min-width: 180px;
+  padding: var(--fold-space-14) var(--fold-space-16);
+  border-radius: var(--fold-radius-card);
+  background: var(--fold-white);
+  box-shadow: var(--fold-shadow-card);
+}
+
+.who {
+  color: var(--fold-dusk);
+  font-size: 13px;
+}
+
+/* The row-action button style from CLAUDE.md: white, 1.5px steel border, steel
+   text, 12px semibold, 32px tall, pill. */
+.signOut {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 32px;
+  padding: 0 var(--fold-space-14);
+  border: 1.5px solid var(--fold-burgundy-steel);
+  border-radius: var(--fold-radius-pill);
+  background: var(--fold-white);
+  color: var(--fold-burgundy-steel);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}

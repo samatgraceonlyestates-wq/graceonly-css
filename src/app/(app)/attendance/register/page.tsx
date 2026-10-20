@@ -1,7 +1,11 @@
-// TODO: ADMIN-ONLY. The attendance register is for admins, but the role gate
-// is not built yet, so for now anyone signed in can open this route. The
+// ADMIN-ONLY, enforced HERE on the server before any data is loaded: requireRole
+// ("ADMIN") below (a Super Admin passes too). A signed-in staff member without the
+// role gets a plain notice and the register is never built for them. The
 // "Attendance" nav link points at /attendance (a person's own attendance, 07),
 // not here.
+// TODO (screen 08 requirement, CLAUDE.md "Decisions"): when this reads real
+// data it must VISIBLY mark any clock-in or clock-out whose recorded device kind
+// is PERSONAL, and any manual entry. The sample has no device kind yet.
 
 import type { ReactNode } from "react";
 import type { Metadata } from "next";
@@ -21,6 +25,8 @@ import {
   TableHeaderCell,
   TableRow,
 } from "@/components/Table/Table";
+import { Notice } from "@/components/Notice/Notice";
+import { requireRole } from "@/lib/auth";
 import { cx } from "@/lib/cx";
 import { attendanceState, type AttendanceState } from "@/lib/attendance";
 import { getClockParts, timeOfDay } from "@/lib/format";
@@ -53,7 +59,16 @@ function mobileSub(staff: SampleStaff, state: AttendanceState, asOf: string): Re
   );
 }
 
-export default function AttendanceRegisterPage() {
+export default async function AttendanceRegisterPage() {
+  const { allowed } = await requireRole("ADMIN");
+  if (!allowed) {
+    return (
+      <Notice tone="limited" title="Administrators only" role="status">
+        <p>The attendance register is for administrators. If you need it, ask an administrator to give you the role.</p>
+      </Notice>
+    );
+  }
+
   const now = new Date();
   const asOf = now.toISOString();
   const clock = getClockParts(now);

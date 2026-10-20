@@ -17,6 +17,7 @@ import {
   TableRow,
 } from "@/components/Table/Table";
 import { attendanceState, closedMs, shiftState, type AttendanceState } from "@/lib/attendance";
+import { requireSession } from "@/lib/auth";
 import { cx } from "@/lib/cx";
 import { NO_TIME, formatDuration, getClockParts, greetingForHour, timeOfDay } from "@/lib/format";
 import {
@@ -141,6 +142,7 @@ export default async function MyAttendancePage({
 }: {
   searchParams: Promise<{ scenario?: string }>;
 }) {
+  await requireSession();
   // TODO: sample-only preview switch (see getMyAttendanceSample); remove it
   // when auth and a backend exist. It is honoured ONLY outside production: in
   // a production build the query string is never read and the real record is

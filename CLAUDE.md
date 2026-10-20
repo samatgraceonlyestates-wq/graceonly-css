@@ -161,7 +161,7 @@ do not mirror the defect in CSS.
   or Analytics (no such screens). Complaints is visible to everyone.
 - "Attendance" is the person's own attendance (07). The admin Attendance
   Register (08) is a separate role-gated route, not a nav item for
-  everyone. TODO: role gate; roles are not built yet.
+  everyone. The role gate is enforced on the server (see "Authentication").
 - Mobile: top bar (logo mark + "CSS", compact "+ New visit" button, avatar)
   plus a BOTTOM TAB BAR with the same four destinations. The button is not
   in the mobile Figma; it is there because starting a visit is the front
@@ -239,8 +239,9 @@ do not mirror the defect in CSS.
   rule) for unresolved cases, green for resolved, silver for withdrawn.
 - The dashboard's complaints are the SAME portal-shaped list (the open ones,
   oldest first), so the dashboard and 06 cannot disagree.
-- Attendance register (08) lives at /attendance/register and is ADMIN-ONLY;
-  the role gate is a TODO (roles are not built). The nav's "Attendance" link
+- Attendance register (08) lives at /attendance/register and is ADMIN-ONLY,
+  enforced on the server by requireRole("ADMIN") before any data is loaded (a
+  Super Admin passes too; anyone else gets a plain notice). The nav's "Attendance" link
   stays on /attendance (07, a person's own attendance). TODO when it reads real
   data: it must visibly mark clock-ins from a PERSONAL device (see Decisions);
   the sample data has no device kind yet.
@@ -274,7 +275,7 @@ do not mirror the defect in CSS.
   not-clocked-in|on-shift|complete is a SAMPLE-ONLY preview switch so all
   three states can be seen; the other two deliberately disagree with 08. It
   is honoured only when NODE_ENV !== "production"; a production build never
-  reads the query string. Remove it when auth and a backend exist.
+  reads the query string. Remove it when the attendance backend exists.
 - 07's week rows are the real Mon to Fri of the current week, computed from
   the calendar: earlier days are sample history, today is live, later days
   are empty. NOTE: the Figma frame's week table is off by one day against
@@ -387,6 +388,87 @@ of fidelity. Recorded so nobody "fixes" them back:
   computer is bought and registered as a DESK device, setting it to `true` is how
   phone clock-in gets refused: an UPDATE of that row, no code change, no
   migration. NOTHING READS IT YET.
+
+## Authentication
+
+Password only (no PIN; see Decisions). CSS's own end to end: NOTHING on the
+sign-in path calls the portal, so signing in works when the portal is down.
+Files: `authPolicy.ts` (the numbers and pure rules), `password.ts` (scrypt),
+`authCore.ts` (the rules), `authStore.ts` (SQL), `auth.ts` (Next glue: cookies,
+redirects), `src/proxy.ts` + `proxyDecision.ts`, `staffAdmin.ts` + `scripts/create-staff.ts`.
+
+- PASSWORDS: scrypt from `node:crypto`, N=32768, r=8, p=1, 64-byte key, 16-byte
+  random salt, NFKC-normalised. Stored as
+  `scrypt$N=32768,r=8,p=1,len=64$<salt b64url>$<hash b64url>`: the parameters
+  are IN the string, so raising them later is done per user at their next
+  sign-in (`needsRehash`), with no migration. Compared with `timingSafeEqual`.
+  `maxmem` is derived from the parameters: they need 33,557,504 bytes and Node's
+  default limit is 33,554,432, so scrypt THROWS without it. At most 2 hashes run
+  at once (a 34 MB buffer each, on a shared host); beyond a short queue the
+  answer is "busy". `DUMMY_HASH` (used for an email with no account) must be
+  regenerated if `CURRENT_PARAMS` change; `password.test.ts` fails if not.
+- A PLAINTEXT PASSWORD is never logged, returned, put in an error, a test name
+  or a server action's result. The tests carry a canary for it.
+- SESSIONS: a 32-byte random token (base64url); the database stores ONLY its
+  SHA-256 (`session.token_hash`). Cookie `css_session`: httpOnly, sameSite=lax,
+  path=/, Secure when `NODE_ENV === "production"` (a browser will not keep a
+  Secure cookie that arrived over plain http, so it is off in development; it
+  is decided from the environment, not hard-coded). ABSOLUTE lifetime 12 hours
+  (`expires_at`, set from the DATABASE clock), IDLE timeout 3 hours
+  (`last_seen_at`, refreshed at most once a minute). Past either, or revoked,
+  or the person deactivated, the session is invalid. LOGOUT REVOKES THE ROW
+  (`revoked_at`); clearing the cookie alone leaves a working token in the wild.
+  Changing a password ends every session and issues a fresh one. `device_id`
+  stays NULL until a device is registered.
+- FAILED SIGN-INS: 5 failures in a row lock the account for 15 minutes
+  (`password_failed_count`, `password_locked_until`); a success resets it. The
+  update is ONE atomic statement, so simultaneous guesses cannot step over the
+  limit; the failure that applies the lock restarts the count. The same message
+  for a wrong password, an unknown address and an inactive account. TIMING
+  PARITY: every attempt does exactly ONE scrypt run (a dummy hash when there is
+  no account) and, on failure, exactly one write-shaped query (a no-op for an
+  unknown or locked account). "Locked" must look the same for an address with no
+  account, or locking would prove an account exists, so unknown addresses lock
+  too (`SimulatedLockout`). Also a per-IP limit: 20 failures per 15 minutes,
+  checked BEFORE any hashing (deliberately above 5: an office shares one
+  address).
+- LOGGING: a failed sign-in logs a reason and, only when the email matched a real
+  account, the STAFF ID. NEVER the email that was typed, and no IP; nothing
+  identifying when no account matched.
+- WHERE THE GATES ARE. EVERY PAGE AND EVERY SERVER ACTION calls `requireSession()`
+  (or `requireRole()`) itself, at the top, before it loads or asks for anything.
+  A layout is NOT a gate (Next does not re-run it between pages in the layout,
+  and a server action never passes through it). Roles come from `staff_role`;
+  a Super Admin satisfies ADMIN, no other role implies another. Anything in the
+  browser is a hint, never a gate. A new page or action that skips the call is a
+  defect.
+- THE PROXY (`src/proxy.ts`; Next 16 renamed middleware to proxy, and it runs on
+  the Node.js runtime, not the edge) is only for cheap things: no cookie at all
+  -> `/login?next=...`, and it forwards the path in `x-css-path`. It NEVER decides
+  whether a session is valid and imports nothing that reaches the database.
+- MUST CHANGE PASSWORD: a person with `must_change_password` reaches NOTHING but
+  `/change-password` (every other page and action redirects them there) until
+  they change it. After signing in, a person continues to where they were going
+  (`safeNext`: a path on this site only; anything else becomes the dashboard).
+- FIRST ACCOUNT / NEW ACCOUNTS: there is NO signup and there must never be one.
+  `npm run staff:create -- --email ... --name "..." --department "..." --role ADMIN`
+  (repeat `--role`); the password is typed at a prompt, twice, nothing echoed. It
+  is never an argument (shell history, process list): the script refuses
+  `--password`, and refuses a pipe. It works on the server over SSH or the cPanel
+  terminal (PowerShell or Windows Terminal on Windows; Git Bash is not a TTY to
+  Node). The account is created with `must_change_password`.
+- UNDESIGNED, not in Figma: the change-password screen and the sign-out control
+  (the avatar opens a small menu). Both are placeholders built from shared
+  components; replace them when a design exists.
+- KNOWN LIMITS (decide, do not forget): (1) The IP and unknown-address limiters are
+  in this process's memory: several processes each keep their own, and a restart
+  clears them. The per-ACCOUNT lock is in the database and holds. (2) The client
+  address comes from `X-Forwarded-For` (the last entry, the one the proxy saw);
+  confirm how the host presents it. (3) A lock means anyone who knows a staff
+  email can lock that person out for 15 minutes by typing wrong passwords;
+  there is no admin unlock yet (wait, or clear `password_locked_until`).
+  (4) No password-reset flow: an administrator resets by a script yet to be
+  written. (5) A DbError during sign-in shows its fixed message and a reference.
 
 ## Database
 
@@ -544,8 +626,9 @@ PRD requirements the eight screens do NOT cover (six; none is built):
    wired to nothing.
 5. Looking back and reporting (FR-1, FR-6): a Completed visits history (03 is
    Active only), visitor frequency, document volumes, CSV export.
-6. Super Admin (FR-7): user management, dropdown management, the audit log
-   viewer, and the four-role model (only login exists).
+6. Super Admin (FR-7): user management screens, dropdown management and the
+   audit log viewer. (Sign-in, sessions and the four roles ARE built: see
+   "Authentication". Accounts are made from the command line.)
 
 Built but NOT in the PRD: STAFF ATTENDANCE, all of it (07 My Attendance, 08
 Attendance Register, clock in/out, departments, leave, the 09:15 late rule,

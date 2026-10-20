@@ -199,6 +199,19 @@
   text-decoration: underline;
 }
 
+/* The one addition to the design: a place to say why a sign-in failed. Red passes
+   AA as text on white (4.83:1), so it needs no ink token. */
+.error {
+  color: var(--fold-status-red);
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.submit:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+
 .input:focus-visible,
 .submit:focus-visible,
 .forgot:focus-visible {

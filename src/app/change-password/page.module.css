@@ -1,0 +1,75 @@
+/* UNDESIGNED (not in Figma). Mobile first; tokens only. */
+.page {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: var(--fold-space-8);
+  height: 60px;
+  padding: var(--fold-space-20) var(--fold-space-24);
+}
+
+.logoMark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--fold-radius-8);
+  background: var(--fold-burgundy);
+  color: var(--fold-gold);
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.brandName {
+  color: var(--fold-burgundy);
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.56px;
+}
+
+.main {
+  display: flex;
+  flex: 1;
+  justify-content: center;
+  padding: var(--fold-space-24) var(--fold-space-16) var(--fold-space-40);
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--fold-space-16);
+  width: 100%;
+  max-width: 440px;
+  height: fit-content;
+}
+
+.title {
+  color: var(--fold-burgundy);
+  font-size: 24px;
+  font-weight: 600;
+  letter-spacing: -0.72px;
+}
+
+.lede {
+  color: var(--fold-dusk);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--fold-space-16);
+}
+
+.hint {
+  color: var(--fold-dusk);
+  font-size: 13px;
+}

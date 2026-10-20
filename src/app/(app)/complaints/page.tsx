@@ -5,6 +5,7 @@ import { Chip } from "@/components/Chip/Chip";
 import { ComplaintAge } from "@/components/ComplaintAge/ComplaintAge";
 import { PageHeader } from "@/components/PageHeader/PageHeader";
 import { StatusPill } from "@/components/StatusPill/StatusPill";
+import { requireSession } from "@/lib/auth";
 import { complaintAgeMs, complaintAgeTone } from "@/lib/complaintAge";
 import { cx } from "@/lib/cx";
 import {
@@ -80,6 +81,8 @@ export default async function ComplaintsPage({
 }: {
   searchParams: Promise<{ status?: string }>;
 }) {
+  // The session first; when the portal read arrives it must come after this.
+  await requireSession();
   // TODO: THE PORTAL READ BELONGS HERE (see getComplaintsSample). NONE of the
   // case endpoints are built yet: only the five read-only client endpoints
   // exist, so this reads sample rows shaped like the portal's `disputes` row.

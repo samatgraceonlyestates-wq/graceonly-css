@@ -1,9 +1,15 @@
 import type { Metadata } from "next";
+import { redirect } from "next/navigation";
+import { getSession, safeNext } from "@/lib/auth";
+import { LoginForm } from "./LoginForm";
 import styles from "./page.module.css";
 
 export const metadata: Metadata = {
   title: "Sign in — CSS",
 };
+
+// Reads the session cookie, so it is rendered per request.
+export const dynamic = "force-dynamic";
 
 function LogoMark() {
   return (
@@ -13,7 +19,20 @@ function LogoMark() {
   );
 }
 
-export default function LoginPage() {
+export default async function LoginPage({ searchParams }: { searchParams: Promise<{ next?: string | string[] }> }) {
+  const requested = (await searchParams).next;
+  const next = safeNext(Array.isArray(requested) ? requested[0] : requested);
+
+  // Already signed in: go where they were heading. If the database cannot be
+  // reached, show the form anyway; signing in will say what is wrong.
+  let user = null;
+  try {
+    user = await getSession();
+  } catch {
+    user = null;
+  }
+  if (user !== null) redirect(user.mustChangePassword ? `/change-password?next=${encodeURIComponent(next)}` : next);
+
   return (
     <div className={styles.page}>
       {/* Mobile brand bar */}
@@ -63,46 +82,7 @@ export default function LoginPage() {
             <span className={styles.cardTitleMobile}>Sign in</span>
           </h2>
 
-          {/* TODO: no auth yet, so this form is not wired to anything.
-              method="post" is deliberate: it keeps the password out of the URL
-              and browser history. Submitting returns a 405 for now; that goes
-              away once real auth handles the POST. */}
-          <form className={styles.form} method="post">
-            <label className={styles.label} htmlFor="login-email">
-              Email
-            </label>
-            <input
-              id="login-email"
-              className={styles.input}
-              type="email"
-              name="email"
-              autoComplete="username"
-              placeholder="you@graceonlyestates.com"
-              required
-            />
-
-            <label className={styles.label} htmlFor="login-password">
-              Password
-            </label>
-            <input
-              id="login-password"
-              className={styles.input}
-              type="password"
-              name="password"
-              autoComplete="current-password"
-              placeholder="••••••••••••"
-              required
-            />
-
-            <button className={styles.submit} type="submit">
-              Sign in
-            </button>
-
-            {/* TODO: point at the real reset route once it exists. */}
-            <a className={styles.forgot} href="#">
-              Forgot password?
-            </a>
-          </form>
+          <LoginForm next={next} />
         </section>
 
         <div className={styles.spaceBottom} aria-hidden="true" />

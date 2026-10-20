@@ -4,13 +4,12 @@ import { Avatar } from "@/components/Avatar/Avatar";
 import { Button } from "@/components/Button/Button";
 import { NavLinks } from "./NavLinks";
 import { TabBar } from "./TabBar";
+import { UserMenu } from "./UserMenu";
 import styles from "./AppShell.module.css";
 
 // Wraps every signed-in screen (02 to 08). Login has its own bar and does not
 // use this. Desktop: floating nav. Mobile: top bar plus a bottom tab bar.
 export function AppShell({ user, children }: { user: { name: string }; children: ReactNode }) {
-  const signedInAs = `Signed in as ${user.name}`;
-
   return (
     <div className={styles.shell}>
       <header className={styles.header}>
@@ -32,12 +31,16 @@ export function AppShell({ user, children }: { user: { name: string }; children:
                 + New visit
               </Button>
             </span>
-            <span className={styles.avatarDesktop}>
-              <Avatar name={user.name} size={40} tone="solid" label={signedInAs} />
-            </span>
-            <span className={styles.avatarMobile}>
-              <Avatar name={user.name} size={36} tone="solid" label={signedInAs} />
-            </span>
+            {/* The avatars are decorative now: the menu button that wraps them
+                carries the accessible name. */}
+            <UserMenu name={user.name}>
+              <span className={styles.avatarDesktop}>
+                <Avatar name={user.name} size={40} tone="solid" />
+              </span>
+              <span className={styles.avatarMobile}>
+                <Avatar name={user.name} size={36} tone="solid" />
+              </span>
+            </UserMenu>
           </div>
         </div>
       </header>

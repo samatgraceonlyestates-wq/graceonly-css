@@ -16,9 +16,28 @@ type Props = {
   describedBy?: string;
   enterKeyHint?: "search" | "next" | "done";
   className?: string;
+  // Defaults keep it a plain text field: type "text", autocomplete off, words
+  // capitalised, not required. A password field sets all of these.
+  type?: "text" | "password";
+  autoComplete?: string;
+  autoCapitalize?: "off" | "words";
+  required?: boolean;
 };
 
-export function TextField({ label, name, value, onChange, placeholder, describedBy, enterKeyHint, className }: Props) {
+export function TextField({
+  label,
+  name,
+  value,
+  onChange,
+  placeholder,
+  describedBy,
+  enterKeyHint,
+  className,
+  type = "text",
+  autoComplete = "off",
+  autoCapitalize = "words",
+  required = false,
+}: Props) {
   const id = useId();
 
   return (
@@ -29,14 +48,15 @@ export function TextField({ label, name, value, onChange, placeholder, described
       <input
         id={id}
         className={styles.input}
-        type="text"
+        type={type}
         name={name}
         value={value}
         placeholder={placeholder}
         aria-describedby={describedBy}
         enterKeyHint={enterKeyHint}
-        autoComplete="off"
-        autoCapitalize="words"
+        autoComplete={autoComplete}
+        autoCapitalize={autoCapitalize}
+        required={required}
         spellCheck={false}
         onChange={(event) => onChange(event.target.value)}
       />

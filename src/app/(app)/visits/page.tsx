@@ -16,6 +16,7 @@ import {
 } from "@/components/Table/Table";
 import { VisitStatus } from "@/components/VisitStatus/VisitStatus";
 import { VisuallyHidden } from "@/components/VisuallyHidden/VisuallyHidden";
+import { requireSession } from "@/lib/auth";
 import { getClockParts } from "@/lib/format";
 import { getVisitsSample } from "@/lib/sampleData";
 import styles from "./page.module.css";
@@ -34,7 +35,8 @@ const GROUPS = [
   { label: "Deliveries", kind: "Delivery" },
 ] as const;
 
-export default function VisitsPage() {
+export default async function VisitsPage() {
+  await requireSession();
   const now = new Date();
   const asOf = now.toISOString();
   const visits = getVisitsSample(now);
