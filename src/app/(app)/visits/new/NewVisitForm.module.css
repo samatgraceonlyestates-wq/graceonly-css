@@ -54,45 +54,6 @@
   gap: var(--fold-space-12);
 }
 
-/* A 4px rail down the left, like a complaint card. The rail is a fill; the
-   text stays dusk and burgundy. */
-.notice {
-  padding: var(--fold-space-14) var(--fold-space-16);
-  border-left: 4px solid var(--rail-color);
-  border-radius: var(--fold-radius-card);
-  background: var(--fold-white);
-  box-shadow: var(--fold-shadow-subtle);
-}
-
-.info {
-  --rail-color: var(--fold-burgundy-steel);
-}
-
-.guidance {
-  --rail-color: var(--fold-silver);
-}
-
-.limited {
-  --rail-color: var(--fold-status-amber);
-}
-
-.failure {
-  --rail-color: var(--fold-status-red);
-}
-
-.noticeTitle {
-  margin-bottom: var(--fold-space-4);
-  color: var(--fold-burgundy);
-  font-size: 14px;
-  font-weight: 600;
-}
-
-.noticeText {
-  color: var(--fold-dusk);
-  font-size: 13px;
-  line-height: 1.5;
-}
-
 /* ---------- candidates ---------- */
 
 .details {

@@ -1,0 +1,157 @@
+/* UNVERIFIED AGAINST FIGMA (28:2 / 28:80). Mobile first; desktop from 768px. */
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--fold-space-12);
+  min-width: 0;
+}
+
+.panelHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--fold-space-12);
+}
+
+.panelTitle {
+  color: var(--fold-burgundy);
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: -0.54px;
+}
+
+.quiet {
+  color: var(--fold-dusk);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.total {
+  color: var(--fold-dusk);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.rows {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.row,
+.docRow,
+.entry {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--fold-space-12);
+  padding: var(--fold-space-10) 0;
+  border-bottom: 1px solid var(--fold-silver);
+}
+
+.rows > li:last-child,
+.timeline > li:last-child {
+  border-bottom: 0;
+}
+
+.docRow {
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: var(--fold-space-4) var(--fold-space-12);
+}
+
+.rowText {
+  display: flex;
+  flex-direction: column;
+  gap: var(--fold-space-4);
+  min-width: 0;
+}
+
+.rowTitle {
+  color: var(--fold-burgundy);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.rowDetail {
+  color: var(--fold-dusk);
+  font-size: 13px;
+}
+
+.docGroup {
+  display: flex;
+  flex-direction: column;
+  gap: var(--fold-space-6);
+}
+
+.docHeading {
+  color: var(--fold-dusk);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+}
+
+/* ---------- timeline ---------- */
+
+.timeline {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.entry {
+  align-items: flex-start;
+}
+
+.entryTime {
+  flex-shrink: 0;
+  color: var(--fold-dusk);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- release ---------- */
+
+.releasePurchase {
+  display: flex;
+  flex-direction: column;
+  gap: var(--fold-space-6);
+}
+
+.releaseHeading {
+  color: var(--fold-burgundy);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.releaseList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--fold-space-8);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.releaseRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--fold-space-4) var(--fold-space-10);
+}
+
+.releaseReason {
+  flex-basis: 100%;
+  font-size: 12px;
+}
+
+@media (min-width: 768px) {
+  .releaseReason {
+    flex-basis: auto;
+  }
+}

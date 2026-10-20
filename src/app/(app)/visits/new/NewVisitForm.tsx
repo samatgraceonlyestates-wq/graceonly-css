@@ -18,16 +18,18 @@
 //  - A non-client (any non-Client type, a lookup that finds nobody, or "none of
 //    these") is logged with no clientId, and anything they raise is an
 //    ENQUIRY, never a case.
-import { useActionState, useRef, useState, useTransition, type ReactNode } from "react";
+import { useActionState, useRef, useState, useTransition } from "react";
 import { Avatar } from "@/components/Avatar/Avatar";
 import { Button } from "@/components/Button/Button";
 import { Card } from "@/components/Card/Card";
 import { ChoiceGroup, type ChoiceOption } from "@/components/ChoiceGroup/ChoiceGroup";
 import { Chip } from "@/components/Chip/Chip";
+import { Notice } from "@/components/Notice/Notice";
 import { StatusPill } from "@/components/StatusPill/StatusPill";
 import { TextField } from "@/components/TextField/TextField";
+import { ROLLUP_PILL } from "@/lib/feeRollup";
 import { firstName } from "@/lib/format";
-import type { ClientCandidate, Match, RollupStatus } from "@/lib/portal";
+import type { ClientCandidate, Match } from "@/lib/portal";
 import { IDLE_SEARCH, type VisitSearchState } from "@/lib/visitSearch";
 import type { VisitorBriefState } from "@/lib/visitorBriefState";
 import { loadVisitorBriefAction, searchVisitorAction } from "./actions";
@@ -60,35 +62,7 @@ const MATCH_LABEL: Record<Match, string> = {
   APPROXIMATE: "Approximate match",
 };
 
-// The one fee pill, from the documentation fee rollup. The wording is ours.
-const FEE_PILL: Record<RollupStatus, { tone: "green" | "amber" | "red" | "neutral"; label: string }> = {
-  HAS_OUTSTANDING: { tone: "red", label: "Fee outstanding" },
-  HAS_UNKNOWN: { tone: "amber", label: "Fee status unknown" },
-  ALL_PAID: { tone: "green", label: "Fee paid" },
-  NO_FEE_ON_ANY_PURCHASE: { tone: "neutral", label: "No fee" },
-  NO_LIVE_PURCHASES: { tone: "neutral", label: "No live purchases" },
-};
-
 type Person = { kind: "client"; clientId: string; name: string } | { kind: "non_client"; name: string };
-
-function Notice({
-  tone,
-  title,
-  role,
-  children,
-}: {
-  tone: "info" | "guidance" | "limited" | "failure";
-  title?: string;
-  role?: "status" | "alert";
-  children: ReactNode;
-}) {
-  return (
-    <div className={`${styles.notice} ${styles[tone]}`} role={role}>
-      {title ? <p className={styles.noticeTitle}>{title}</p> : null}
-      <p className={styles.noticeText}>{children}</p>
-    </div>
-  );
-}
 
 function CandidateDetails({ candidate }: { candidate: ClientCandidate }) {
   return (
@@ -311,7 +285,7 @@ export function NewVisitForm() {
                 </p>
               </div>
               <div className={styles.resultPills}>
-                <StatusPill tone={FEE_PILL[brief.brief.feeStatus].tone}>{FEE_PILL[brief.brief.feeStatus].label}</StatusPill>
+                <StatusPill tone={ROLLUP_PILL[brief.brief.feeStatus].tone}>{ROLLUP_PILL[brief.brief.feeStatus].label}</StatusPill>
                 {brief.brief.openCaseCount !== null && brief.brief.openCaseCount > 0 ? (
                   <StatusPill tone="amber">
                     {brief.brief.openCaseCount} open {brief.brief.openCaseCount === 1 ? "case" : "cases"}

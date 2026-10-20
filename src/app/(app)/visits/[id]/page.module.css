@@ -1,0 +1,111 @@
+/* UNVERIFIED AGAINST FIGMA (28:2 / 28:80). Mobile first; desktop from 768px. */
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--fold-space-16);
+  padding-top: var(--fold-space-20);
+}
+
+/* The header card is a wrapping row: avatar, identity, timer, button. The
+   check-out notice takes a full row under them (CheckOutAction). */
+.header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--fold-space-12) var(--fold-space-16);
+}
+
+.avatar {
+  --avatar-size: 56px;
+  --avatar-font: 24px;
+}
+
+.identity {
+  flex: 1;
+  min-width: 0;
+}
+
+.name {
+  color: var(--fold-burgundy);
+  font-size: 24px;
+  font-weight: 600;
+  letter-spacing: -0.72px;
+}
+
+.meta {
+  margin-top: var(--fold-space-4);
+  color: var(--fold-dusk);
+  font-size: 13px;
+}
+
+.timer {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--fold-space-4);
+}
+
+/* Two classes so it wins over the shared ElapsedTime's own 14px. */
+.timer .elapsed {
+  font-size: 22px;
+  letter-spacing: -0.66px;
+}
+
+.sampleTag {
+  color: var(--fold-dusk);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+}
+
+.columns {
+  display: flex;
+  flex-direction: column;
+  gap: var(--fold-space-16);
+}
+
+.side {
+  display: flex;
+  flex-direction: column;
+  gap: var(--fold-space-16);
+  min-width: 0;
+}
+
+@media (min-width: 768px) {
+  .page {
+    gap: var(--fold-space-24);
+    padding-top: 0;
+  }
+
+  .header {
+    flex-wrap: wrap;
+    gap: var(--fold-space-16) var(--fold-space-24);
+  }
+
+  .avatar {
+    --avatar-size: 72px;
+    --avatar-font: 30px;
+  }
+
+  .name {
+    font-size: 32px;
+    letter-spacing: -0.96px;
+  }
+
+  .meta {
+    font-size: 14px;
+  }
+
+  .timer .elapsed {
+    font-size: 28px;
+    letter-spacing: -0.84px;
+  }
+
+  .columns {
+    display: grid;
+    grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+    gap: var(--fold-space-24);
+    align-items: start;
+  }
+}

@@ -57,6 +57,26 @@ export function formatAge(ms: number): string {
   return `${minutes}m`;
 }
 
+// Integer kobo as naira: 500000 -> "₦5,000.00". Built by hand, no locale data.
+export function formatNaira(kobo: number): string {
+  const sign = kobo < 0 ? "-" : "";
+  const absolute = Math.abs(kobo);
+  const naira = Math.floor(absolute / 100)
+    .toString()
+    .replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  return `${sign}₦${naira}.${String(absolute % 100).padStart(2, "0")}`;
+}
+
+// "2026-08-18" -> "18 Aug 2026". The portal sends these as SQL-formatted
+// strings; they are split, never parsed as timestamps, so no time zone can move
+// the day. Anything that is not YYYY-MM-DD is returned as it came.
+export function formatIsoDate(value: string): string {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (!match) return value;
+  const month = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][Number(match[2]) - 1];
+  return month ? `${Number(match[3])} ${month} ${match[1]}` : value;
+}
+
 // The first name for a greeting or a button ("Check in Lara"). A leading title
 // ("Mrs.", "Dr.") is skipped. A one-word name is returned as it is.
 export function firstName(name: string): string {

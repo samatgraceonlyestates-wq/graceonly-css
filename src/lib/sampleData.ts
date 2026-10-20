@@ -583,3 +583,35 @@ export function getDashboardSample(now: Date) {
     complaints,
   };
 }
+
+// ---------------------------------------------------------------------------
+// Screen 05 (Visit Detail): the visit's own log.
+//
+// TODO: PLACEHOLDER. CSS's visit log does not exist yet, so none of this is a
+// real visit. The check-in time, the reason and every timeline entry are made
+// up and anchored to `now`, and the screen says so on its face. Replace this
+// with a read of CSS's own visit store when it exists. The CLIENT data on the
+// screen (name, estate, fee, documents, release position) is NOT sample: it is
+// read live from the portal.
+// ---------------------------------------------------------------------------
+export type SampleTimelineEntry = {
+  id: string;
+  title: string;
+  detail: string;
+  at: string; // ISO timestamp
+};
+
+export function getVisitDetailSample(now: Date): { checkInAt: string; entries: SampleTimelineEntry[] } {
+  const checkIn = now.getTime() - 14 * MINUTE;
+  const at = (minutesAfter: number) => new Date(checkIn + minutesAfter * MINUTE).toISOString();
+
+  return {
+    checkInAt: at(0),
+    entries: [
+      { id: "sample-1", title: "Checked in", detail: "Reason: Inquiry · logged by front desk", at: at(0) },
+      { id: "sample-2", title: "Portal lookup", detail: "Client found by name and picked by the desk", at: at(1) },
+      { id: "sample-3", title: "Documents", detail: "Issued documents reviewed with the client", at: at(6) },
+      { id: "sample-4", title: "Note", detail: "Asked about the next step on their purchase", at: at(9) },
+    ],
+  };
+}
