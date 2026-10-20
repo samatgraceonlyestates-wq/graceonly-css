@@ -87,6 +87,49 @@ Git Bash:
 To drop the whole database instead, connect as a superuser:
 `DROP DATABASE css_dev; CREATE DATABASE css_dev OWNER css_dev;`.
 
+## One file for the server: `pg10-proof.sql`
+
+To apply the schema on a machine that is awkward to reach, `db/pg10-proof.sql` is
+the eight migrations joined into a single file, verbatim and in filename order.
+It is **generated, and it is not a ninth migration**: it lives in `db/`, never in
+`db/migrations/`, and must never be applied on top of the migrations (it
+contains them). Do not edit it.
+
+```
+npm run db:proof          # (re)generate db/pg10-proof.sql
+npm run db:proof:check    # exit 1 if it is stale
+```
+
+**Regenerate it after ANY edit to a migration, and commit both together.** A
+stale proof file is worse than none: it would test something other than what you
+ship. `db:proof:check` catches it.
+
+What the generator does and does not do:
+
+- Copies each migration's bytes unchanged. The only change to a source file is
+  CRLF to LF (Git for Windows checks files out with CRLF; the repository and the
+  server use LF). A lone CR, a NUL, a byte order mark or a missing final newline
+  fails the build.
+- Adds only a comment header, one `\set ON_ERROR_STOP on`, and one
+  `\echo '>>> applying NNN_name.sql'` line before each file.
+- Keeps every file's own `BEGIN`/`COMMIT`. There is no outer transaction, so a
+  failing file rolls back but the files before it stay applied.
+- The header lists the line range of each source file. psql reports
+  `psql:pg10-proof.sql:LINE: ERROR`; the line inside the source file is
+  `LINE - first + 1`.
+
+Run it with `psql` on an EMPTY database (the `\echo` and `\set` lines are psql
+commands; phpPgAdmin and most web consoles will not run them):
+
+```
+psql -X -v ON_ERROR_STOP=1 -f pg10-proof.sql "<connection>"
+```
+
+No server address, user or password belongs in the repository.
+
+`.gitattributes` pins `db/**` to LF so a fresh checkout on Windows does not
+produce CRLF SQL.
+
 ## Look at it
 
 ```bash

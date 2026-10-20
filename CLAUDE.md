@@ -370,6 +370,10 @@ extension. They have been applied to the LOCAL dev database only (PostgreSQL 18)
 and have NOT been run on a PostgreSQL 10 server: a local pass proves syntax and
 logic, not PG10 compatibility. How to create, apply and reset the local database
 is in `db/README.md`. Nothing has been applied to the cPanel server.
+`db/pg10-proof.sql` is the eight migrations joined into one file to carry to the
+PG10 server. It is GENERATED (`npm run db:proof`) and is NOT a migration: never
+put it in `db/migrations/`, never edit it, and regenerate it (and commit both)
+after ANY migration edit. `npm run db:proof:check` fails if it is stale.
 
 - UUID primary keys come from `crypto.randomUUID()` in the app; no DEFAULT,
   because `gen_random_uuid()` does not exist on 10. Only `audit_log` uses an

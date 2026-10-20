@@ -1,0 +1,4 @@
+# The SQL under db/ is applied on a Linux server: keep it LF in the working tree
+# too, whatever core.autocrlf says (Git for Windows would otherwise check it out
+# with CRLF). Scoped to db/ on purpose.
+db/** text eol=lf
