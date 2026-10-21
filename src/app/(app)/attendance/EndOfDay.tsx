@@ -44,14 +44,14 @@ export function EndOfDay({ people }: { people: { id: string; name: string }[] })
           </p>
 
           {confirming ? (
-            <form action={formAction} className={styles.confirm}>
+            <form action={formAction} className={styles.confirm} data-pause-refresh="true">
               {people.map((person) => (
                 <input key={person.id} type="hidden" name="recordId" value={person.id} />
               ))}
               <p className={styles.confirmText}>
                 Mark {people.length === 1 ? "this person" : `these ${people.length} people`} as not signed out?{" "}
-                <strong>{people.map((person) => person.name).join(", ")}</strong>. Their hours will be unknown, and this screen
-                cannot undo it.
+                <strong>{people.map((person) => person.name).join(", ")}</strong>. Their hours will be unknown. It can be undone
+                later from the person&apos;s Correct… panel.
               </p>
               <div className={styles.confirmActions}>
                 <Button type="submit" size="compact" disabled={pending}>

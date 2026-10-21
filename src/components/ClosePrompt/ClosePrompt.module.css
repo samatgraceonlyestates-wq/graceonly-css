@@ -1,0 +1,30 @@
+.prompt {
+  display: flex;
+  flex-direction: column;
+  gap: var(--fold-space-8);
+  padding: var(--fold-space-10) var(--fold-space-14);
+  border-radius: var(--fold-radius-card);
+  background: var(--fold-mist);
+  color: var(--fold-dusk);
+  font-size: 13px;
+}
+
+.prompt p {
+  margin: 0;
+}
+
+.prompt strong {
+  color: var(--fold-burgundy);
+  font-weight: 600;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--fold-space-8);
+}
+
+.keys {
+  color: var(--fold-dusk);
+  font-size: 12px;
+}

@@ -21,14 +21,18 @@ import { PersonCell } from "@/components/PersonCell/PersonCell";
 import { StatTile } from "@/components/StatTile/StatTile";
 import { StatusPill } from "@/components/StatusPill/StatusPill";
 import { ARRIVAL_ROLES } from "@/lib/arrivalBatch";
+import { loadArrivalRoster } from "@/lib/arrivalStore";
 import { requireAnyRole } from "@/lib/auth";
 import { timeLabel } from "@/lib/departureTime";
 import { loadDayBoard } from "@/lib/departureStore";
 import { formatDuration, formatIsoDate, formatLongDate } from "@/lib/format";
 import { lagosDateOf, lagosDayRange } from "@/lib/lagosTime";
-import type { BoardPerson } from "@/lib/todayBoard";
+import { loadMovementSuggestions } from "@/lib/movementStore";
+import type { BoardMovement, BoardPerson } from "@/lib/todayBoard";
+import { BoardDataProvider } from "./BoardData";
 import { BoardRefresher } from "./BoardRefresher";
 import { EndOfDay } from "./EndOfDay";
+import { MovementItem, type MovementView } from "./MovementItem";
 import { RowActions, type RowState } from "./RowActions";
 import styles from "./page.module.css";
 
@@ -96,6 +100,8 @@ export default async function BoardPage({ searchParams }: { searchParams: Promis
   const today = lagosDateOf(now);
   const day = chosenDay((await searchParams).day, today);
   const board = await loadDayBoard(day, now);
+  // The roster (for the approver of a movement) and what has been used before (for suggestions).
+  const [roster, suggestions] = await Promise.all([loadArrivalRoster(), loadMovementSuggestions()]);
 
   const sub = (person: BoardPerson) => person.department ?? undefined;
   // Where the correction (if any) was made, in words a person reads: "Corrected 10:12 by Desk B: reason".
@@ -111,6 +117,39 @@ export default async function BoardPage({ searchParams }: { searchParams: Promis
       </p>
     ) : null;
 
+  const movementView = (movement: BoardMovement, removed: boolean): MovementView => ({
+    id: movement.id,
+    version: movement.version,
+    left: timeLabel(movement.leftAt),
+    returned: movement.returnedAt ? timeLabel(movement.returnedAt) : null,
+    leftIso: movement.leftAt.toISOString(),
+    destination: movement.destination,
+    purpose: movement.purpose,
+    approvedBy: movement.approvedByName,
+    removed,
+    note:
+      movement.correctedAt !== null
+        ? `${removed ? "Removed" : "Changed"} at ${correctedWhen(movement.correctedAt)} by ${movement.correctedByName ?? "someone"}: "${movement.correctionReason}"`
+        : null,
+  });
+
+  // A person's movements today, under their row: where, what for, who approved it, when out and
+  // back, and how to correct each. Removed ones are listed (struck through) so they can be restored.
+  const movementsBlock = (person: BoardPerson) =>
+    person.movements.length + person.removedMovements.length > 0 ? (
+      <div className={styles.movements}>
+        <p className={styles.movementsTitle}>Movements</p>
+        <ul className={styles.movementList}>
+          {person.movements.map((movement) => (
+            <MovementItem key={movement.id} movement={movementView(movement, false)} asOf={asOf} />
+          ))}
+          {person.removedMovements.map((movement) => (
+            <MovementItem key={movement.id} movement={movementView(movement, true)} asOf={asOf} />
+          ))}
+        </ul>
+      </div>
+    ) : null;
+
   const actions = (person: BoardPerson, state: RowState) => (
     <RowActions
       recordId={person.id}
@@ -120,6 +159,7 @@ export default async function BoardPage({ searchParams }: { searchParams: Promis
       timeIn={timeLabel(person.clockInAt)}
       timeOut={person.clockOutAt ? timeLabel(person.clockOutAt) : null}
       olderDay={person.olderDay ? formatLongDate(person.arrivedOn) : null}
+      openMovement={person.movement ? { id: person.movement.id, left: timeLabel(person.movement.leftAt) } : null}
       asOf={asOf}
     />
   );
@@ -127,6 +167,7 @@ export default async function BoardPage({ searchParams }: { searchParams: Promis
   const { isToday } = board;
 
   return (
+    <BoardDataProvider roster={roster} destinations={suggestions.destinations} purposes={suggestions.purposes}>
     <div className={styles.page}>
       <BoardRefresher asOf={asOf} />
 
@@ -182,6 +223,7 @@ export default async function BoardPage({ searchParams }: { searchParams: Promis
             )}
             {actions(person, "in")}
             {note(person)}
+            {movementsBlock(person)}
           </li>
         ))}
       </Section>
@@ -190,16 +232,17 @@ export default async function BoardPage({ searchParams }: { searchParams: Promis
         id="out-heading"
         title="Out on a movement"
         count={board.counts.out}
-        empty="Nobody is recorded as out. Movements cannot be entered yet, so this stays empty for now."
+        empty="Nobody is out on a movement. Use Out… on a person who is in."
       >
         {board.outNow.map((person) => (
           <li key={person.id} className={styles.item}>
             <PersonCell name={person.name} sub={sub(person)} size={36} />
             {fact("Left at", timeLabel(person.movement!.leftAt))}
             {fact("Gone to", `${person.movement!.destination} · ${person.movement!.purpose}`)}
-            {fact("Approved by", person.movement!.approvedByName)}
+            {fact("Gone for", <Duration since={person.movement!.leftAt.toISOString()} asOf={asOf} />)}
             {actions(person, "out")}
             {note(person)}
+            {movementsBlock(person)}
           </li>
         ))}
       </Section>
@@ -218,6 +261,7 @@ export default async function BoardPage({ searchParams }: { searchParams: Promis
             {fact("Time", formatDuration(person.clockOutAt!.getTime() - person.clockInAt.getTime()))}
             {actions(person, "gone")}
             {note(person)}
+            {movementsBlock(person)}
           </li>
         ))}
       </Section>
@@ -239,6 +283,7 @@ export default async function BoardPage({ searchParams }: { searchParams: Promis
             </p>
             {actions(person, "nosignout")}
             {note(person)}
+            {movementsBlock(person)}
           </li>
         ))}
       </Section>
@@ -250,6 +295,7 @@ export default async function BoardPage({ searchParams }: { searchParams: Promis
               <PersonCell name={person.name} sub={sub(person)} size={36} />
               {fact("Was in at", timeLabel(person.clockInAt))}
               {fact("Removed", person.voidedAt ? timeLabel(person.voidedAt) : "")}
+              {actions(person, "removed")}
               {note(person, true)}
             </li>
           ))}
@@ -258,5 +304,6 @@ export default async function BoardPage({ searchParams }: { searchParams: Promis
 
       {isToday ? <EndOfDay people={board.inNow.map((person) => ({ id: person.id, name: person.name }))} /> : null}
     </div>
+    </BoardDataProvider>
   );
 }

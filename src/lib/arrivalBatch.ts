@@ -33,7 +33,8 @@
 import { parseClockTime } from "./clockTime.ts";
 import { formatIsoDate } from "./format.ts";
 import { lagosDateOf, lagosDayRange, lagosInstantAt } from "./lagosTime.ts";
-import { cleanDisplayName, matchName, normaliseName, type RosterName } from "./rosterMatch.ts";
+import { resolveName } from "./nameResolution.ts";
+import type { RosterName } from "./rosterMatch.ts";
 
 /** Who may enter attendance: the front desk, and the owner as admin (a Super Admin passes as ADMIN). */
 export const ARRIVAL_ROLES = ["FRONT_DESK", "ADMIN"] as const;
@@ -251,42 +252,28 @@ export async function saveArrivalBatch(input: ArrivalBatchInput, deps: ArrivalDe
     const firstRowOf = new Map<string, number>();
 
     for (const { row, index } of filled) {
-      const typed = cleanDisplayName(row.name);
-      if (typed === "") {
-        problems.push({ row: index, field: "name", message: "Enter a name." });
+      // The ONE name resolution (nameResolution.ts), shared with the movement book's approver.
+      const resolution = resolveName({ name: row.name, personId: row.personId, confirmNew: row.confirmNew }, pool, BATCH_LIMITS.maxNameLength);
+      if (resolution.kind === "problem") {
+        problems.push({ row: index, field: "name", message: resolution.message });
         continue;
       }
-      if (typed.length > BATCH_LIMITS.maxNameLength) {
-        problems.push({ row: index, field: "name", message: `Keep the name under ${BATCH_LIMITS.maxNameLength} characters.` });
+      if (resolution.kind === "confirm") {
+        confirmations.push({ row: index, typed: resolution.typed, candidates: resolution.candidates });
         continue;
       }
 
-      let person: ResolvedPerson | null = null;
-      // A picked suggestion counts only while the name still IS that person's name.
-      const picked = row.personId === null ? undefined : pool.find((candidate) => candidate.id === row.personId);
-      if (picked !== undefined && normaliseName(picked.name) === normaliseName(typed)) {
-        person = { id: picked.id, name: picked.name, isNew: created.some((c) => c.id === picked.id) };
+      let person: ResolvedPerson;
+      if (resolution.kind === "person") {
+        person = { id: resolution.person.id, name: resolution.person.name, isNew: created.some((c) => c.id === resolution.person.id) };
       } else {
-        const match = matchName(typed, pool);
-        if (match.kind === "exact") {
-          if (match.people.length > 1) {
-            problems.push({ row: index, field: "name", message: `More than one person is called ${typed}. Pick the right one from the list.` });
-            continue;
-          }
-          const only = match.people[0]!;
-          person = { id: only.id, name: only.name, isNew: created.some((c) => c.id === only.id) };
-        } else if (match.kind === "close" && !row.confirmNew) {
-          confirmations.push({ row: index, typed, candidates: match.candidates.slice(0, 3) });
-          continue;
-        } else {
-          // A name nobody has, or one she has confirmed is a different person: a new
-          // roster entry. It joins the pool at once, so a second row typing the same
-          // name (or one close to it) in this batch is held to the same rules.
-          const id = newId();
-          created.push({ id, name: typed });
-          pool.push({ id, name: typed, department: null });
-          person = { id, name: typed, isNew: true };
-        }
+        // A name nobody has, or one she has confirmed is a different person: a new roster
+        // entry. It joins the pool at once, so a second row typing the same name (or one
+        // close to it) in this batch is held to the same rules.
+        const id = newId();
+        created.push({ id, name: resolution.name });
+        pool.push({ id, name: resolution.name, department: null });
+        person = { id, name: resolution.name, isNew: true };
       }
 
       const earlier = firstRowOf.get(person.id);

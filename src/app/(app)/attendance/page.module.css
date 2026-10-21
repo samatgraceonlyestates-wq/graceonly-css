@@ -325,3 +325,95 @@
   color: var(--fold-burgundy);
   font-weight: 500;
 }
+
+/* ---- the movement book ---- */
+.leaveForm {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+  gap: var(--fold-space-10);
+}
+
+/* The button sits level with the boxes (under where the labels are). */
+.leaveSubmit {
+  display: flex;
+}
+
+.phraseField {
+  display: flex;
+  flex-direction: column;
+  gap: var(--fold-space-6);
+  min-width: 0;
+}
+
+.movements {
+  display: flex;
+  flex-direction: column;
+  gap: var(--fold-space-6);
+  grid-column: 1 / -1;
+}
+
+.movementsTitle {
+  margin: 0;
+  color: var(--fold-dusk);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+}
+
+.movementList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--fold-space-8);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.movement {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--fold-space-6) var(--fold-space-12);
+  padding: var(--fold-space-8) var(--fold-space-12);
+  border-radius: var(--fold-radius-card);
+  background: var(--fold-canvas);
+}
+
+.movement .panel,
+.movement .correctionNote {
+  flex-basis: 100%;
+}
+
+.movementLine {
+  flex: 1 1 280px;
+  margin: 0;
+  color: var(--fold-dusk);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.movementLine strong {
+  color: var(--fold-burgundy);
+  font-weight: 600;
+}
+
+.movementRemoved .movementLine {
+  text-decoration: line-through;
+}
+
+.movementActions {
+  display: flex;
+  margin-left: auto;
+}
+
+@media (min-width: 768px) {
+  .leaveForm {
+    grid-template-columns: minmax(0, 1.2fr) minmax(0, 1.2fr) minmax(0, 1.2fr) 110px auto;
+  }
+
+  .leaveSubmit {
+    padding-top: 22px;
+  }
+}

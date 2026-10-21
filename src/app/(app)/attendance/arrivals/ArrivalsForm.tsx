@@ -3,11 +3,12 @@
 import { useActionState, useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { Button } from "@/components/Button/Button";
 import { Card } from "@/components/Card/Card";
+import { NameField, nameNeedsAnswer, type NameValue } from "@/components/NameField/NameField";
 import { Notice } from "@/components/Notice/Notice";
 import { parseClockTime } from "@/lib/clockTime";
 import { cx } from "@/lib/cx";
 import { formatIsoDate, formatLongDate } from "@/lib/format";
-import { matchName, personDetails, suggest, type RosterName } from "@/lib/rosterMatch";
+import { personDetails, type RosterName } from "@/lib/rosterMatch";
 import { saveArrivalsAction, type ArrivalsState } from "./actions";
 import styles from "./page.module.css";
 
@@ -17,19 +18,15 @@ import styles from "./page.module.css";
 // KEYBOARD FIRST. She is copying twenty or thirty lines off a page, so the whole
 // sheet is typed without the mouse:
 //   Enter or Tab   on to the next field; past the last field a new row appears
-//   Arrow keys     move through the name suggestions; Enter takes the highlighted one
-//                  (a single suggestion is already highlighted, so "divi" Enter is enough)
 //   Enter          never submits the form: only the Save button does
-//   A close name   leaving the name field (Enter or Tab) with a name close to someone on
-//                  the roster moves focus INTO the "did you mean" prompt: Y takes the
-//                  first person offered (1, 2, 3 take the others), N says a different
-//                  person, and focus then goes on to the time. No mouse, no Tab hunt.
+//   The name       is the shared NameField (components/NameField): suggestions, arrow keys,
+//                  and the close-name question answered from the keyboard (Y, N, 1-3)
 //   Never signed   on an earlier day, N in the Time out box says "Never signed out"
 //                  (N again, or Backspace, undoes it). Phones tick the box instead.
 // Tab never takes a suggestion for her, so a name she meant to type in full is not
 // swapped for another. The names she types are checked against the roster with the
-// same rules as the server (rosterMatch.ts), so a near-duplicate is flagged here
-// as she leaves the field, and again, authoritatively, when the page is saved.
+// same rules as the server (rosterMatch.ts, nameResolution.ts), so a near-duplicate is
+// flagged here as she leaves the field, and again, authoritatively, when the page is saved.
 
 type Field = "name" | "timeIn" | "timeOut";
 
@@ -68,10 +65,12 @@ const blankRow = (generation: number, index: number): RowState => ({
 
 const isBlank = (row: RowState) => row.name.trim() === "" && row.timeIn.trim() === "" && row.timeOut.trim() === "" && !row.neverSignedOut;
 
+const nameOf = (row: RowState): NameValue => ({ name: row.name, personId: row.personId, confirmNew: row.confirmNew, touched: row.touched });
+
 export function ArrivalsForm({ roster, today }: { roster: RosterName[]; today: string }) {
   const listId = useId();
   // What tells two people of one name apart (department, when added): shown in the
-  // suggestions and in the "did you mean" prompt.
+  // suggestions and in the "did you mean" question.
   const details = useMemo(() => personDetails(roster), [roster]);
   const [generation, setGeneration] = useState(0);
   const [date, setDate] = useState(today);
@@ -83,15 +82,12 @@ export function ArrivalsForm({ roster, today }: { roster: RosterName[]; today: s
   const [handled, setHandled] = useState<ArrivalsState>(state);
   const [flags, setFlags] = useState<Record<number, Flag[]>>({});
 
-  // Where the cursor is, and which suggestion (if any) she has moved to with the arrows.
+  // Where the cursor is (for the time fields).
   const [focused, setFocused] = useState<{ index: number; field: Field } | null>(null);
-  const [arrowed, setArrowed] = useState<number | null>(null);
 
   const inputs = useRef(new Map<string, HTMLInputElement>());
-  const prompts = useRef(new Map<number, HTMLDivElement>());
-  // "3:name", "3:timeIn", "3:timeOut" or "prompt:3": where focus goes after the next render.
+  // "3:name", "3:timeIn" or "3:timeOut": where focus goes after the next render.
   const pendingFocus = useRef<string | null>(null);
-  const [, bump] = useState(0);
 
   const isEarlier = DATE_SHAPE.test(date) && date < today;
   const isFuture = DATE_SHAPE.test(date) && date > today;
@@ -126,8 +122,7 @@ export function ArrivalsForm({ roster, today }: { roster: RosterName[]; today: s
     const target = pendingFocus.current;
     if (target !== null) {
       pendingFocus.current = null;
-      if (target.startsWith("prompt:")) prompts.current.get(Number(target.slice(7)))?.querySelector("button")?.focus();
-      else inputs.current.get(target)?.focus();
+      inputs.current.get(target)?.focus();
     }
   });
 
@@ -153,6 +148,13 @@ export function ArrivalsForm({ roster, today }: { roster: RosterName[]; today: s
     setRows((current) => current.map((row, i) => (i === index && !row.touched ? { ...row, touched: true } : row)));
   }
 
+  function onName(index: number, next: NameValue) {
+    const row = rows[index]!;
+    if (next.name === row.name && next.personId === row.personId && next.confirmNew === row.confirmNew) {
+      if (next.touched) markTouched(index);
+    } else update(index, next);
+  }
+
   function addRows(count: number, focusFirst: boolean) {
     if (focusFirst) pendingFocus.current = `${rows.length}:name`;
     setRows((current) => [...current, ...Array.from({ length: count }, (_, i) => blankRow(generation, current.length + i))]);
@@ -166,71 +168,14 @@ export function ArrivalsForm({ roster, today }: { roster: RosterName[]; today: s
     else addRows(1, true);
   }
 
-  function choose(index: number, person: RosterName) {
-    update(index, { name: person.name, personId: person.id, confirmNew: false, touched: true });
-    setArrowed(null);
-  }
-
-  /** She answered the "did you mean" prompt: carry on at the time, in the row's own flow. */
-  function answered(index: number) {
-    pendingFocus.current = `${index}:timeIn`;
-    bump((n) => n + 1);
-  }
-
-  /** Move focus into this row's prompt (it is shown first, if it was not already). */
-  function askPrompt(index: number) {
-    markTouched(index);
-    pendingFocus.current = `prompt:${index}`;
-    bump((n) => n + 1);
-  }
-
-  /** Is this row's name close to someone on the roster, and not yet answered? */
-  function needsAnswer(row: RowState): boolean {
-    if (row.name.trim() === "" || row.personId !== null || row.confirmNew) return false;
-    return matchName(row.name, roster).kind === "close";
-  }
-
-  // The prompt's own keys: Y (or 1) the first person offered, 2 and 3 the others, N a
-  // different person, Left and Right between the buttons. Enter or Space presses the
-  // focused button as usual.
-  function onPromptKeyDown(event: KeyboardEvent<HTMLDivElement>, index: number, candidates: RosterName[]) {
-    if (event.ctrlKey || event.altKey || event.metaKey) return;
-    const key = event.key.toLowerCase();
-    const pick = key === "y" ? 0 : key >= "1" && key <= "3" ? Number(key) - 1 : -1;
-    if (pick >= 0 && candidates[pick] !== undefined) {
-      event.preventDefault();
-      choose(index, candidates[pick]);
-      answered(index);
-    } else if (key === "n") {
-      event.preventDefault();
-      update(index, { confirmNew: true });
-      answered(index);
-    } else if (key === "arrowright" || key === "arrowleft") {
-      event.preventDefault();
-      const buttons = [...event.currentTarget.querySelectorAll("button")];
-      const at = buttons.indexOf(document.activeElement as HTMLButtonElement);
-      buttons[(at + (key === "arrowright" ? 1 : buttons.length - 1)) % buttons.length]?.focus();
-    }
-  }
-
-  function onKeyDown(event: KeyboardEvent<HTMLInputElement>, index: number, field: Field, options: RosterName[]) {
+  // The time fields' keys. (The name has its own, in NameField.)
+  function onKeyDown(event: KeyboardEvent<HTMLInputElement>, index: number, field: "timeIn" | "timeOut") {
     const row = rows[index]!;
-    const open = field === "name" && options.length > 0 && row.personId === null;
-    const active = arrowed ?? (options.length === 1 ? 0 : -1);
     const plainTab = event.key === "Tab" && !event.shiftKey && !event.ctrlKey && !event.altKey && !event.metaKey;
-    const takingSuggestion = event.key === "Enter" && open && active >= 0 && options[active] !== undefined;
-
-    // Leaving the name with a close name unanswered: ask, with the keyboard, right here.
-    if (field === "name" && (event.key === "Enter" || plainTab) && !takingSuggestion && needsAnswer(row)) {
-      event.preventDefault();
-      askPrompt(index);
-      return;
-    }
 
     // Earlier day, Time out box: N means "Never signed out" (no time), N or Backspace undoes it.
     if (field === "timeOut" && !event.ctrlKey && !event.altKey && !event.metaKey) {
-      const key = event.key.toLowerCase();
-      if (key === "n") {
+      if (event.key.toLowerCase() === "n") {
         event.preventDefault();
         update(index, { neverSignedOut: !row.neverSignedOut, timeOut: "" });
         return;
@@ -244,10 +189,7 @@ export function ArrivalsForm({ roster, today }: { roster: RosterName[]; today: s
 
     if (event.key === "Enter") {
       event.preventDefault(); // Enter never submits the page
-      if (takingSuggestion) {
-        choose(index, options[active]!);
-        moveOn(index, field);
-      } else moveOn(index, field);
+      moveOn(index, field);
     } else if (plainTab) {
       // Past the last field of the last row: a fresh row, if this one has anything in it.
       const lastField = fields[fields.length - 1];
@@ -255,12 +197,6 @@ export function ArrivalsForm({ roster, today }: { roster: RosterName[]; today: s
         event.preventDefault();
         addRows(1, true);
       }
-    } else if (open && event.key === "ArrowDown") {
-      event.preventDefault();
-      setArrowed(active < options.length - 1 ? active + 1 : 0);
-    } else if (open && event.key === "ArrowUp") {
-      event.preventDefault();
-      setArrowed(active > 0 ? active - 1 : options.length - 1);
     }
   }
 
@@ -377,12 +313,9 @@ export function ArrivalsForm({ roster, today }: { roster: RosterName[]; today: s
 
         <ol className={styles.rows}>
           {rows.map((row, index) => {
-            const options = focused?.index === index && focused.field === "name" ? suggest(row.name, roster) : [];
-            const listOpen = options.length > 0 && row.personId === null;
-            const active = arrowed ?? (options.length === 1 ? 0 : -1);
-            const match = row.touched && row.name.trim() !== "" ? matchName(row.name, roster) : null;
             const rowFlags = flags[index] ?? [];
             const flagged = (field: Field) => rowFlags.some((flag) => flag.field === field);
+            const questionShown = row.touched && nameNeedsAnswer(nameOf(row), roster);
 
             // A time she has finished typing and that cannot be read, said at once.
             const timeError = (field: "timeIn" | "timeOut"): string | null => {
@@ -402,81 +335,27 @@ export function ArrivalsForm({ roster, today }: { roster: RosterName[]; today: s
               setFocused(null);
             };
 
-            const hint =
-              match === null || match.kind === "empty"
-                ? null
-                : row.personId !== null || (match.kind === "exact" && match.people.length === 1)
-                  ? null // a known person needs no line: thirty of them would only bury the exceptions
-                  : match.kind === "exact"
-                    ? { tone: "warn", text: "Two people have this name. Pick the right one from the list." }
-                    : match.kind === "none"
-                      ? { tone: "ok", text: "New person: will be added to the roster." }
-                      : row.confirmNew
-                        ? { tone: "ok", text: `New person, confirmed different from ${match.candidates.map((c) => c.name).join(", ")}.` }
-                        : null;
-            const prompt = match !== null && match.kind === "close" && row.personId === null && !row.confirmNew ? match : null;
-
             return (
               <li
                 key={row.key}
-                className={cx(styles.row, !isEarlier && styles.today, (rowFlags.length > 0 || prompt !== null) && styles.rowFlagged)}
+                className={cx(styles.row, !isEarlier && styles.today, (rowFlags.length > 0 || questionShown) && styles.rowFlagged)}
               >
                 <span className={styles.num} aria-hidden="true">
                   {index + 1}
                 </span>
 
                 <div className={styles.nameCell}>
-                  <input
-                    ref={register(`${index}:name`)}
-                    className={cx(styles.input, flagged("name") && styles.inputError)}
-                    type="text"
-                    role="combobox"
-                    aria-label={`Row ${index + 1} name`}
-                    aria-autocomplete="list"
-                    aria-expanded={listOpen}
-                    aria-controls={listOpen ? `${listId}-list-${index}` : undefined}
-                    aria-activedescendant={listOpen && active >= 0 ? `${listId}-${index}-opt-${active}` : undefined}
-                    aria-invalid={flagged("name") || undefined}
-                    autoComplete="off"
-                    autoCapitalize="words"
-                    spellCheck={false}
-                    enterKeyHint="next"
-                    placeholder="Name"
-                    value={row.name}
-                    onChange={(event) => {
-                      setArrowed(null);
-                      update(index, { name: event.target.value, personId: null, confirmNew: false });
-                    }}
-                    onFocus={() => setFocused({ index, field: "name" })}
-                    onBlur={() => {
-                      setFocused(null);
-                      setArrowed(null);
-                      if (row.name.trim() !== "") markTouched(index);
-                    }}
-                    onKeyDown={(event) => onKeyDown(event, index, "name", options)}
+                  <NameField
+                    value={nameOf(row)}
+                    onChange={(next) => onName(index, next)}
+                    roster={roster}
+                    details={details}
+                    ariaLabel={`Row ${index + 1} name`}
+                    inputRef={register(`${index}:name`)}
+                    inputClassName={cx(styles.input, flagged("name") && styles.inputError)}
+                    invalid={flagged("name")}
+                    onMoveOn={() => moveOn(index, "name")}
                   />
-                  {listOpen ? (
-                    <ul className={styles.options} role="listbox" id={`${listId}-list-${index}`} aria-label="Matching people">
-                      {options.map((person, at) => (
-                        <li
-                          key={person.id}
-                          id={`${listId}-${index}-opt-${at}`}
-                          role="option"
-                          aria-selected={at === active}
-                          className={cx(styles.option, at === active && styles.optionActive)}
-                          // mousedown, not click: the input must not lose focus first.
-                          onMouseDown={(event) => {
-                            event.preventDefault();
-                            choose(index, person);
-                            focusCell(index, "timeIn");
-                          }}
-                        >
-                          <span>{person.name}</span>
-                          {details.get(person.id) ? <span className={styles.optionDept}>{details.get(person.id)}</span> : null}
-                        </li>
-                      ))}
-                    </ul>
-                  ) : null}
                 </div>
 
                 <input
@@ -493,7 +372,7 @@ export function ArrivalsForm({ roster, today }: { roster: RosterName[]; today: s
                   onChange={(event) => update(index, { timeIn: event.target.value })}
                   onFocus={() => setFocused({ index, field: "timeIn" })}
                   onBlur={() => onTime("timeIn")}
-                  onKeyDown={(event) => onKeyDown(event, index, "timeIn", [])}
+                  onKeyDown={(event) => onKeyDown(event, index, "timeIn")}
                 />
 
                 {isEarlier ? (
@@ -519,7 +398,7 @@ export function ArrivalsForm({ roster, today }: { roster: RosterName[]; today: s
                       onChange={(event) => update(index, { timeOut: event.target.value })}
                       onFocus={() => setFocused({ index, field: "timeOut" })}
                       onBlur={() => onTime("timeOut")}
-                      onKeyDown={(event) => onKeyDown(event, index, "timeOut", [])}
+                      onKeyDown={(event) => onKeyDown(event, index, "timeOut")}
                     />
                     {/* For touch and mouse. The keyboard uses N in the box above, so this is
                         out of the Tab order and the typing flow is not lengthened. */}
@@ -539,68 +418,13 @@ export function ArrivalsForm({ roster, today }: { roster: RosterName[]; today: s
                 {rowFlags.length > 0 || inError !== null || outError !== null ? (
                   <ul className={styles.errors} role="list">
                     {rowFlags
-                      .filter((flag) => !(prompt !== null && flag.message === "Say whether this is a different person."))
+                      .filter((flag) => !(questionShown && flag.message === "Say whether this is a different person."))
                       .map((flag) => (
                         <li key={flag.field + flag.message}>{flag.message}</li>
                       ))}
                     {inError !== null && !rowFlags.some((flag) => flag.field === "timeIn") ? <li>Time in: {inError}</li> : null}
                     {outError !== null && !rowFlags.some((flag) => flag.field === "timeOut") ? <li>Time out: {outError}</li> : null}
                   </ul>
-                ) : null}
-
-                {prompt !== null ? (
-                  <div
-                    ref={(element) => {
-                      if (element) prompts.current.set(index, element);
-                      else prompts.current.delete(index);
-                    }}
-                    className={styles.prompt}
-                    role="group"
-                    aria-label={`Row ${index + 1}: is this someone already on the roster?`}
-                    onKeyDown={(event) => onPromptKeyDown(event, index, prompt.candidates.slice(0, 3))}
-                  >
-                    <p>
-                      {prompt.candidates.length === 1 ? "Did you mean " : "Did you mean one of these? "}
-                      {prompt.candidates.slice(0, 3).map((candidate, at) => (
-                        <span key={candidate.id}>
-                          {at > 0 ? ", " : ""}
-                          <strong>{candidate.name}</strong>
-                          {details.get(candidate.id) ? ` (${details.get(candidate.id)})` : ""}
-                        </span>
-                      ))}
-                      ?
-                    </p>
-                    <div className={styles.promptActions}>
-                      {prompt.candidates.slice(0, 3).map((candidate, at) => (
-                        <Button
-                          key={candidate.id}
-                          size="compact"
-                          onClick={() => {
-                            choose(index, candidate);
-                            answered(index);
-                          }}
-                        >
-                          Yes, {candidate.name}
-                          {details.get(candidate.id) ? ` · ${details.get(candidate.id)}` : ""}
-                          {prompt.candidates.length > 1 ? ` (${at + 1})` : ""}
-                        </Button>
-                      ))}
-                      <Button
-                        variant="row-action"
-                        onClick={() => {
-                          update(index, { confirmNew: true });
-                          answered(index);
-                        }}
-                      >
-                        No, a different person
-                      </Button>
-                    </div>
-                    <p className={styles.promptKeys}>
-                      Keys: Y for yes{prompt.candidates.length > 1 ? " (or 1, 2, 3)" : ""}, N for a different person.
-                    </p>
-                  </div>
-                ) : hint !== null ? (
-                  <p className={cx(styles.hint, hint.tone === "warn" && styles.hintWarn)}>{hint.text}</p>
                 ) : null}
               </li>
             );

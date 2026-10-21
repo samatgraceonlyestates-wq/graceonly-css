@@ -91,7 +91,7 @@ export default async function scenario({ base, open, shot, problem }: ScenarioHe
   // End of day: an explicit, confirmed act that names the people.
   await page.getByRole("button", { name: /Mark 5 as not signed out/ }).click();
   text = await body(page);
-  expect(text.includes("Their hours will be unknown, and this screen cannot undo it."), "desktop: the confirmation should say what it does");
+  expect(text.includes("Their hours will be unknown. It can be undone"), "desktop: the confirmation should say what it does");
   await shot(page, "board-7-end-of-day-confirm-desktop");
   await page.getByRole("button", { name: "Cancel" }).click();
   expect((await tile(page, "In now")) === "5", "desktop: cancelling must change nothing");

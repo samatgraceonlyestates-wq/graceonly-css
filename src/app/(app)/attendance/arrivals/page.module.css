@@ -180,103 +180,16 @@
   accent-color: var(--fold-burgundy);
 }
 
-.promptKeys {
-  color: var(--fold-dusk);
-  font-size: 12px;
-}
-
 /* Everything under a row's inputs spans the row. */
-.errors,
-.hint,
-.prompt {
+.errors {
   grid-column: 1 / -1;
   grid-row: auto;
-}
-
-.errors {
   margin: 0;
   padding: 0 0 0 var(--fold-space-32);
   list-style: none;
   color: var(--fold-status-red);
   font-size: 13px;
   font-weight: 600;
-}
-
-.hint {
-  margin: 0;
-  padding-left: var(--fold-space-32);
-  color: var(--fold-dusk);
-  font-size: 13px;
-}
-
-.hintWarn {
-  color: var(--fold-status-amber-ink);
-  font-weight: 600;
-}
-
-.prompt {
-  display: flex;
-  flex-direction: column;
-  gap: var(--fold-space-8);
-  margin-left: var(--fold-space-32);
-  padding: var(--fold-space-10) var(--fold-space-14);
-  border-radius: var(--fold-radius-card);
-  background: var(--fold-mist);
-  color: var(--fold-dusk);
-  font-size: 13px;
-}
-
-.prompt p {
-  margin: 0;
-}
-
-.prompt strong {
-  color: var(--fold-burgundy);
-  font-weight: 600;
-}
-
-.promptActions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--fold-space-8);
-}
-
-/* ---- the suggestions ---- */
-.options {
-  position: absolute;
-  z-index: 5;
-  top: calc(100% + 4px);
-  right: 0;
-  left: 0;
-  margin: 0;
-  padding: var(--fold-space-4);
-  border-radius: var(--fold-radius-card);
-  background: var(--fold-white);
-  box-shadow: var(--fold-shadow-card);
-  list-style: none;
-}
-
-.option {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: var(--fold-space-12);
-  padding: var(--fold-space-10) var(--fold-space-12);
-  border-radius: var(--fold-space-8);
-  color: var(--fold-burgundy);
-  font-size: 15px;
-  font-weight: 500;
-  cursor: pointer;
-}
-
-.optionActive {
-  background: var(--fold-mist);
-}
-
-.optionDept {
-  color: var(--fold-dusk);
-  font-size: 12px;
-  font-weight: 400;
 }
 
 /* ---- the foot of the sheet ---- */
@@ -355,12 +268,7 @@
     text-align: center;
   }
 
-  .errors,
-  .hint {
+  .errors {
     padding-left: 52px;
-  }
-
-  .prompt {
-    margin-left: 52px;
   }
 }

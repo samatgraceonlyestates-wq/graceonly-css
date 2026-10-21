@@ -81,7 +81,7 @@ export function editDistance(a: string, b: string): number {
 }
 
 /** True if every word of `part` is the start of a DIFFERENT word of `whole`. */
-function isPartialOf(part: string[], whole: string[]): boolean {
+export function isPartialOf(part: string[], whole: string[]): boolean {
   if (part.length === 0 || part.length > whole.length) return false;
   const used = new Set<number>();
   for (const word of part) {

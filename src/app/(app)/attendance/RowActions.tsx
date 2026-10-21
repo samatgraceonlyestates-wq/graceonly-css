@@ -2,32 +2,49 @@
 
 import { useActionState, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/Button/Button";
+import { Combobox } from "@/components/Combobox/Combobox";
+import { blankName, NameField, type NameValue } from "@/components/NameField/NameField";
 import type { CorrectionKind } from "@/lib/corrections";
 import { getClockParts } from "@/lib/format";
-import { clockOutAction, correctRecordAction, markNoSignoutAction, type BoardActionState } from "./actions";
+import { suggestPhrases } from "@/lib/phraseMatch";
+import {
+  clockOutAction,
+  correctRecordAction,
+  markNoSignoutAction,
+  recordDepartureAction,
+  recordReturnAction,
+  type BoardActionState,
+} from "./actions";
+import { useBoardData } from "./BoardData";
 import styles from "./page.module.css";
 
 // UNDESIGNED (the board is not in Figma). Everything the front desk does to ONE person's
-// record, in the row: clock them out as they leave, or CORRECT the record.
+// record, in the row: clock them out as they leave, record a MOVEMENT (out, and back), or
+// CORRECT the record.
 //
-// CLOCK OUT. The time is a plain text field (8:15, 08:15 or 0815) that defaults to NOW on
-// the office clock and is editable, because she may be typing it a few minutes after they
-// went. "Now" is the SERVER's render time plus the time since the page loaded, so a wrong
-// browser clock cannot put a future time in the box. It is read once, when the panel
-// opens: no timer of its own (the board's ticking shares useNow.ts). A shift left open
-// from an EARLIER day takes its time on that day, so it has no default.
+// CLOCK OUT / OUT / BACK. The time is a plain text field (8:15, 08:15 or 0815) that defaults to
+// NOW on the office clock and is editable, because she may be typing it a few minutes after
+// it happened. "Now" is the SERVER's render time plus the time since the page loaded, so a
+// wrong browser clock cannot put a future time in the box. It is read once, when the panel
+// opens: no timer of its own (the board's ticking shares useNow.ts). A shift left open from an
+// EARLIER day takes its time on that day, so it has no default.
 //
-// CORRECT. Change the time in; change the time out (or give one to a shift marked never
-// signed out); reopen a shift closed by mistake; unmark a never-signed-out; or remove a
-// record entered for the wrong person. EVERY correction needs a REASON: the box is
-// required and there is no default text. Front desk and admin may both correct; the reason
-// is the control, not a permission. The VERSION of the record when she opened the panel
-// goes back with the form (not whatever the live refresh has since put in the page), so a
-// record someone else changed in the meantime is refused with a clear message.
+// OUT (a movement): where, what for, who approved it, and the time they left. Where and what
+// for are SUGGESTED from what has been used before; the approver is a roster person by the
+// shared NameField (suggestions, the close-name question answered from the keyboard).
+// A person who is OUT cannot be clocked out until they are BACK: the row says so.
 //
-// The server decides everything and its message is shown here.
+// CORRECT. Change the time in; change the time out (or give one to a shift marked never signed
+// out); reopen a shift closed by mistake; unmark a never-signed-out; remove a record entered for
+// the wrong person; or RESTORE one removed by mistake. EVERY correction needs a REASON: the box
+// is required and there is no default text. The VERSION of the record when she opened the panel
+// goes back with the form (not whatever the live refresh has since put in the page), so a record
+// someone else changed in the meantime is refused with a clear message.
+//
+// While any panel is open the live refresh is PAUSED (data-pause-refresh): it never takes away
+// what she is typing. The server decides everything and its message is shown here.
 
-export type RowState = "in" | "out" | "gone" | "nosignout";
+export type RowState = "in" | "out" | "gone" | "nosignout" | "removed";
 
 const CHOICES: Record<RowState, { kind: CorrectionKind; label: string }[]> = {
   in: [
@@ -47,7 +64,10 @@ const CHOICES: Record<RowState, { kind: CorrectionKind; label: string }[]> = {
     { kind: "unmark", label: "Unmark: back to still in" },
     { kind: "void", label: "Remove: wrong person" },
   ],
+  removed: [{ kind: "restore", label: "Restore this record" }],
 };
+
+type Mode = "clockout" | "leave" | "return" | "correct" | null;
 
 export function RowActions({
   recordId,
@@ -57,6 +77,7 @@ export function RowActions({
   timeIn,
   timeOut,
   olderDay,
+  openMovement,
   asOf,
 }: {
   recordId: string;
@@ -70,15 +91,21 @@ export function RowActions({
   timeOut: string | null;
   /** "Monday, 19 October 2026" when the shift is still open from an earlier day, else null. */
   olderDay: string | null;
+  /** The movement they are out on right now, if any. */
+  openMovement: { id: string; left: string } | null;
   /** The server's render time (ISO). */
   asOf: string;
 }) {
-  const [mode, setMode] = useState<"clockout" | "correct" | null>(null);
+  const { roster, details, destinations, purposes } = useBoardData();
+  const [mode, setMode] = useState<Mode>(null);
   const loadedAt = useRef(0);
   useEffect(() => {
     loadedAt.current = Date.now();
   }, [asOf]);
   const firstName = name.split(/\s+/)[0] ?? name;
+
+  /** The office clock now, as HH:MM: the server's render time plus how long the page has been open. */
+  const nowLabel = () => getClockParts(new Date(Date.parse(asOf) + (Date.now() - loadedAt.current))).time24;
 
   // ---- clock out
   const [outTime, setOutTime] = useState("");
@@ -86,10 +113,39 @@ export function RowActions({
   const [markState, markAction, marking] = useActionState<BoardActionState, FormData>(markNoSignoutAction, { status: "idle" });
 
   function openClockOut() {
-    // Server time now = the render time + how long the page has been open.
-    const serverNow = Date.parse(asOf) + (Date.now() - loadedAt.current);
-    setOutTime(olderDay === null ? getClockParts(new Date(serverNow)).time24 : "");
+    setOutTime(olderDay === null ? nowLabel() : "");
     setMode("clockout");
+  }
+
+  // ---- a movement: out, and back
+  const [where, setWhere] = useState("");
+  const [what, setWhat] = useState("");
+  const [approver, setApprover] = useState<NameValue>(blankName());
+  const [leftTime, setLeftTime] = useState("");
+  const [backTime, setBackTime] = useState("");
+  const [leaveState, leaveAction, leaving] = useActionState<BoardActionState, FormData>(recordDepartureAction, { status: "idle" });
+  const [backState, backAction, returning] = useActionState<BoardActionState, FormData>(recordReturnAction, { status: "idle" });
+  const whereEl = useRef<HTMLInputElement | null>(null);
+  const whatEl = useRef<HTMLInputElement | null>(null);
+  const approverEl = useRef<HTMLInputElement | null>(null);
+  const timeEl = useRef<HTMLInputElement | null>(null);
+
+  function openLeave() {
+    setWhere("");
+    setWhat("");
+    setApprover(blankName());
+    setLeftTime(olderDay === null ? nowLabel() : "");
+    setMode("leave");
+  }
+
+  // The first box of a movement panel is focused when it opens.
+  useEffect(() => {
+    if (mode === "leave") whereEl.current?.focus();
+  }, [mode]);
+
+  function openReturn() {
+    setBackTime(nowLabel());
+    setMode("return");
   }
 
   // ---- correct
@@ -101,7 +157,7 @@ export function RowActions({
 
   function openCorrect() {
     setOpenedVersion(version); // the one she is looking at NOW; a later refresh must not replace it
-    setKind(null);
+    setKind(state === "removed" ? "restore" : null);
     setReason("");
     setMode("correct");
   }
@@ -111,38 +167,51 @@ export function RowActions({
     setFixTime(next === "arrival" ? timeIn : next === "departure" ? (timeOut ?? "") : "");
   }
 
-  // A correction that succeeded closes the panel: the row now carries the "Corrected" note
-  // (who, when, why), which is the confirmation. Leaving it open would also leave it holding
-  // the OLD version, so a second correction from it would be refused as stale, and the
-  // "changed since you opened this" warning would fire on her own change.
-  const [handledFix, setHandledFix] = useState(fixState);
-  if (fixState !== handledFix) {
-    setHandledFix(fixState);
-    if (fixState.status === "done") {
+  // A save that succeeded closes the panel: the row now carries the "Corrected" note (who, when,
+  // why), or sits in its new group, which is the confirmation. Leaving it open would also leave
+  // it holding the OLD version, so a second correction from it would be refused as stale.
+  const [handled, setHandled] = useState({ fixState, leaveState, backState });
+  if (fixState !== handled.fixState || leaveState !== handled.leaveState || backState !== handled.backState) {
+    setHandled({ fixState, leaveState, backState });
+    if (fixState.status === "done" || leaveState.status === "done" || backState.status === "done") {
       setMode(null);
       setKind(null);
     }
   }
 
   const clockMessage = clockState.status === "error" ? clockState.message : markState.status === "error" ? markState.message : null;
-  const fixMessage = fixState.status === "error" ? fixState.message : fixState.status === "done" ? fixState.message : null;
-  const busy = clocking || marking || fixing;
+  const fixMessage = fixState.status === "error" ? fixState.message : null;
+  const leaveMessage = leaveState.status === "error" ? leaveState.message : null;
+  const backMessage = backState.status === "error" ? backState.message : null;
+  const busy = clocking || marking || fixing || leaving || returning;
+
+  const toggle = (target: Exclude<Mode, null>, open: () => void) => (mode === target ? setMode(null) : open());
 
   return (
     <>
       <div className={styles.actionCell}>
         {state === "in" ? (
-          <Button variant="row-action" onClick={mode === "clockout" ? () => setMode(null) : openClockOut}>
-            {mode === "clockout" ? "Close" : "Clock out"}
+          <>
+            <Button variant="row-action" onClick={() => toggle("clockout", openClockOut)}>
+              {mode === "clockout" ? "Close" : "Clock out"}
+            </Button>
+            <Button variant="row-action" onClick={() => toggle("leave", openLeave)}>
+              {mode === "leave" ? "Close" : "Out…"}
+            </Button>
+          </>
+        ) : null}
+        {state === "out" && openMovement !== null ? (
+          <Button variant="row-action" onClick={() => toggle("return", openReturn)}>
+            {mode === "return" ? "Close" : "Back…"}
           </Button>
         ) : null}
-        <Button variant="row-action" onClick={mode === "correct" ? () => setMode(null) : openCorrect}>
-          {mode === "correct" ? "Close" : "Correct…"}
+        <Button variant="row-action" onClick={() => toggle("correct", openCorrect)}>
+          {mode === "correct" ? "Close" : state === "removed" ? "Restore…" : "Correct…"}
         </Button>
       </div>
 
       {mode === "clockout" ? (
-        <div className={styles.panel} role="group" aria-label={`Clock out ${name}`}>
+        <div className={styles.panel} role="group" aria-label={`Clock out ${name}`} data-pause-refresh="true">
           <form action={clockAction} className={styles.panelForm}>
             <input type="hidden" name="recordId" value={recordId} />
             <div className={styles.panelField}>
@@ -172,7 +241,7 @@ export function RowActions({
           <p className={styles.panelNote}>
             {olderDay !== null
               ? `${firstName} arrived on ${olderDay} and was never clocked out. This time is on that day, after ${timeIn}.`
-              : `Now, by default. Change it if ${firstName} left earlier; it must be after ${timeIn}.`}
+              : `Now, by default. Change it if ${firstName} left earlier; it must be after ${timeIn}. (Someone who is out on a movement is clocked out once they are back.)`}
           </p>
 
           <form action={markAction} className={styles.panelForm}>
@@ -191,11 +260,164 @@ export function RowActions({
         </div>
       ) : null}
 
-      {mode === "correct" ? (
-        <div className={styles.panel} role="group" aria-label={`Correct ${name}`}>
+      {mode === "leave" ? (
+        <div className={styles.panel} role="group" aria-label={`${name} goes out`} data-pause-refresh="true">
+          <form action={leaveAction} className={styles.leaveForm}>
+            <input type="hidden" name="recordId" value={recordId} />
+            <input type="hidden" name="destination" value={where} />
+            <input type="hidden" name="purpose" value={what} />
+            <input type="hidden" name="approverName" value={approver.name} />
+            <input type="hidden" name="approverId" value={approver.personId ?? ""} />
+            <input type="hidden" name="approverConfirmNew" value={String(approver.confirmNew)} />
+
+            <div className={styles.phraseField}>
+              <span className={styles.label}>Where to</span>
+              <Combobox
+                value={where}
+                onChange={setWhere}
+                onPick={(item) => {
+                  setWhere(item.label);
+                  whatEl.current?.focus();
+                }}
+                suggest={(text) => suggestPhrases(text, destinations).map((phrase) => ({ id: phrase, label: phrase }))}
+                onLeave={(key) => {
+                  if (key === "Enter") whatEl.current?.focus();
+                  return false;
+                }}
+                inputRef={(element) => {
+                  whereEl.current = element;
+                }}
+                ariaLabel={`Where ${firstName} is going`}
+                placeholder="Bank, site, court…"
+                inputClassName={styles.reasonInput}
+                maxLength={100}
+              />
+            </div>
+
+            <div className={styles.phraseField}>
+              <span className={styles.label}>What for</span>
+              <Combobox
+                value={what}
+                onChange={setWhat}
+                onPick={(item) => {
+                  setWhat(item.label);
+                  approverEl.current?.focus();
+                }}
+                suggest={(text) => suggestPhrases(text, purposes).map((phrase) => ({ id: phrase, label: phrase }))}
+                onLeave={(key) => {
+                  if (key === "Enter") approverEl.current?.focus();
+                  return false;
+                }}
+                inputRef={(element) => {
+                  whatEl.current = element;
+                }}
+                ariaLabel={`What ${firstName} is going for`}
+                placeholder="Lodgement, inspection…"
+                inputClassName={styles.reasonInput}
+                maxLength={200}
+              />
+            </div>
+
+            <div className={styles.phraseField}>
+              <span className={styles.label}>Approved by</span>
+              <NameField
+                value={approver}
+                onChange={setApprover}
+                roster={roster}
+                details={details}
+                ariaLabel="Approved by"
+                placeholder="Who approved it"
+                inputRef={(element) => {
+                  approverEl.current = element;
+                }}
+                inputClassName={styles.reasonInput}
+                onMoveOn={() => timeEl.current?.focus()}
+                newPersonText="Not on the roster yet: will be added."
+              />
+            </div>
+
+            <div className={styles.panelField}>
+              <label className={styles.label} htmlFor={`left-${recordId}`}>
+                Time left
+              </label>
+              <input
+                id={`left-${recordId}`}
+                ref={timeEl}
+                className={styles.input}
+                name="timeLeft"
+                type="text"
+                inputMode="numeric"
+                autoComplete="off"
+                placeholder="1030"
+                value={leftTime}
+                onChange={(event) => setLeftTime(event.target.value)}
+              />
+            </div>
+            <div className={styles.leaveSubmit}>
+              <Button type="submit" size="compact" disabled={busy}>
+                {leaving ? "Saving…" : `${firstName} goes out`}
+              </Button>
+            </div>
+          </form>
           <p className={styles.panelNote}>
-            Correcting {name}&apos;s record (in at {timeIn}
-            {timeOut ? `, out at ${timeOut}` : ""}). Every correction needs a reason, and the record will show that it was changed.
+            {olderDay !== null
+              ? `${firstName} arrived on ${olderDay}: this time is on that day, after ${timeIn}.`
+              : `Now, by default. Change it if ${firstName} left earlier; it must be after ${timeIn}. The approver is someone on the roster.`}
+          </p>
+          {leaveMessage !== null ? (
+            <p className={styles.panelError} role="alert">
+              {leaveMessage}
+            </p>
+          ) : null}
+        </div>
+      ) : null}
+
+      {mode === "return" && openMovement !== null ? (
+        <div className={styles.panel} role="group" aria-label={`${name} is back`} data-pause-refresh="true">
+          <form action={backAction} className={styles.panelForm}>
+            <input type="hidden" name="movementId" value={openMovement.id} />
+            <div className={styles.panelField}>
+              <label className={styles.label} htmlFor={`back-${recordId}`}>
+                Time back
+              </label>
+              <input
+                id={`back-${recordId}`}
+                className={styles.input}
+                name="timeReturned"
+                type="text"
+                inputMode="numeric"
+                autoComplete="off"
+                autoFocus
+                placeholder="1040"
+                value={backTime}
+                onChange={(event) => setBackTime(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Escape") setMode(null);
+                }}
+              />
+            </div>
+            <Button type="submit" size="compact" disabled={busy}>
+              {returning ? "Saving…" : `${firstName} is back`}
+            </Button>
+          </form>
+          <p className={styles.panelNote}>
+            Now, by default. Change it if {firstName} came back earlier; it must be after {openMovement.left}. {firstName} can be clocked out
+            only once they are back.
+          </p>
+          {backMessage !== null ? (
+            <p className={styles.panelError} role="alert">
+              {backMessage}
+            </p>
+          ) : null}
+        </div>
+      ) : null}
+
+      {mode === "correct" ? (
+        <div className={styles.panel} role="group" aria-label={`Correct ${name}`} data-pause-refresh="true">
+          <p className={styles.panelNote}>
+            {state === "removed"
+              ? `${name}'s record was removed and counts for nothing. Restoring it needs a reason, and is refused if it would break the one-open-shift or one-record-a-day rule.`
+              : `Correcting ${name}'s record (in at ${timeIn}${timeOut ? `, out at ${timeOut}` : ""}). Every correction needs a reason, and the record will show that it was changed.`}
           </p>
 
           {version !== openedVersion ? (
@@ -204,13 +426,15 @@ export function RowActions({
             </p>
           ) : null}
 
-          <div className={styles.choiceRow}>
-            {CHOICES[state].map((choice) => (
-              <Button key={choice.kind} variant="row-action" onClick={() => choose(choice.kind)}>
-                {choice.label}
-              </Button>
-            ))}
-          </div>
+          {state !== "removed" ? (
+            <div className={styles.choiceRow}>
+              {CHOICES[state].map((choice) => (
+                <Button key={choice.kind} variant="row-action" onClick={() => choose(choice.kind)}>
+                  {choice.label}
+                </Button>
+              ))}
+            </div>
+          ) : null}
 
           {kind !== null ? (
             <form action={fixAction} className={styles.panelForm}>
@@ -251,25 +475,25 @@ export function RowActions({
                   maxLength={500}
                   required
                   autoFocus={kind !== "arrival" && kind !== "departure"}
-                  placeholder={kind === "void" ? "e.g. entered for the wrong person" : "e.g. the book says 08:30"}
+                  placeholder={kind === "void" ? "e.g. entered for the wrong person" : kind === "restore" ? "e.g. removed by mistake" : "e.g. the book says 08:30"}
                   value={reason}
                   onChange={(event) => setReason(event.target.value)}
                 />
               </div>
               <Button type="submit" size="compact" disabled={busy}>
-                {fixing ? "Saving…" : kind === "void" ? "Remove this record" : "Save correction"}
+                {fixing ? "Saving…" : kind === "void" ? "Remove this record" : kind === "restore" ? "Restore this record" : "Save correction"}
               </Button>
             </form>
           ) : null}
 
           {kind === "void" ? (
             <p className={styles.panelNote}>
-              This takes {name}&apos;s record off the lists and counts. It stays on file, with your reason and your name.
+              This takes {name}&apos;s record off the lists and counts. It stays on file, with your reason and your name, and can be restored.
             </p>
           ) : null}
 
           {fixMessage !== null ? (
-            <p className={fixState.status === "error" ? styles.panelError : styles.panelNote} role={fixState.status === "error" ? "alert" : "status"}>
+            <p className={styles.panelError} role="alert">
               {fixMessage}
             </p>
           ) : null}

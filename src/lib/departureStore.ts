@@ -39,17 +39,33 @@ export async function loadDayBoard(dayOrNow: string | Date, now: Date): Promise<
       LEFT JOIN staff c ON c.id = r.corrected_by
      WHERE (r.clock_in_at >= ${range.start} AND r.clock_in_at < ${range.end})
         OR (${isToday}::boolean AND r.clock_out_at IS NULL AND r.signout_missing_at IS NULL AND r.voided_at IS NULL)`);
+  // Every movement of the records shown, returned or not, removed or not: the board lists
+  // the live ones under each person and the removed ones so they can be restored.
+  const recordIds = records.rows.map((row) => row.id);
   const movements = await query<{
+    id: string;
     attendance_record_id: string;
     left_at: Date;
+    returned_at: Date | null;
     destination: string;
     purpose: string;
     approver: string;
+    returned_by: string | null;
+    version: string;
+    corrected_at: Date | null;
+    corrected_by_name: string | null;
+    correction_reason: string | null;
+    voided_at: Date | null;
   }>(sql`
-    SELECT m.attendance_record_id, m.left_at, m.destination, m.purpose, a.full_name AS approver
+    SELECT m.id, m.attendance_record_id, m.left_at, m.returned_at, m.destination, m.purpose, a.full_name AS approver,
+           rb.full_name AS returned_by, m.updated_at::text AS version, m.corrected_at, c.full_name AS corrected_by_name,
+           m.correction_reason, m.voided_at
       FROM movement m
       JOIN staff a ON a.id = m.approved_by
-     WHERE m.returned_at IS NULL`);
+      LEFT JOIN staff rb ON rb.id = m.returned_entered_by
+      LEFT JOIN staff c ON c.id = m.corrected_by
+     WHERE m.attendance_record_id = ANY(${recordIds}::uuid[])
+     ORDER BY m.left_at`);
 
   return groupBoard(
     records.rows.map(
@@ -70,11 +86,19 @@ export async function loadDayBoard(dayOrNow: string | Date, now: Date): Promise<
     ),
     movements.rows.map(
       (row): BoardMovement => ({
+        id: row.id,
         recordId: row.attendance_record_id,
         leftAt: row.left_at,
+        returnedAt: row.returned_at,
         destination: row.destination,
         purpose: row.purpose,
         approvedByName: row.approver,
+        returnedByName: row.returned_by,
+        version: row.version,
+        correctedAt: row.corrected_at,
+        correctedByName: row.corrected_by_name,
+        correctionReason: row.correction_reason,
+        voidedAt: row.voided_at,
       }),
     ),
     now,
@@ -112,9 +136,9 @@ export const pgDepartureStore: DepartureStore = {
           }>(sql`
             SELECT r.id, r.staff_id, s.full_name, r.clock_in_at, r.clock_out_at, r.signout_missing_at, r.voided_at,
                    co.full_name AS clock_out_by, sm.full_name AS signout_missing_by,
-                   EXISTS (SELECT 1 FROM movement m WHERE m.attendance_record_id = r.id AND m.returned_at IS NULL) AS has_open_movement,
+                   EXISTS (SELECT 1 FROM movement m WHERE m.attendance_record_id = r.id AND m.returned_at IS NULL AND m.voided_at IS NULL) AS has_open_movement,
                    (SELECT max(greatest(m.left_at, coalesce(m.returned_at, m.left_at)))
-                      FROM movement m WHERE m.attendance_record_id = r.id) AS last_movement_at
+                      FROM movement m WHERE m.attendance_record_id = r.id AND m.voided_at IS NULL) AS last_movement_at
               FROM attendance_record r
               JOIN staff s ON s.id = r.staff_id
               LEFT JOIN staff co ON co.id = r.clock_out_entered_by

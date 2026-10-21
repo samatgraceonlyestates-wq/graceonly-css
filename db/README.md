@@ -136,12 +136,12 @@ No server address, user or password belongs in the repository.
 `.gitattributes` pins `db/**` to LF so a fresh checkout on Windows does not
 produce CRLF SQL.
 
-## Which file goes where (the server gets 010 to 014, not the proof file)
+## Which file goes where (the server gets 010 to 015, not the proof file)
 
 `pg10-proof.sql` is for a FRESH, EMPTY database. The cPanel server already has
 `001` to `009`, so it must NOT be given the proof file: it would try to create
 everything again and fail. It receives `db/migrations/010_roster_movements_backdating.sql` and then
-`011_entered_by_per_event.sql`, `012_movement_entered_by_names.sql`, `013_signout_missing.sql` and `014_corrections.sql` (each on its own), and every later migration the
+`011_entered_by_per_event.sql`, `012_movement_entered_by_names.sql`, `013_signout_missing.sql`, `014_corrections.sql` and `015_movement_corrections.sql` (each on its own), and every later migration the
 same way, one file at a time, in filename order. (Locally, either route gives the same schema: both were applied
 and compared column for column and constraint for constraint.)
 

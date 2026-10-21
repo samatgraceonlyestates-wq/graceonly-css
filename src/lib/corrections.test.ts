@@ -81,6 +81,12 @@ class MemoryStore implements CorrectionStore {
   private tx(): CorrectionTx {
     return {
       lock: async () => {},
+      hasOtherLiveRecordOnDay: async (id, day) => {
+        const record = this.records.get(id)!;
+        return [...this.records.values()].some(
+          (o) => o.id !== id && o.staffId === record.staffId && o.voidedAt === null && o.clockInAt >= day.start && o.clockInAt < day.end,
+        );
+      },
       find: async (id) => {
         const record = this.records.get(id);
         if (record === undefined) return null;
@@ -92,7 +98,7 @@ class MemoryStore implements CorrectionStore {
       },
       apply: async ({ id, version, actorId, reason, correction }) => {
         const record = this.records.get(id)!;
-        if (this.loseTheRace || record.version !== version || record.voidedAt !== null) return false;
+        if (this.loseTheRace || record.version !== version || (correction.kind !== "restore" && record.voidedAt !== null)) return false;
         this.change(record, correction, actorId);
         record.correctedAt = NOW;
         record.correctedBy = actorId;
@@ -125,6 +131,9 @@ class MemoryStore implements CorrectionStore {
         break;
       case "void":
         record.voidedAt = NOW;
+        break;
+      case "restore":
+        record.voidedAt = null;
         break;
     }
   }
@@ -360,12 +369,12 @@ describe("removing a record entered for the wrong person (a void, not a delete)"
     assert.equal(store.audits[0]!.after.voided, true);
   });
 
-  it("a removed record cannot be corrected or removed again", async () => {
+  it("a removed record cannot be corrected or removed again (only restored)", async () => {
     const { store, deps } = setup();
     store.add("r1", "Wrong Person", { voidedAt: lagos(21, 9) });
-    for (const kind of CORRECTION_KINDS) {
+    for (const kind of CORRECTION_KINDS.filter((k) => k !== "restore")) {
       const result = await correctRecord({ recordId: "r1", version: store.get("r1").version, kind, time: "08:00", reason: "x" }, deps);
-      assert.equal(refused(result), "Wrong Person's record has been removed.", kind);
+      assert.equal(refused(result), "Wrong Person's record has been removed. Restore it first to change it.", kind);
     }
   });
 
@@ -374,6 +383,66 @@ describe("removing a record entered for the wrong person (a void, not a delete)"
     store.add("r1", "Divine Mike", { movementCount: 2 });
     assert.match(refused(await run("r1", "void")), /movements recorded against this record/);
     assert.equal(store.get("r1").voidedAt, null);
+  });
+});
+
+describe("restoring a removed record (the way back)", () => {
+  it("puts it back, with a reason, who and when, and one audit row", async () => {
+    const { store, run } = setup();
+    store.add("r1", "Divine Mike", { voidedAt: lagos(21, 9) });
+    const result = await run("r1", "restore", { reason: "Removed by mistake" });
+    assert.deepEqual(result, { ok: true, message: "Divine Mike's record was restored." });
+    assert.equal(store.get("r1").voidedAt, null);
+    assert.equal(store.get("r1").correctionReason, "Removed by mistake");
+    assert.equal(store.get("r1").correctedBy, ACTOR);
+    assert.deepEqual(store.audits[0]!.before, { voided: true });
+    assert.deepEqual(store.audits[0]!.after.voided, false);
+    assert.equal(store.audits[0]!.after.correction, "restore");
+  });
+
+  it("needs a reason like every other correction", async () => {
+    const { store, run } = setup();
+    store.add("r1", "Divine Mike", { voidedAt: lagos(21, 9) });
+    assert.equal(refused(await run("r1", "restore", { reason: "  " })), NEEDS_REASON);
+    assert.notEqual(store.get("r1").voidedAt, null);
+  });
+
+  it("is BLOCKED by the one-open-shift rule: the person is in again, and this record would be a second open shift", async () => {
+    const { store, run } = setup();
+    store.add("removed", "Divine Mike", { clockInAt: lagos(20, 8), voidedAt: lagos(20, 9) }); // open, from Monday
+    store.add("today", "Divine Mike", { clockInAt: lagos(21, 8) });
+    assert.equal(
+      refused(await run("removed", "restore")),
+      "Divine Mike is already recorded as in since 21 Oct 2026, and a person can have only one open shift. Clock that one out first.",
+    );
+    assert.notEqual(store.get("removed").voidedAt, null);
+    assert.equal(store.audits.length, 0);
+  });
+
+  it("is BLOCKED by the one-record-a-day rule, naming the day", async () => {
+    const { store, run } = setup();
+    // The wrong record was removed and the right one entered for the same day; restoring would give two.
+    store.add("removed", "Divine Mike", { clockInAt: lagos(21, 8), clockOutAt: lagos(21, 9), voidedAt: lagos(21, 9) });
+    store.add("entered-again", "Divine Mike", { clockInAt: lagos(21, 7), clockOutAt: lagos(21, 8) });
+    assert.equal(refused(await run("removed", "restore")), "Divine Mike already has a record for 21 Oct 2026, so this one cannot be restored.");
+  });
+
+  it("a CLOSED removed record is not blocked by an open shift on another day", async () => {
+    const { store, run } = setup();
+    store.add("removed", "Divine Mike", { clockInAt: lagos(20, 8), clockOutAt: lagos(20, 17), clockOutEnteredBy: "x", voidedAt: lagos(20, 18) });
+    store.add("today", "Divine Mike", { clockInAt: lagos(21, 8) });
+    assert.equal((await run("removed", "restore")).ok, true);
+  });
+
+  it("is refused for a record that is not removed, and a stale version loses cleanly", async () => {
+    const { store, run, deps } = setup();
+    store.add("live", "Divine Mike");
+    assert.match(refused(await run("live", "restore")), /is not removed/);
+    store.add("r1", "Peter Obi", { voidedAt: lagos(21, 9) });
+    const seen = store.get("r1").version;
+    await correctRecord({ recordId: "r1", version: seen, kind: "restore", time: "", reason: "first" }, deps);
+    store.get("r1").voidedAt = lagos(21, 9); // removed again by someone else
+    assert.equal(refused(await correctRecord({ recordId: "r1", version: seen, kind: "restore", time: "", reason: "second" }, deps)), STALE_VERSION);
   });
 });
 

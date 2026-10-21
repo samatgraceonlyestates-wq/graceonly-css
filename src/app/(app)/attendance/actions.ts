@@ -1,5 +1,6 @@
 "use server";
 
+import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { ARRIVAL_ROLES } from "@/lib/arrivalBatch";
 import { requireAnyRole } from "@/lib/auth";
@@ -8,6 +9,9 @@ import { correctRecord } from "@/lib/corrections";
 import { pgCorrectionStore } from "@/lib/correctionStore";
 import { clockOutPerson, markNoSignout } from "@/lib/departures";
 import { pgDepartureStore } from "@/lib/departureStore";
+import { correctMovement } from "@/lib/movementCorrections";
+import { pgMovementCorrectionStore, pgMovementStore } from "@/lib/movementStore";
+import { recordDeparture, recordReturn } from "@/lib/movements";
 
 // What a control on the board gets back: one line to show. Nothing typed is echoed.
 export type BoardActionState = { status: "idle" } | { status: "done"; message: string } | { status: "error"; message: string };
@@ -78,6 +82,93 @@ export async function correctRecordAction(_previous: BoardActionState, formData:
     const result = await correctRecord(
       { recordId: text("recordId"), version: text("version"), kind: text("kind"), time: text("time"), reason: text("reason") },
       { store: pgCorrectionStore, actorId: user.staffId, now: new Date() },
+    );
+    if (!result.ok) return error(result.message);
+    revalidatePath("/attendance");
+    return { status: "done", message: result.message };
+  } catch (caught) {
+    if (caught instanceof DbError) return error(`${caught.message} Nothing was changed. Reference ${caught.errorId}.`);
+    throw caught;
+  }
+}
+
+// ---- the movement book -------------------------------------------------------------------
+
+const textOf = (formData: FormData, key: string) => {
+  const value = formData.get(key);
+  return typeof value === "string" ? value : "";
+};
+
+/** The approver as the NameField sends it: what she typed, the person she picked (if any), and whether she said "a different person". */
+const approverOf = (formData: FormData) => ({
+  name: textOf(formData, "approverName"),
+  personId: textOf(formData, "approverId") || null,
+  confirmNew: textOf(formData, "approverConfirmNew") === "true",
+});
+
+// A person who is IN leaves the premises: where, what for, who approved it (a ROSTER
+// person, by the same name rules as the arrivals sheet), and the time they left.
+export async function recordDepartureAction(_previous: BoardActionState, formData: FormData): Promise<BoardActionState> {
+  const { user, allowed } = await requireAnyRole(ARRIVAL_ROLES);
+  if (!allowed) return error("Only the front desk can record a movement.");
+  try {
+    const result = await recordDeparture(
+      {
+        recordId: textOf(formData, "recordId"),
+        destination: textOf(formData, "destination"),
+        purpose: textOf(formData, "purpose"),
+        timeLeft: textOf(formData, "timeLeft"),
+        approver: approverOf(formData),
+      },
+      { store: pgMovementStore, actorId: user.staffId, now: new Date(), newId: randomUUID },
+    );
+    if (!result.ok) return error(result.message);
+    revalidatePath("/attendance");
+    return { status: "done", message: result.message };
+  } catch (caught) {
+    if (caught instanceof DbError) return error(`${caught.message} Nothing was saved. Reference ${caught.errorId}.`);
+    throw caught;
+  }
+}
+
+// A person who is OUT comes back. Recorded as returned_entered_by (the signed-in user),
+// who may not be whoever recorded the departure.
+export async function recordReturnAction(_previous: BoardActionState, formData: FormData): Promise<BoardActionState> {
+  const { user, allowed } = await requireAnyRole(ARRIVAL_ROLES);
+  if (!allowed) return error("Only the front desk can record a movement.");
+  try {
+    const result = await recordReturn(
+      { movementId: textOf(formData, "movementId"), timeReturned: textOf(formData, "timeReturned") },
+      { store: pgMovementStore, actorId: user.staffId, now: new Date(), newId: randomUUID },
+    );
+    if (!result.ok) return error(result.message);
+    revalidatePath("/attendance");
+    return { status: "done", message: result.message };
+  } catch (caught) {
+    if (caught instanceof DbError) return error(`${caught.message} Nothing was saved. Reference ${caught.errorId}.`);
+    throw caught;
+  }
+}
+
+// Correct a movement: the times, the destination, the purpose, the approver, remove it or
+// restore it. EVERY one needs a reason; front desk and admin may both correct; the version
+// she was looking at goes back with it.
+export async function correctMovementAction(_previous: BoardActionState, formData: FormData): Promise<BoardActionState> {
+  const { user, allowed } = await requireAnyRole(ARRIVAL_ROLES);
+  if (!allowed) return error("Only the front desk can correct a movement.");
+  try {
+    const result = await correctMovement(
+      {
+        movementId: textOf(formData, "movementId"),
+        version: textOf(formData, "version"),
+        kind: textOf(formData, "kind"),
+        time: textOf(formData, "time"),
+        destination: textOf(formData, "destination"),
+        purpose: textOf(formData, "purpose"),
+        approver: approverOf(formData),
+        reason: textOf(formData, "reason"),
+      },
+      { store: pgMovementCorrectionStore, actorId: user.staffId, now: new Date(), newId: randomUUID },
     );
     if (!result.ok) return error(result.message);
     revalidatePath("/attendance");

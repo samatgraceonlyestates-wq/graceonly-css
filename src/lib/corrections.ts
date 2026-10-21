@@ -9,6 +9,7 @@
 //   reopen      undo a clock-out entered by mistake
 //   unmark      undo a "never signed out" mark: back to still in
 //   void        REMOVE a record entered for the wrong person
+//   restore     UN-REMOVE a record that was removed by mistake
 //
 // THE RULES
 //  * EVERY correction needs a REASON. No exception, no default text, no silent fix. The
@@ -27,14 +28,18 @@
 //    in order: time in before time out, and a movement lies inside its shift (the
 //    database cannot check that across tables; see migration 010, so this does).
 //  * REMOVED IS A VOID, NOT A DELETE (migration 014): the row stays, with its reason and
-//    who removed it, and is left out of every list and count. A record with movements
-//    cannot be removed.
+//    who removed it, and is left out of every list and count. A record with (live)
+//    movements cannot be removed.
+//  * A removal has a way back, the same shape as the others: RESTORE needs a reason, records
+//    who and when, and is blocked if putting the record back would break the one-open-shift
+//    rule or the one-record-a-day rule (naming what is in the way). Without it a mis-removal
+//    gets "fixed" by entering a duplicate.
 import { parseClockTime } from "./clockTime.ts";
 import { timeLabel } from "./departureTime.ts";
 import { formatIsoDate } from "./format.ts";
-import { lagosDateOf, lagosInstantAt } from "./lagosTime.ts";
+import { lagosDateOf, lagosDayRange, lagosInstantAt } from "./lagosTime.ts";
 
-export const CORRECTION_KINDS = ["arrival", "departure", "reopen", "unmark", "void"] as const;
+export const CORRECTION_KINDS = ["arrival", "departure", "reopen", "unmark", "void", "restore"] as const;
 export type CorrectionKind = (typeof CORRECTION_KINDS)[number];
 
 export const CORRECTION_LIMITS = Object.freeze({ maxReasonLength: 500 });
@@ -62,12 +67,15 @@ export type Correction =
   | { kind: "departure"; clockOutAt: Date }
   | { kind: "reopen" }
   | { kind: "unmark" }
-  | { kind: "void" };
+  | { kind: "void" }
+  | { kind: "restore" };
 
 export interface CorrectionTx {
   /** Locks the person (staff row) and then the record, FOR UPDATE, in that order. */
   lock(recordId: string): Promise<void>;
   find(recordId: string): Promise<CorrectionRecord | null>;
+  /** Does this person have ANOTHER live (not removed) record that starts inside this Lagos day? */
+  hasOtherLiveRecordOnDay(recordId: string, day: { start: Date; end: Date }): Promise<boolean>;
   /** Guarded by the version AND by the state the rule just checked. False if nothing was updated. */
   apply(input: { id: string; version: string; actorId: string; reason: string; correction: Correction }): Promise<boolean>;
   audit(entry: { actorId: string; entityId: string; before: Record<string, unknown>; after: Record<string, unknown> }): Promise<void>;
@@ -125,7 +133,12 @@ export async function correctRecord(input: CorrectionInput, deps: CorrectionDeps
     await tx.lock(input.recordId);
     const record = await tx.find(input.recordId);
     if (record === null) return fail(STALE_VERSION);
-    if (record.voidedAt !== null) return fail(`${record.name}'s record has been removed.`);
+    // A removed record can only be restored; nothing else may touch it.
+    if (kind === "restore") {
+      if (record.voidedAt === null) return fail(`${record.name}'s record is not removed.`);
+    } else if (record.voidedAt !== null) {
+      return fail(`${record.name}'s record has been removed. Restore it first to change it.`);
+    }
     // Someone else changed it since she opened it: say so, change nothing.
     if (record.version !== input.version) return fail(STALE_VERSION);
 
@@ -191,6 +204,19 @@ export async function correctRecord(input: CorrectionInput, deps: CorrectionDeps
         before = { signout_missing_at: iso(record.signoutMissingAt) };
         after = { signout_missing_at: null };
         message = `${record.name} is back to still in: the never-signed-out mark was removed.`;
+        break;
+      }
+      case "restore": {
+        // Putting it back must not break the rules the removal was hiding from.
+        const dayRange = lagosDayRange(day);
+        if (await tx.hasOtherLiveRecordOnDay(record.id, dayRange)) {
+          return fail(`${record.name} already has a record for ${formatIsoDate(day)}, so this one cannot be restored.`);
+        }
+        if (isOpen && record.otherOpenSince !== null) return fail(otherOpen(record.name, record.otherOpenSince));
+        correction = { kind };
+        before = { voided: true };
+        after = { voided: false };
+        message = `${record.name}'s record was restored.`;
         break;
       }
       case "void": {

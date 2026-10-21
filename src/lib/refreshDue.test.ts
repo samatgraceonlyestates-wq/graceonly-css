@@ -19,6 +19,11 @@ describe("refreshDue: one shared poll that stops when the tab is hidden", () => 
     assert.equal(refreshDue({ now: 26_000, lastRefreshAt: 0, everyMs: EVERY, visible: true }), true);
   });
 
+  it("is PAUSED while she is busy (a panel open or a field focused), however overdue, and runs the moment she is done", () => {
+    assert.equal(refreshDue({ now: 10 * 60_000, lastRefreshAt: 0, everyMs: EVERY, visible: true, paused: true }), false);
+    assert.equal(refreshDue({ now: 10 * 60_000, lastRefreshAt: 0, everyMs: EVERY, visible: true, paused: false }), true);
+  });
+
   it("a tab that was hidden for an hour refreshes the moment it is visible again", () => {
     assert.equal(refreshDue({ now: 3_600_000, lastRefreshAt: 0, everyMs: EVERY, visible: true }), true);
   });

@@ -1,0 +1,41 @@
+.root {
+  position: relative;
+  min-width: 0;
+}
+
+.options {
+  position: absolute;
+  z-index: 5;
+  top: calc(100% + 4px);
+  right: 0;
+  left: 0;
+  margin: 0;
+  padding: var(--fold-space-4);
+  border-radius: var(--fold-radius-card);
+  background: var(--fold-white);
+  box-shadow: var(--fold-shadow-card);
+  list-style: none;
+}
+
+.option {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--fold-space-12);
+  padding: var(--fold-space-10) var(--fold-space-12);
+  border-radius: var(--fold-space-8);
+  color: var(--fold-burgundy);
+  font-size: 15px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.optionActive {
+  background: var(--fold-mist);
+}
+
+.optionDetail {
+  color: var(--fold-dusk);
+  font-size: 12px;
+  font-weight: 400;
+}

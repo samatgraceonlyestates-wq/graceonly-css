@@ -51,8 +51,8 @@ WINS and that line is stale.
 - A MOVEMENT BOOK also exists. When a staff member leaves the premises during the
   day they sign out and sign back in. The front desk records where they went,
   what for, who approved it, the time they left and the time they returned. An
-  open movement (no return) means they are out NOW. (Table built in migration 010;
-  no screens yet.)
+  open movement (no return) means they are out NOW. (Table built in migration 010,
+  corrections in 015; the movement book is built: see "The movement book".)
 - ANY earlier day can be entered or corrected, with a reason recorded.
 - So `staff` holds two kinds of person: a LOGIN account (password hash, email) and
   a ROSTER person (no password, usually no email, department optional) who is only
@@ -167,8 +167,8 @@ grouping, pure), `departures.ts` (the clock-out and no-sign-out rules, behind a
 `ClockOutControl.tsx`, `EndOfDay.tsx`, `attendance/actions.ts`.
 
 - For TODAY in Lagos it shows four groups and a count of each, all DERIVED, never
-  stored: IN now; OUT on a movement (the movement table exists, no screen enters
-  movements yet, so this reads empty for now); GONE for the day; NO SIGN-OUT. An open
+  stored: IN now; OUT on a movement (someone with a LIVE movement that has not
+  returned: where, what for, who approved it, how long gone); GONE for the day; NO SIGN-OUT. An open
   shift left from an EARLIER day is shown IN, flagged "open since <day>": it is the
   forgotten shift, and it blocks that person's next arrival.
 - CLOCK OUT, one person at a time: the time defaults to NOW (from the server's render
@@ -239,9 +239,66 @@ rules, behind a `CorrectionStore`), `correctionStore.ts` (SQL), `RowActions.tsx`
   deleted here. The clutter objection is answered by leaving a voided record out of EVERY
   list, count, the one-record-a-day check and the open-shift index: it appears only in the
   board's "Removed records" list. Any new query of attendance_record MUST exclude
-  `voided_at IS NOT NULL` the same way. A record with movements cannot be removed.
+  `voided_at IS NOT NULL` the same way. A record with (live) movements cannot be removed.
+- A REMOVAL HAS A WAY BACK: RESTORE (un-remove) is the same shape as every other correction:
+  a reason, who and when recorded, visibly marked, one audit row, the version check. It is
+  BLOCKED, naming what is in the way, if putting the record back would break the
+  one-open-shift rule or the one-record-a-day rule. (Without it a mis-removal gets "fixed" by
+  entering a duplicate.) Removed records are restored from the "Removed records" list.
+- A REFRESH NEVER TAKES AWAY WHAT SHE IS TYPING. The live refresh is PAUSED while any panel is
+  open (anything marked `data-pause-refresh`) or any field in the page has focus; it is
+  paused, not dropped, and runs as soon as she is done (focus leaves a field, or a click
+  closes the panel). A refresh can move a row to another group, which would unmount the
+  panel under her and lose what she typed; the stale-write protection does not help her
+  retype it. Any new panel on the board MUST carry `data-pause-refresh`.
+- Not built yet: correction HISTORY on screen (only the latest correction is in the row; the
+  full history is in audit_log), and moving a record to a different day (remove it and enter
+  it again).
 - Verified with `scripts/shots-corrections.ts` (seed: `scripts/shots-corrections.seed.sql`,
   after the arrivals and board seeds) against a THROWAWAY schema.
+
+### The movement book (BUILT; UNDESIGNED), migration 015
+
+The second paper book at reception: a staff member leaves the premises during the day,
+signs out, and signs back in. The front desk copies it in. Files: `movements.ts` (a
+departure and a return), `movementCorrections.ts` (corrections), `movementStore.ts` (SQL
+and the suggestions), `phraseMatch.ts`, `nameResolution.ts`, the shared components
+`Combobox`, `ClosePrompt` and `NameField`, and on the board `RowActions.tsx` (Out…, Back…),
+`MovementItem.tsx` (one movement and its corrections) and `BoardData.tsx`.
+
+- A DEPARTURE is recorded from a person who is IN ("Out…"): where to, what for, who approved
+  it, the time left (default now on the office clock, editable, same rules as the clock-out
+  time). The movement must sit INSIDE the shift (after the time in; the database cannot
+  check it, the application does, in the same transaction, under the person and record locks).
+  Movements of one record never overlap, and a person is out at most once at a time.
+- THE APPROVER IS A ROSTER PERSON, resolved by the ONE name rule used by the arrivals sheet
+  (`nameResolution.ts`, the `NameField` component): suggestions as she types, a CLOSE name
+  asks "Did you mean ...?" and is answered from the keyboard (Y, N, 1-3), a name nobody has
+  creates a roster person. Do NOT write a second matcher or a second combobox. A person
+  CANNOT APPROVE THEIR OWN movement.
+- A RETURN is recorded from a person who is OUT ("Back…"): the time back (default now,
+  editable), as `returned_entered_by`, which may be a different person from `left_entered_by`.
+  A return must be after the departure, not in the future, and before any time out.
+- DESTINATIONS and PURPOSES are SUGGESTED from what has been used before: the distinct values
+  (one spelling each, most used first, removed movements left out) are loaded and matched in
+  the application, as the roster is (`phraseMatch.ts`). No index, no extension.
+- A PERSON OUT ON A MOVEMENT CANNOT BE CLOCKED OUT until they are back, and the message says
+  why: "<name> is recorded as out on a movement. Record their return first." The row offers
+  Back…, not Clock out. Likewise they cannot be marked never-signed-out, and a record with
+  live movements cannot be removed.
+- CORRECTING A MOVEMENT: the time left, the time back, the destination, the purpose, the
+  approver, REMOVE it (a void, as for attendance) and RESTORE it. Every one needs a REASON
+  (no default text), records who and when (`corrected_by`, `corrected_at`,
+  `correction_reason`: all three or none), writes an audit row, is checked against the movement
+  version she was looking at (a change by the other front-desk person meanwhile is refused
+  cleanly) and is VISIBLY marked in the movement's line ("Corrected" / "Removed", by whom, why).
+  Restoring is blocked if it would make the person out twice at once or overlap another movement.
+- A REMOVED MOVEMENT COUNTS FOR NOTHING: not "out right now", not in any count, not in any
+  overlap or inside-the-shift check, and it does not keep the person from leaving again (the
+  open-movement index excludes it). Any new query of `movement` MUST exclude
+  `voided_at IS NOT NULL` the same way.
+- Verified with `scripts/shots-movements.ts` (seed: `scripts/shots-movements.seed.sql`, after
+  the arrivals and board seeds) against a THROWAWAY schema, including the refresh pause.
 
 ## Design tokens — from Figma, exact
 
@@ -688,7 +745,7 @@ allowed before the first server apply). `npm run db:proof:check` fails if it is 
   closed rule. It reshapes attendance (see "ATTENDANCE: HOW IT REALLY WORKS") by
   DROPPING two constraints of 005/009 (new names are used, nothing is re-added
   under an old name) and adding columns and a table. The cPanel server already
-  has 001-009, so it receives 010 to 014 (one file at a time), never
+  has 001-009, so it receives 010 to 015 (one file at a time), never
   `pg10-proof.sql` (that file is for a FRESH database and re-creates everything).
   Applying them there is done outside this repo's sessions.
   010 leaves two rules to the APPLICATION, each commented in the migration: a
@@ -699,7 +756,7 @@ allowed before the first server apply). `npm run db:proof:check` fails if it is 
   `movement.returned_recorded_by` (each present exactly when its time is).
   `012_movement_entered_by_names.sql` then renamed movement's two author columns to
   `left_entered_by` and `returned_entered_by` (and their constraints) to match. The
-  server receives 010 to 014 together, outside these sessions.
+  server receives 010 to 015 together, outside these sessions.
   `013_signout_missing.sql` adds the third attendance state, "closed but never signed
   out" (`signout_missing_at`, `signout_missing_by`; never with a clock-out time) and
   rebuilds `attendance_one_open_shift_key` to exclude it. The server receives 010 to
@@ -708,6 +765,10 @@ allowed before the first server apply). `npm run db:proof:check` fails if it is 
   `correction_reason`: all three or none) and `voided_at` (a removed record), and rebuilds
   `attendance_one_open_shift_key` again to exclude removed records. The server receives
   010 to 014, one file at a time.
+  `015_movement_corrections.sql` gives `movement` the same correction columns
+  (`correction_reason`, `corrected_at`, `corrected_by`: all three or none) and `voided_at`
+  (a removed movement), and rebuilds `movement_one_open_key` to exclude removed movements.
+  The server receives 010 to 015, one file at a time.
 - NEVER DROP OR RECREATE THE LOCAL `public` SCHEMA (STANDING RULE). It holds the
   owner's real local login, whose password was typed at a prompt and cannot be
   recreated, and his sessions. Verify migrations in THROWAWAY schemas inside the

@@ -37,11 +37,24 @@ export interface BoardRecord {
 }
 
 export interface BoardMovement {
+  id: string;
   recordId: string;
   leftAt: Date;
+  /** Null while they are still out. */
+  returnedAt: Date | null;
   destination: string;
   purpose: string;
   approvedByName: string;
+  /** Who typed the return (it may not be who typed the departure). */
+  returnedByName: string | null;
+  /** Changes whenever the movement changes: a correction sends back the one it was looking at (015). */
+  version: string;
+  /** The LATEST correction (015): when, by whom and why. The full history is in audit_log. */
+  correctedAt: Date | null;
+  correctedByName: string | null;
+  correctionReason: string | null;
+  /** Removed (015): counts for nothing. */
+  voidedAt: Date | null;
 }
 
 export interface BoardPerson extends BoardRecord {
@@ -49,7 +62,12 @@ export interface BoardPerson extends BoardRecord {
   arrivedOn: string;
   /** Open, and from a Lagos day before today. Only ever true for IN. */
   olderDay: boolean;
+  /** The movement they are out on RIGHT NOW (live, not yet returned), if any. */
   movement: BoardMovement | null;
+  /** Every LIVE movement of this record, earliest first (the open one included). */
+  movements: BoardMovement[];
+  /** Movements of this record that were removed: they count for nothing, but are listed so they can be restored. */
+  removedMovements: BoardMovement[];
 }
 
 export interface Board {
@@ -69,11 +87,12 @@ export interface Board {
 
 const byName = (a: BoardPerson, b: BoardPerson) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" }) || a.id.localeCompare(b.id);
 
-export function groupBoard(records: readonly BoardRecord[], openMovements: readonly BoardMovement[], now: Date, day?: string): Board {
+export function groupBoard(records: readonly BoardRecord[], allMovements: readonly BoardMovement[], now: Date, day?: string): Board {
   const today = lagosDateOf(now);
   const shown = day ?? today;
   const isToday = shown === today;
-  const movementOf = new Map(openMovements.map((movement) => [movement.recordId, movement]));
+  const movementsOf = new Map<string, BoardMovement[]>();
+  for (const movement of allMovements) movementsOf.set(movement.recordId, [...(movementsOf.get(movement.recordId) ?? []), movement]);
   const board: Board = { day: shown, today, isToday, inNow: [], outNow: [], gone: [], noSignout: [], removed: [], counts: { in: 0, out: 0, gone: 0, noSignout: 0 } };
 
   for (const record of records) {
@@ -83,7 +102,17 @@ export function groupBoard(records: readonly BoardRecord[], openMovements: reado
     // Today's board also carries open shifts from earlier days; no other day does.
     if (!startedOnDay && !(isToday && isOpen && arrivedOn < today)) continue;
 
-    const person: BoardPerson = { ...record, arrivedOn, olderDay: isOpen && arrivedOn < today, movement: movementOf.get(record.id) ?? null };
+    const mine = (movementsOf.get(record.id) ?? []).sort((a, b) => a.leftAt.getTime() - b.leftAt.getTime());
+    // A REMOVED movement counts for nothing: it is never "out", whatever its return says.
+    const live = mine.filter((movement) => movement.voidedAt === null);
+    const person: BoardPerson = {
+      ...record,
+      arrivedOn,
+      olderDay: isOpen && arrivedOn < today,
+      movement: live.find((movement) => movement.returnedAt === null) ?? null,
+      movements: live,
+      removedMovements: mine.filter((movement) => movement.voidedAt !== null),
+    };
 
     if (record.voidedAt !== null) board.removed.push(person);
     else if (record.signoutMissingAt !== null) board.noSignout.push(person);

@@ -21,7 +21,22 @@ const record = (id: string, name: string, extra: Partial<BoardRecord> = {}): Boa
   voidedAt: null,
   ...extra,
 });
-const movement = (recordId: string): BoardMovement => ({ recordId, leftAt: at(21, 10), destination: "Bank", purpose: "Lodgement", approvedByName: "Peter Obi" });
+const movement = (recordId: string, extra: Partial<BoardMovement> = {}): BoardMovement => ({
+  id: `m-${recordId}`,
+  recordId,
+  leftAt: at(21, 10),
+  returnedAt: null,
+  destination: "Bank",
+  purpose: "Lodgement",
+  approvedByName: "Peter Obi",
+  returnedByName: null,
+  version: "v1",
+  correctedAt: null,
+  correctedByName: null,
+  correctionReason: null,
+  voidedAt: null,
+  ...extra,
+});
 const names = (list: { name: string }[]) => list.map((p) => p.name);
 
 describe("groupBoard: today's board, derived and never stored", () => {
@@ -147,5 +162,58 @@ describe("groupBoard: another day, corrections and removed records", () => {
     assert.equal(person.correctedByName, "Desk B");
     assert.equal(person.correctionReason, "Book says 08:30");
     assert.equal(person.version, "2026-10-21 10:00:00.123456+01");
+  });
+});
+
+describe("groupBoard: the movement book on the board", () => {
+  it("someone with an open movement is OUT, with where, what for, who approved it", () => {
+    const board = groupBoard([record("1", "Out Person")], [movement("1")], NOW);
+    assert.deepEqual(names(board.outNow), ["Out Person"]);
+    assert.equal(board.outNow[0]!.movement?.destination, "Bank");
+    assert.equal(board.outNow[0]!.movement?.approvedByName, "Peter Obi");
+    assert.deepEqual(board.counts, { in: 0, out: 1, gone: 0, noSignout: 0 });
+  });
+
+  it("someone whose movement has RETURNED is IN again, and the movement is listed under them", () => {
+    const board = groupBoard([record("1", "Back Person")], [movement("1", { returnedAt: at(21, 10, 40) })], NOW);
+    assert.deepEqual(names(board.inNow), ["Back Person"]);
+    assert.equal(board.inNow[0]!.movement, null);
+    assert.equal(board.inNow[0]!.movements.length, 1);
+    assert.equal(board.counts.out, 0);
+  });
+
+  it("a REMOVED movement counts for nothing: not OUT, not in any count, listed only as removed", () => {
+    const board = groupBoard([record("1", "Not Really Out")], [movement("1", { voidedAt: at(21, 10, 5), correctedAt: at(21, 10, 5), correctionReason: "Never left" })], NOW);
+    assert.deepEqual(names(board.inNow), ["Not Really Out"]);
+    assert.deepEqual(board.counts, { in: 1, out: 0, gone: 0, noSignout: 0 });
+    assert.equal(board.inNow[0]!.movements.length, 0);
+    assert.equal(board.inNow[0]!.removedMovements.length, 1);
+  });
+
+  it("a person can be out again after a removed movement, and several movements are kept in order", () => {
+    const board = groupBoard(
+      [record("1", "Busy Person")],
+      [
+        movement("1", { id: "b", leftAt: at(21, 10), returnedAt: null }),
+        movement("1", { id: "a", leftAt: at(21, 9), returnedAt: at(21, 9, 30) }),
+        movement("1", { id: "x", leftAt: at(21, 8), voidedAt: at(21, 8, 5) }),
+      ],
+      NOW,
+    );
+    assert.deepEqual(names(board.outNow), ["Busy Person"]);
+    assert.deepEqual(board.outNow[0]!.movements.map((m) => m.id), ["a", "b"]);
+    assert.equal(board.outNow[0]!.movement?.id, "b");
+  });
+
+  it("carries the movement's correction (who, when, why) and version", () => {
+    const board = groupBoard(
+      [record("1", "Corrected Out")],
+      [movement("1", { correctedAt: at(21, 10, 10), correctedByName: "Desk B", correctionReason: "Wrong destination", version: "2026-10-21 10:10:00.5+01" })],
+      NOW,
+    );
+    const m = board.outNow[0]!.movement!;
+    assert.equal(m.correctedByName, "Desk B");
+    assert.equal(m.correctionReason, "Wrong destination");
+    assert.equal(m.version, "2026-10-21 10:10:00.5+01");
   });
 });

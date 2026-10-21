@@ -41,10 +41,10 @@ export const pgCorrectionStore: CorrectionStore = {
           }>(sql`
             SELECT r.id, r.staff_id, s.full_name, r.clock_in_at, r.clock_out_at, r.signout_missing_at, r.voided_at,
                    r.updated_at::text AS version,
-                   (SELECT count(*) FROM movement m WHERE m.attendance_record_id = r.id)::int AS movement_count,
-                   (SELECT min(m.left_at) FROM movement m WHERE m.attendance_record_id = r.id) AS first_movement_at,
+                   (SELECT count(*) FROM movement m WHERE m.attendance_record_id = r.id AND m.voided_at IS NULL)::int AS movement_count,
+                   (SELECT min(m.left_at) FROM movement m WHERE m.attendance_record_id = r.id AND m.voided_at IS NULL) AS first_movement_at,
                    (SELECT max(greatest(m.left_at, coalesce(m.returned_at, m.left_at)))
-                      FROM movement m WHERE m.attendance_record_id = r.id) AS last_movement_at,
+                      FROM movement m WHERE m.attendance_record_id = r.id AND m.voided_at IS NULL) AS last_movement_at,
                    (SELECT o.clock_in_at FROM attendance_record o
                      WHERE o.staff_id = r.staff_id AND o.id <> r.id
                        AND o.clock_out_at IS NULL AND o.signout_missing_at IS NULL AND o.voided_at IS NULL
@@ -68,6 +68,18 @@ export const pgCorrectionStore: CorrectionStore = {
             lastMovementAt: row.last_movement_at,
             otherOpenSince: row.other_open_since,
           } satisfies CorrectionRecord;
+        },
+
+        async hasOtherLiveRecordOnDay(recordId, day) {
+          const { rows } = await db.query(sql`
+            SELECT 1
+              FROM attendance_record r
+              JOIN attendance_record o ON o.staff_id = r.staff_id AND o.id <> r.id
+             WHERE r.id = ${recordId}::uuid
+               AND o.voided_at IS NULL
+               AND o.clock_in_at >= ${day.start} AND o.clock_in_at < ${day.end}
+             LIMIT 1`);
+          return rows.length > 0;
         },
 
         async apply({ id, version, actorId, reason, correction }) {
@@ -126,6 +138,15 @@ export const pgCorrectionStore: CorrectionStore = {
                        corrected_at = now(), corrected_by = ${actorId}, correction_reason = ${reason}
                  WHERE id = ${id} AND voided_at IS NULL AND updated_at = ${version}::timestamptz
                    AND signout_missing_at IS NOT NULL
+             RETURNING id`)
+            ).rowCount;
+          case "restore":
+            return (
+              await db.query(sql`
+                UPDATE attendance_record
+                   SET voided_at = NULL,
+                       corrected_at = now(), corrected_by = ${actorId}, correction_reason = ${reason}
+                 WHERE id = ${id} AND voided_at IS NOT NULL AND updated_at = ${version}::timestamptz
              RETURNING id`)
             ).rowCount;
           case "void":

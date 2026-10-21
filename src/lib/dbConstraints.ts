@@ -102,6 +102,7 @@ export const CONSTRAINT_RULES: Readonly<Record<string, ConstraintRule>> = Object
   movement_destination_not_blank_check: rule("check", "Enter where they went.", "destination"),
   movement_purpose_not_blank_check: rule("check", "Enter what it was for.", "purpose"),
   movement_returned_after_left_check: rule("check", "The return cannot be earlier than the time they left.", "returned_at"),
+  movement_correction_reason_not_blank_check: rule("check", "A correction needs a reason.", "correction_reason"),
   movement_one_open_key: rule("unique", "That person is already recorded as out. Record their return first."),
   movement_attendance_record_id_fkey: rule(
     "foreign_key",
@@ -176,6 +177,11 @@ export const UNTRIPPABLE_CONSTRAINTS: Readonly<Record<string, string>> = Object.
     "Setting keys are written by application code and migrations. A settings screen edits values only, never keys.",
   staff_password_needs_email_check:
     "A login account is created with its email in the same statement, and a roster person has no password. Only a forged request or a database edit gives one without the other.",
+  movement_corrected_pair_check: "A correction writes the person and the time together. " + FIXED_TOGETHER,
+  movement_corrected_matches_reason_check:
+    "A correction writes its reason, person and time together, and the application refuses a correction with no reason before it writes. " + FIXED_TOGETHER,
+  movement_voided_needs_correction_check:
+    "Removing a movement is a correction and is written with its reason, person and time. " + FIXED_TOGETHER,
   attendance_corrected_pair_check:
     "A correction writes the person and the time together. " + FIXED_TOGETHER,
   attendance_corrected_matches_reason_check:
@@ -220,6 +226,7 @@ export const UNTRIPPABLE_CONSTRAINTS: Readonly<Record<string, string>> = Object.
   attendance_clock_out_entered_by_fkey: SESSION_STAFF,
   attendance_signout_missing_by_fkey: SESSION_STAFF,
   attendance_corrected_by_fkey: SESSION_STAFF,
+  movement_corrected_by_fkey: SESSION_STAFF,
   attendance_record_staff_id_fkey: PICKED_STAFF,
   movement_approved_by_fkey: PICKED_STAFF,
   movement_left_entered_by_fkey: SESSION_STAFF,
