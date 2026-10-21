@@ -70,8 +70,8 @@ WINS and that line is stale.
   (`attendance_record.clock_in_entered_by` for the arrival and
   `clock_out_entered_by` for the departure: with two front-desk people they are
   often different people, and "who typed this" is the accountability mechanism for
-  the whole feature). A movement likewise carries `entered_by` (the departure) and
-  `returned_recorded_by` (the return). One person typing everyone else's
+  the whole feature). A movement likewise carries `left_entered_by` (the departure) and
+  `returned_entered_by` (the return). ONE PATTERN everywhere: `<event>_entered_by`. One person typing everyone else's
   attendance is the thing that must be visible. The same goes for a back-dated
   entry and a correction (their reasons are recorded).
 - Screen 07 ("My Attendance") has almost no audience now: nobody it describes
@@ -568,7 +568,7 @@ allowed before the first server apply). `npm run db:proof:check` fails if it is 
   closed rule. It reshapes attendance (see "ATTENDANCE: HOW IT REALLY WORKS") by
   DROPPING two constraints of 005/009 (new names are used, nothing is re-added
   under an old name) and adding columns and a table. The cPanel server already
-  has 001-009, so it receives 010 and 011 (one file at a time), never
+  has 001-009, so it receives 010, 011 and 012 (one file at a time), never
   `pg10-proof.sql` (that file is for a FRESH database and re-creates everything).
   Applying them there is done outside this repo's sessions.
   010 leaves two rules to the APPLICATION, each commented in the migration: a
@@ -576,8 +576,10 @@ allowed before the first server apply). `npm run db:proof:check` fails if it is 
   carries `backdate_reason`.
   `011_entered_by_per_event.sql` renames `attendance_record.entered_by` to
   `clock_in_entered_by`, adds `attendance_record.clock_out_entered_by` and
-  `movement.returned_recorded_by` (each present exactly when its time is). The
-  server receives 010 and 011 together, outside these sessions.
+  `movement.returned_recorded_by` (each present exactly when its time is).
+  `012_movement_entered_by_names.sql` then renamed movement's two author columns to
+  `left_entered_by` and `returned_entered_by` (and their constraints) to match. The
+  server receives 010, 011 and 012 together, outside these sessions.
 - NEVER DROP OR RECREATE THE LOCAL `public` SCHEMA (STANDING RULE). It holds the
   owner's real local login, whose password was typed at a prompt and cannot be
   recreated, and his sessions. Verify migrations in THROWAWAY schemas inside the

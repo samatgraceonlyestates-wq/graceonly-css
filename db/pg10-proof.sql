@@ -20,17 +20,18 @@
 -- psql reports  psql:pg10-proof.sql:LINE: ERROR: ...  Find LINE below. The line
 -- inside the source file is  LINE - first + 1.  Lines are counted in THIS file.
 --
---   001_foundation.sql               lines    37 -   166
---   002_staff_auth.sql               lines   168 -   256
---   003_visits.sql                   lines   258 -   416
---   004_enquiries.sql                lines   418 -   465
---   005_attendance.sql               lines   467 -   568
---   006_audit_log.sql                lines   570 -   611
---   007_handovers.sql                lines   613 -   700
---   008_case_links.sql               lines   702 -   783
---   009_attendance_device.sql        lines   785 -   855
---   010_roster_movements_backdating.sql lines   857 -  1011
---   011_entered_by_per_event.sql     lines  1013 -  1063
+--   001_foundation.sql               lines    38 -   167
+--   002_staff_auth.sql               lines   169 -   257
+--   003_visits.sql                   lines   259 -   417
+--   004_enquiries.sql                lines   419 -   466
+--   005_attendance.sql               lines   468 -   569
+--   006_audit_log.sql                lines   571 -   612
+--   007_handovers.sql                lines   614 -   701
+--   008_case_links.sql               lines   703 -   784
+--   009_attendance_device.sql        lines   786 -   856
+--   010_roster_movements_backdating.sql lines   858 -  1012
+--   011_entered_by_per_event.sql     lines  1014 -  1064
+--   012_movement_entered_by_names.sql lines  1066 -  1095
 -- ============================================================================
 \set ON_ERROR_STOP on
 \echo '>>> applying 001_foundation.sql'
@@ -1059,5 +1060,36 @@ ALTER TABLE movement
 ALTER TABLE movement
   ADD CONSTRAINT movement_returned_recorded_by_matches_check
     CHECK ((returned_at IS NULL) = (returned_recorded_by IS NULL));
+
+COMMIT;
+\echo '>>> applying 012_movement_entered_by_names.sql'
+-- 012 one naming pattern for "who typed it": <event>_entered_by.
+--
+-- attendance_record already follows it (clock_in_entered_by, clock_out_entered_by,
+-- from 010 and 011). movement did not: 010 named the author of the departure
+-- entered_by, and 011 named the author of the return returned_recorded_by. Both
+-- now say which EVENT they belong to, in the same shape.
+--
+--   movement.entered_by           ->  left_entered_by       (who typed the departure)
+--   movement.returned_recorded_by ->  returned_entered_by   (who typed the return)
+--
+-- This is a new migration and not an edit to 010 or 011, even though the server has
+-- neither yet: both are applied to the local database that holds the owner's login,
+-- which cannot be rebuilt, and a migration file must describe a schema that exists.
+--
+-- As in 011, a column rename leaves its foreign key's and check's NAMES alone, and a
+-- constraint name is part of the application's contract (dbConstraints.ts), so each
+-- is renamed to match. Nothing else changes: no column, type, nullability or rule.
+-- (movement.entered_device_id and entered_device_kind keep their names: they record
+-- the machine the departure was entered on, as attendance_record's device columns do.)
+
+BEGIN;
+
+ALTER TABLE movement RENAME COLUMN entered_by TO left_entered_by;
+ALTER TABLE movement RENAME CONSTRAINT movement_entered_by_fkey TO movement_left_entered_by_fkey;
+
+ALTER TABLE movement RENAME COLUMN returned_recorded_by TO returned_entered_by;
+ALTER TABLE movement RENAME CONSTRAINT movement_returned_recorded_by_fkey TO movement_returned_entered_by_fkey;
+ALTER TABLE movement RENAME CONSTRAINT movement_returned_recorded_by_matches_check TO movement_returned_entered_by_matches_check;
 
 COMMIT;
