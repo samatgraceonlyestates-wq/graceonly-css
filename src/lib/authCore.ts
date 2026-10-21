@@ -35,6 +35,14 @@
 // The database is the clock. Every date the rules compare comes back from the
 // store with the database's `now()`, never from the web server's clock.
 //
+// Roster people. `staff` also holds people who never sign in (the staff whose
+// attendance the front desk records): their password_hash is NULL. A row with no
+// hash is NOT an account here: signInAccount() turns it into "no account", so the
+// rest of the rules see exactly what they see for an address that does not exist
+// (one scrypt run against the dummy hash, a no-op write, the same message, the
+// same simulated lockout, no staff id in the log). It is checked here, in the
+// rules, and not only in the SQL, so a store that forgets cannot let one in.
+//
 // A plaintext password is never logged, returned or placed in an error. The log
 // carries a reason and, when the email matched a real account, the staff id. It
 // NEVER carries the typed email, or anything identifying when none matched.
@@ -58,7 +66,8 @@ const MAX_LOGIN_PASSWORD_CHARS = 1024;
 
 export interface AccountRow {
   id: string;
-  passwordHash: string;
+  /** NULL for a roster person, who cannot sign in. Never read it directly: use signInAccount(). */
+  passwordHash: string | null;
   mustChangePassword: boolean;
   isActive: boolean;
   failedCount: number;
@@ -75,11 +84,22 @@ export interface SessionRow {
   expiresAt: Date;
   revokedAt: Date | null;
   fullName: string;
-  department: string;
+  /** NULL until a department is set (roster people are entered before they have one). */
+  department: string | null;
   isActive: boolean;
   mustChangePassword: boolean;
   roles: string[];
   dbNow: Date;
+}
+
+/** An account that can sign in: it has a password hash. */
+type SignInAccount = AccountRow & { passwordHash: string };
+
+/** A row with no password hash is a roster person, not an account: treat it as no account at all. */
+export function signInAccount(row: AccountRow | null): SignInAccount | null {
+  return row !== null && typeof row.passwordHash === "string" && row.passwordHash !== ""
+    ? { ...row, passwordHash: row.passwordHash }
+    : null;
 }
 
 export interface AuthStore {
@@ -130,7 +150,7 @@ export interface SessionUser {
   sessionId: string;
   staffId: string;
   fullName: string;
-  department: string;
+  department: string | null;
   roles: string[];
   mustChangePassword: boolean;
 }
@@ -264,7 +284,7 @@ export function createAuthService(deps: AuthDeps): AuthService {
     }
 
     // 3. Look up, then verify ONCE, always.
-    const account = await store.findAccountByEmail(email);
+    const account = signInAccount(await store.findAccountByEmail(email));
     let matched: boolean;
     try {
       matched = await passwords.verify(password, account === null ? null : account.passwordHash);
@@ -367,7 +387,7 @@ export function createAuthService(deps: AuthDeps): AuthService {
       safeLog({ event: "auth_password_change_failed", reason: "ip_limited", staffId: input.staffId });
       return fail("ip_limited", MESSAGES.ipLimited, ipLimiter.retryAfterSeconds(ipKey));
     }
-    const account = await store.findAccountById(input.staffId);
+    const account = signInAccount(await store.findAccountById(input.staffId));
     if (account === null || !account.isActive) return fail("no_account", MESSAGES.invalid);
 
     const current = typeof input.currentPassword === "string" ? input.currentPassword : "";

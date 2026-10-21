@@ -107,3 +107,23 @@ describe("NOT NULL rules point at real NOT NULL columns", () => {
     }
   });
 });
+
+describe("NOT NULL rules are not stale after a later migration", () => {
+  it("no rule is keyed to a column that a later migration made nullable", () => {
+    // 002 says NOT NULL on staff.email; 010 drops it. The CREATE TABLE text alone
+    // would keep the rule alive, and the message would never be shown.
+    const dropped = new Set<string>();
+    for (const file of readdirSync(migrationsDir).filter((name) => name.endsWith(".sql")).sort()) {
+      const sql = readFileSync(join(migrationsDir, file), "utf8").replace(/--.*$/gm, "");
+      for (const statement of sql.matchAll(/ALTER\s+TABLE\s+([a-z0-9_]+)\s+([^;]*);/g)) {
+        for (const column of (statement[2] ?? "").matchAll(/ALTER\s+COLUMN\s+([a-z0-9_]+)\s+(DROP|SET)\s+NOT\s+NULL/g)) {
+          const key = `${statement[1]}.${column[1]}`;
+          if (column[2] === "DROP") dropped.add(key);
+          else dropped.delete(key);
+        }
+      }
+    }
+    assert.ok(dropped.has("staff.email"), "the scan understands 010");
+    assert.deepEqual(Object.keys(NOT_NULL_RULES).filter((key) => dropped.has(key)), []);
+  });
+});

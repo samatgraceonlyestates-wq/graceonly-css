@@ -33,7 +33,7 @@ const TYPED_EMAIL_CANARY = "typo.canary9f3a@canary-domain.example";
 interface MemAccount {
   id: string;
   email: string;
-  passwordHash: string;
+  passwordHash: string | null;
   mustChangePassword: boolean;
   isActive: boolean;
   failedCount: number;
@@ -62,11 +62,12 @@ class MemoryStore implements AuthStore {
   writes: string[] = [];
   touches = 0;
 
-  async addAccount(input: { id: string; email: string; password: string; hasher?: PasswordHasher; mustChange?: boolean; active?: boolean; roles?: string[] }) {
+  async addAccount(input: { id: string; email: string; password: string; hasher?: PasswordHasher; mustChange?: boolean; active?: boolean; roles?: string[]; roster?: boolean }) {
     this.accounts.set(input.id, {
       id: input.id,
       email: input.email,
-      passwordHash: await (input.hasher ?? cheap).hash(input.password),
+      // A roster person has no password hash at all (staff.password_hash IS NULL).
+      passwordHash: input.roster ? null : await (input.hasher ?? cheap).hash(input.password),
       mustChangePassword: input.mustChange ?? false,
       isActive: input.active ?? true,
       failedCount: 0,
@@ -90,6 +91,7 @@ class MemoryStore implements AuthStore {
   }
 
   async findAccountByEmail(email: string) {
+    // Like the SQL store this returns a roster row as it is (hash NULL); authCore must refuse it.
     const found = [...this.accounts.values()].find((account) => account.email.toLowerCase() === email.toLowerCase());
     return found ? this.row(found) : null;
   }
@@ -152,7 +154,7 @@ class MemoryStore implements AuthStore {
     const session = this.sessions.get(tokenHash);
     if (!session) return null;
     const account = this.accounts.get(session.staffId);
-    if (!account) return null;
+    if (!account || account.passwordHash === null) return null; // the SQL joins on password_hash IS NOT NULL
     return {
       sessionId: session.id,
       staffId: session.staffId,
@@ -516,6 +518,80 @@ describe("timing parity between a known and an unknown email", () => {
     // unknown path skipped it, it would be hundreds of times faster, not within 2x.
     assert.ok(knownMedian > 15, `the known path really ran scrypt (${knownMedian.toFixed(1)} ms)`);
     assert.ok(unknownMedian > knownMedian * 0.5 && unknownMedian < knownMedian * 2, `known ${knownMedian.toFixed(1)} ms, unknown ${unknownMedian.toFixed(1)} ms`);
+  });
+});
+
+describe("a roster person (no password hash) is not an account", () => {
+  // A roster person may well have an email (the front desk typed one). They still
+  // cannot sign in, and what the attempt looks like must be exactly what an address
+  // that does not exist looks like: timing, writes, message, lockout and log.
+  it("is refused whatever is typed, with the same answer as an address that does not exist", async () => {
+    const h = harness();
+    const roster = await h.account({ roster: true });
+    const ghost = "nobody@example.test";
+    for (const password of [PASSWORD, "wrong-wrong-wrong", "x"]) {
+      const a = await login(h, roster.email, password);
+      const b = await login(h, ghost, password);
+      assert.equal(a.ok, false);
+      assert.deepEqual(a, b);
+    }
+    assert.equal(h.store.sessions.size, 0, "no session was ever opened");
+  });
+
+  it("costs exactly one scrypt run, against the dummy hash, and one no-op write", async () => {
+    const h = harness();
+    const roster = await h.account({ roster: true });
+    h.calls.verify = 0;
+    h.calls.verifyAgainstNull = 0;
+    await login(h, roster.email, PASSWORD);
+    assert.equal(h.calls.verify, 1, "exactly one scrypt run");
+    assert.equal(h.calls.verifyAgainstNull, 1, "against the dummy hash, as for a missing account");
+    assert.deepEqual(h.store.writes, ["noopWrite"], "the write-shaped query an unknown address makes");
+  });
+
+  it("locks the way an unknown address locks, and never counts a failure on the row", async () => {
+    const h = harness();
+    const roster = await h.account({ roster: true });
+    const ghost = harness();
+    let rosterAnswer: unknown;
+    let ghostAnswer: unknown;
+    for (let i = 0; i < AUTH_POLICY.lockAfterFailures; i += 1) {
+      rosterAnswer = await login(h, roster.email, "wrong-wrong-wrong");
+      ghostAnswer = await login(ghost, "nobody@example.test", "wrong-wrong-wrong");
+    }
+    assert.deepEqual(rosterAnswer, ghostAnswer);
+    assert.equal((rosterAnswer as { reason: string }).reason, "locked");
+    assert.equal(h.store.accounts.get(roster.id)?.failedCount, 0, "the row itself is never written");
+  });
+
+  it("is logged as an unknown account, with no staff id and no typed email", async () => {
+    const h = harness();
+    const roster = await h.account({ roster: true });
+    await login(h, roster.email, PASSWORD);
+    assert.deepEqual(h.events, [{ event: "auth_login_failed", reason: "unknown_account" }]);
+    assert.ok(!JSON.stringify(h.events).includes(roster.email));
+  });
+
+  it("cannot change a password it does not have, and has no session", async () => {
+    const h = harness();
+    const roster = await h.account({ roster: true });
+    const result = await h.service.changePassword({ staffId: roster.id, currentPassword: PASSWORD, newPassword: "another long passphrase", ip: IP });
+    assert.equal(result.ok, false);
+    if (!result.ok) assert.equal(result.reason, "no_account");
+    assert.equal(h.store.accounts.get(roster.id)?.passwordHash, null, "no hash was written");
+
+    // A session row that somehow exists for a roster person does not resolve.
+    h.store.sessions.set("stale-token-hash", { id: "s", staffId: roster.id, createdAt: h.store.now, lastSeenAt: h.store.now, expiresAt: h.store.now + HOUR, revokedAt: null, ip: null, deviceId: null });
+    const found = await h.store.findSession("stale-token-hash");
+    assert.equal(found, null);
+  });
+
+  it("a login account next to a roster person still signs in normally", async () => {
+    const h = harness();
+    await h.account({ roster: true });
+    const real = await h.account();
+    const result = await login(h, real.email, PASSWORD);
+    assert.equal(result.ok, true);
   });
 });
 

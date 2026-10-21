@@ -15,7 +15,7 @@ import type { AccountRow, AuthStore, SessionRow } from "./authCore.ts";
 
 type AccountDbRow = {
   id: string;
-  password_hash: string;
+  password_hash: string | null;
   must_change_password: boolean;
   is_active: boolean;
   failed_count: number;
@@ -36,6 +36,8 @@ function toAccount(row: AccountDbRow): AccountRow {
 }
 
 export const pgAuthStore: AuthStore = {
+  // password_hash may come back NULL (a roster person); authCore.ts's signInAccount()
+  // refuses it, so these return the row as it is.
   async findAccountByEmail(email) {
     // lower() on both sides: the unique index is on lower(email), so this uses it.
     const { rows } = await query<AccountDbRow>(sql`
@@ -124,7 +126,7 @@ export const pgAuthStore: AuthStore = {
       expires_at: Date;
       revoked_at: Date | null;
       full_name: string;
-      department: string;
+      department: string | null;
       is_active: boolean;
       must_change_password: boolean;
       roles: string[];
@@ -135,7 +137,7 @@ export const pgAuthStore: AuthStore = {
              ARRAY(SELECT sr.role_code FROM staff_role sr WHERE sr.staff_id = st.id ORDER BY sr.role_code) AS roles,
              now() AS db_now
         FROM session s
-        JOIN staff st ON st.id = s.staff_id
+        JOIN staff st ON st.id = s.staff_id AND st.password_hash IS NOT NULL
        WHERE s.token_hash = ${tokenHash}`);
     const row = rows[0];
     if (row === undefined) return null;

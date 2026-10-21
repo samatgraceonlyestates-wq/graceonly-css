@@ -28,6 +28,51 @@ repo, separate database from the client portal.
 6. Visitor records are kept permanently. Staff count is 20-30 today and
    growing.
 
+## ATTENDANCE: HOW IT REALLY WORKS (supersedes every attendance line below)
+
+The owner described the real process. It is NOT self-service clock-in. Where any
+other line in this file (or any Figma frame) says staff clock themselves in, from
+their own phones, or that a PERSONAL-device clock-in must be marked, THIS SECTION
+WINS and that line is stale.
+
+- Staff sign a PAPER attendance book at reception. The paper is the real record;
+  CSS is a copy of it.
+- ONE or TWO front-desk people, plus the owner as admin, are the ONLY people who
+  will ever have a login. The staff whose attendance is recorded DO NOT sign in
+  and never will. There is no signup and never will be (the rule is unchanged).
+- The front desk copies arrivals from the paper book into CSS IN A BATCH, and
+  clocks people OUT one at a time as they leave through the day.
+- She types a name. A person entered before MUST be suggested as she types
+  ("divi" offers "Divine Mike"): she never retypes a known name. (Not built yet.)
+- A MOVEMENT BOOK also exists. When a staff member leaves the premises during the
+  day they sign out and sign back in. The front desk records where they went,
+  what for, who approved it, the time they left and the time they returned. An
+  open movement (no return) means they are out NOW. (Table built in migration 010;
+  no screens yet.)
+- ANY earlier day can be entered or corrected, with a reason recorded.
+- So `staff` holds two kinds of person: a LOGIN account (password hash, email) and
+  a ROSTER person (no password, usually no email, department optional) who is only
+  ever the subject of attendance, or the approver named on a movement. A roster
+  person cannot sign in: auth refuses a NULL password hash and treats it exactly
+  like an address that does not exist (same one scrypt run against the dummy hash,
+  same no-op write, same message, same simulated lockout).
+- THE DEVICE IS ALWAYS THE FRONT DESK'S OWN BROWSER. The device columns on
+  `attendance_record` (009) stay, harmless, with a changed meaning: "the machine
+  the ENTRY was made on", never "where the staff member was". The tightening switch
+  `attendance.clock_in_requires_desk_device` is likewise moot for now; nothing
+  reads it.
+- WITHDRAWN: screen 08 does NOT mark PERSONAL clock-ins (marking every row would
+  be noise). REPLACED BY: screen 08 MUST SHOW WHO ENTERED EACH RECORD
+  (`attendance_record.entered_by`). One person typing everyone else's attendance is
+  the thing that must be visible. The same goes for a back-dated entry and a
+  correction (their reasons are recorded).
+- Screen 07 ("My Attendance") has almost no audience now: nobody it describes
+  signs in. Do NOT delete it yet. It will be REPURPOSED into a "who is in right
+  now" board (present, out on a movement, not yet in). That is a later job.
+- Enforced in the APPLICATION, not the database (each has a comment at the schema):
+  a movement lies inside its shift; a record created for an earlier day carries a
+  `backdate_reason` (now() cannot appear in a CHECK).
+
 ## Design tokens — from Figma, exact
 
 Source: https://www.figma.com/design/yWUjcYUogDXQqBJ1uKAd1B/CSS-%E2%80%94-Customer-Support-System--GEL-?node-id=3-21
@@ -243,8 +288,8 @@ do not mirror the defect in CSS.
   enforced on the server by requireRole("ADMIN") before any data is loaded (a
   Super Admin passes too; anyone else gets a plain notice). The nav's "Attendance" link
   stays on /attendance (07, a person's own attendance). TODO when it reads real
-  data: it must visibly mark clock-ins from a PERSONAL device (see Decisions);
-  the sample data has no device kind yet.
+  data: it must show WHO ENTERED each record (see "ATTENDANCE: HOW IT REALLY
+  WORKS"). The earlier requirement to mark PERSONAL-device clock-ins is WITHDRAWN.
 - 08's date control is a STATIC label. Figma draws "◀ Fri 16 Oct 2026 ▶" as
   one text layer with no component and no prototype link (0 interactions in
   either frame). It is rendered without the arrows, since arrows would
@@ -261,6 +306,9 @@ do not mirror the defect in CSS.
   times of day therefore move with now, and the sample's late line moves
   with them (same offset from the day's start as 09:15 has from 10:42), so
   the "after HH:MM" caption is computed. Real data uses the fixed 09:15 rule.
+- (STALE AUDIENCE: nobody 07 describes signs in; it is to be repurposed into a
+  "who is in right now" board. See "ATTENDANCE: HOW IT REALLY WORKS". The
+  behaviour below describes the built sample screen only.)
 - My Attendance (07) lives at /attendance (the nav's "Attendance" link). Its
   shift has THREE states, derived by shiftState from one record (clock-in and
   clock-out): not clocked in, on shift, shift complete. Figma draws only
@@ -372,29 +420,22 @@ of fidelity. Recorded so nobody "fixes" them back:
   `handover.gate_answer`.
 - NO PIN FLOW IS BUILT, and no PIN screen. There is no front-desk computer yet
   (it has not been bought), so there is no trusted desk device to validate a PIN
-  on. Staff authenticate by PASSWORD ONLY, from their own phones. `staff.pin_hash`
-  and the `device` table stay in the schema, unused and empty, ready for the
-  reception laptop. Do not build a PIN screen until that device exists.
-- ATTENDANCE IS RECORDED, NOT BLOCKED, FROM ANY DEVICE. Because staff log in
-  from their own phones, a clock-in can happen from anywhere, including bed.
-  That is not blocked (the hardware does not exist); it is RECORDED and made
-  VISIBLE. `attendance_record` stores the id and a SNAPSHOT of the KIND (DESK or
-  PERSONAL) of the device that clocked in and of the device that clocked out
-  (they can differ). The kind is a snapshot, not a live lookup, so relabelling a
-  device later never rewrites history (same reason as `visit.client_name_logged`).
-  A record with no clock-in device must be a manual entry carrying a
-  `correction_reason`, so a missing device cannot pass for a real clock-in.
-- SCREEN 08 (Attendance Register) MUST VISIBLY MARK any clock-in whose recorded
-  device kind is PERSONAL. Not hidden, not blocked, not styled as an error:
-  visible, so a manager reading the register knows which entries mean "was in
-  the office" and which do not. The exact treatment is a later design question;
-  the requirement is that it cannot be invisible. The same goes for a clock-out
-  from a PERSONAL device, and for a manual entry (no device, has a reason).
-- THE TIGHTENING SWITCH is the `setting` row
-  `attendance.clock_in_requires_desk_device` (value `false`). When the reception
-  computer is bought and registered as a DESK device, setting it to `true` is how
-  phone clock-in gets refused: an UPDATE of that row, no code change, no
-  migration. NOTHING READS IT YET.
+  on. Only the front desk and the owner ever sign in, by PASSWORD ONLY.
+  `staff.pin_hash` and the `device` table stay in the schema, unused and empty,
+  ready for the reception laptop. Do not build a PIN screen until that device exists.
+- THE DEVICE COLUMNS (009) STAY, WITH A NEW MEANING. `attendance_record` stores
+  the id and a SNAPSHOT of the KIND (DESK or PERSONAL) of the device the ENTRY was
+  made on (the clock-in entry and the clock-out entry can differ). It is the front
+  desk's own browser, never "where the staff member was". The kind is a snapshot,
+  not a live lookup, so relabelling a device later never rewrites history (same
+  reason as `visit.client_name_logged`). Migration 010 replaces the two
+  constraints that assumed self-service: a record now ALWAYS has `entered_by`,
+  and a missing device no longer needs a `correction_reason`.
+- SUPERSEDED, WITHDRAWN: "screen 08 must visibly mark PERSONAL clock-ins". It is
+  replaced by "screen 08 must show WHO ENTERED each record" (top of this file).
+- THE TIGHTENING SWITCH, the `setting` row
+  `attendance.clock_in_requires_desk_device` (value `false`), is moot while the
+  front desk enters everything. It stays; NOTHING READS IT.
 
 ## Authentication
 
@@ -482,10 +523,11 @@ redirects), `src/proxy.ts` + `proxyDecision.ts`, `staffAdmin.ts` + `scripts/crea
 SQL migrations live in `db/migrations/`, applied in filename order, one logical
 group per file, each in its own transaction. They target PostgreSQL 10.23 (end
 of life, so plan an upgrade; they run unchanged on later versions) and need no
-extension. They have been applied to the LOCAL dev database only (PostgreSQL 18)
-and have NOT been run on a PostgreSQL 10 server: a local pass proves syntax and
+extension. 001-010 have been applied to the LOCAL dev database (PostgreSQL 18); 001-009
+are reported applied on the cPanel server (010 is pending, applied outside these
+sessions, never by Claude). The files have NOT been verified on PostgreSQL 10 by us: a local pass proves syntax and
 logic, not PG10 compatibility. How to create, apply and reset the local database
-is in `db/README.md`. Nothing has been applied to the cPanel server.
+is in `db/README.md`. Claude never touches the cPanel server.
 `db/pg10-proof.sql` is all the migrations joined into one file to carry to the
 PG10 server. It is GENERATED (`npm run db:proof`) and is NOT a migration: never
 put it in `db/migrations/`, never edit it, and regenerate it (and commit both)
@@ -503,6 +545,16 @@ allowed before the first server apply). `npm run db:proof:check` fails if it is 
   re-applied anyway. Fixing it at the source also left `009` purely additive,
   with no `DROP CONSTRAINT`/`ADD CONSTRAINT` of the same name (the construct in
   it most likely to trouble PG10). The exception does not repeat.
+  `010_roster_movements_backdating.sql` is the FIRST migration written under the
+  closed rule. It reshapes attendance (see "ATTENDANCE: HOW IT REALLY WORKS") by
+  DROPPING two constraints of 005/009 (new names are used, nothing is re-added
+  under an old name) and adding columns and a table. The cPanel server already
+  has 001-009, so it receives 010 ALONE, never `pg10-proof.sql` (that file is for a
+  FRESH database and re-creates everything). Applying 010 there is done outside
+  this repo's sessions.
+  010 leaves two rules to the APPLICATION, each commented in the migration: a
+  movement lies inside its shift, and a record created for an earlier Lagos day
+  carries `backdate_reason`.
 - SETTING KEYS are `<domain>.<name>`: exactly one dot, lower snake case within
   each part, and the domain is the area of the app the setting governs
   (`attendance`, later `visits`, `complaints`, ...). Enforced by
@@ -604,10 +656,9 @@ allowed before the first server apply). `npm run db:proof:check` fails if it is 
   search queries; complaints or their messages; derived values (elapsed time,
   visit status, attendance state, durations, totals, KPIs); plaintext
   passwords or tokens (hashes only); staff phone, address or salary.
-- Attendance proves that someone AUTHENTICATED (by password, today from their own
-  phone), not that they were physically present. Label it so. The device KIND
-  recorded on each clock-in (see Decisions) is what tells a manager whether an
-  entry can mean "was in the office".
+- Attendance is the front desk's COPY of the paper book. It proves what the
+  front desk TYPED (`entered_by` says who), not that the person was present; the
+  paper is the record. Label it so.
 - TODO (portal owner): the create-case endpoint should accept CSS's idempotency
   key (`case_request.id`), record a `source_ref` (the CSS visit id) and offer a
   dedupe lookup of a client's open cases. Until then `008_case_links` is inert.
@@ -639,7 +690,10 @@ PRD requirements the eight screens do NOT cover (six; none is built):
 
 Built but NOT in the PRD: STAFF ATTENDANCE, all of it (07 My Attendance, 08
 Attendance Register, clock in/out, departments, leave, the 09:15 late rule,
-hour targets, the timesheet export). Schema: `005_attendance`.
+hour targets, the timesheet export). Schema: `005_attendance`, reshaped by `010`
+(roster people, the movement book, back-dating) to match how attendance really
+works: see "ATTENDANCE: HOW IT REALLY WORKS" (batch entry by the front desk from
+a paper book; staff never sign in).
 
 PRD points that CONFLICT with settled decisions (not followed):
 

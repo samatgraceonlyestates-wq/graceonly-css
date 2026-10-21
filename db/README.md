@@ -131,10 +131,19 @@ No server address, user or password belongs in the repository.
 `.gitattributes` pins `db/**` to LF so a fresh checkout on Windows does not
 produce CRLF SQL.
 
+## Which file goes where (the server gets 010 alone)
+
+`pg10-proof.sql` is for a FRESH, EMPTY database. The cPanel server already has
+`001` to `009`, so it must NOT be given the proof file: it would try to create
+everything again and fail. It receives `db/migrations/010_roster_movements_backdating.sql`
+ON ITS OWN, and every later migration the same way, one file at a time, in
+filename order. (Locally, either route gives the same schema: both were applied
+and compared column for column and constraint for constraint.)
+
 ## Look at it
 
 ```bash
-"$PSQL" "$DATABASE_URL" -X -c "\dt"        # the 22 tables
+"$PSQL" "$DATABASE_URL" -X -c "\dt"        # the 23 tables
 "$PSQL" "$DATABASE_URL" -X -c "\d visit"   # one table in full
 ```
 

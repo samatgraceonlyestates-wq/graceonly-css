@@ -93,18 +93,20 @@ export const CONSTRAINT_RULES: Readonly<Record<string, ConstraintRule>> = Object
   visit_case_link_visit_case_key: rule("unique", "That case is already linked to this visit."),
 
   // ---- attendance ----
-  attendance_one_open_shift_key: rule("unique", "You are already clocked in."),
+  attendance_one_open_shift_key: rule("unique", "That person is already recorded as in. Clock them out first."),
   attendance_clock_out_after_in_check: rule("check", "Clock-out must be after clock-in.", "clock_out_at"),
-  attendance_correction_reason_matches_entered_by_check: rule(
-    "check",
-    "A correction needs a reason.",
-    "correction_reason",
-  ),
   attendance_correction_reason_not_blank_check: rule("check", "A correction needs a reason.", "correction_reason"),
-  attendance_no_device_needs_correction_reason_check: rule(
-    "check",
-    "A record entered by hand needs a reason.",
-    "correction_reason",
+  attendance_backdate_reason_not_blank_check: rule("check", "An entry for an earlier day needs a reason.", "backdate_reason"),
+
+  // ---- the movement book (leaving the premises and coming back) ----
+  movement_destination_not_blank_check: rule("check", "Enter where they went.", "destination"),
+  movement_purpose_not_blank_check: rule("check", "Enter what it was for.", "purpose"),
+  movement_returned_after_left_check: rule("check", "The return cannot be earlier than the time they left.", "returned_at"),
+  movement_one_open_key: rule("unique", "That person is already recorded as out. Record their return first."),
+  movement_attendance_record_id_fkey: rule(
+    "foreign_key",
+    "That person is not recorded as in for that day. Record their arrival first.",
+    "attendance_record",
   ),
   leave_ends_on_or_after_starts_check: rule("check", "Leave cannot end before it starts.", "ends_on"),
 
@@ -172,6 +174,10 @@ export const UNTRIPPABLE_CONSTRAINTS: Readonly<Record<string, string>> = Object.
   session_expires_after_created_check: "Session lifetimes are set by the application. " + SET_BY_APP,
   setting_key_format_check:
     "Setting keys are written by application code and migrations. A settings screen edits values only, never keys.",
+  staff_password_needs_email_check:
+    "A login account is created with its email in the same statement, and a roster person has no password. Only a forged request or a database edit gives one without the other.",
+  movement_entered_device_kind_valid_check: "The kind is copied from the signed-in session's device. " + SET_BY_APP,
+  movement_entered_device_pair_check: "A device and its kind are written together. " + FIXED_TOGETHER,
   staff_active_matches_deactivated_check: "Deactivating sets both columns together. " + FIXED_TOGETHER,
   staff_password_failed_count_nonneg_check: "A counter the application increments and resets. " + SET_BY_APP,
   staff_pin_failed_count_nonneg_check: "A counter the application increments and resets. " + SET_BY_APP,
@@ -197,7 +203,9 @@ export const UNTRIPPABLE_CONSTRAINTS: Readonly<Record<string, string>> = Object.
 
   // ---- foreign keys to staff ----
   attendance_record_entered_by_fkey: SESSION_STAFF,
-  attendance_record_staff_id_fkey: SESSION_STAFF,
+  attendance_record_staff_id_fkey: PICKED_STAFF,
+  movement_approved_by_fkey: PICKED_STAFF,
+  movement_entered_by_fkey: SESSION_STAFF,
   audit_log_actor_staff_id_fkey: SESSION_STAFF,
   case_request_requested_by_fkey: SESSION_STAFF,
   device_registered_by_fkey: SESSION_STAFF,
@@ -222,6 +230,7 @@ export const UNTRIPPABLE_CONSTRAINTS: Readonly<Record<string, string>> = Object.
   // ---- foreign keys to lookup rows and devices ----
   attendance_record_clock_in_device_id_fkey: "The device of the signed-in session, registered before it can be used.",
   attendance_record_clock_out_device_id_fkey: "The device of the signed-in session, registered before it can be used.",
+  movement_entered_device_id_fkey: "The device of the signed-in session, registered before it can be used.",
   session_device_id_fkey: "The device of the signed-in session, registered before it can be used.",
   enquiry_topic_code_fkey: PICKED_CODE,
   handover_item_document_type_code_fkey: PICKED_CODE,
@@ -240,6 +249,7 @@ export const UNTRIPPABLE_CONSTRAINTS: Readonly<Record<string, string>> = Object.
   enquiry_pkey: APP_ID,
   handover_pkey: APP_ID,
   leave_pkey: APP_ID,
+  movement_pkey: APP_ID,
   role_pkey: "The four roles are fixed by migration 001 and cannot be created.",
   session_pkey: APP_ID,
   setting_pkey: "Setting keys are written by application code and migrations, never typed.",
@@ -262,9 +272,7 @@ const required = (message: string, field: string): NotNullRule => Object.freeze(
 
 /** Keyed "table.column". Only columns a person fills in; every other NOT NULL column is untrippable by rule. */
 export const NOT_NULL_RULES: Readonly<Record<string, NotNullRule>> = Object.freeze({
-  "staff.email": required("Enter an email address.", "email"),
   "staff.full_name": required("Enter the person's full name.", "full_name"),
-  "staff.department": required("Enter the department.", "department"),
   "staff_role.role_code": required("Choose a role.", "role"),
   "device.label": required("Give the device a name.", "label"),
   "visitor.display_name": required("Enter the visitor's name.", "display_name"),
@@ -273,6 +281,8 @@ export const NOT_NULL_RULES: Readonly<Record<string, NotNullRule>> = Object.free
   "visit.reason_code": required("Choose a reason for the visit.", "reason"),
   "enquiry.topic_code": required("Choose a topic.", "topic"),
   "enquiry.summary": required("Describe the enquiry.", "summary"),
+  "movement.destination": required("Enter where they went.", "destination"),
+  "movement.purpose": required("Enter what it was for.", "purpose"),
   "leave.starts_on": required("Enter the first day of leave.", "starts_on"),
   "leave.ends_on": required("Enter the last day of leave.", "ends_on"),
   "leave.kind_code": required("Choose the kind of leave.", "kind"),
