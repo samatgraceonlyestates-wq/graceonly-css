@@ -12,8 +12,9 @@
 //   primary key every CREATE TABLE t has t_pkey
 //   inline FK   a column line with REFERENCES is named <table>_<column>_fkey
 //
-// Names are applied in file order, and DROP CONSTRAINT / DROP INDEX remove one, so
-// a later migration that replaces a constraint is handled.
+// Names are applied in file order, and DROP CONSTRAINT / DROP INDEX remove one and
+// RENAME CONSTRAINT a TO b moves one, so a later migration that replaces or renames
+// a constraint is handled.
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
@@ -63,10 +64,17 @@ export function deriveConstraints(migrationsDir: string): DerivedConstraints {
     primaryKeyKeywords += (sql.match(/\bPRIMARY\s+KEY\b/g) ?? []).length;
 
     // Events in the order they appear in the file.
-    const events = /DROP\s+CONSTRAINT\s+(?:IF\s+EXISTS\s+)?([a-z0-9_]+)|CONSTRAINT\s+([a-z0-9_]+)\s+(CHECK|UNIQUE|FOREIGN\s+KEY)|CREATE\s+UNIQUE\s+INDEX\s+(?:IF\s+NOT\s+EXISTS\s+)?([a-z0-9_]+)|DROP\s+INDEX\s+(?:IF\s+EXISTS\s+)?([a-z0-9_]+)|CREATE\s+TABLE\s+([a-z0-9_]+)\s*\(/g;
+    const events = /RENAME\s+CONSTRAINT\s+([a-z0-9_]+)\s+TO\s+([a-z0-9_]+)|DROP\s+CONSTRAINT\s+(?:IF\s+EXISTS\s+)?([a-z0-9_]+)|CONSTRAINT\s+([a-z0-9_]+)\s+(CHECK|UNIQUE|FOREIGN\s+KEY)|CREATE\s+UNIQUE\s+INDEX\s+(?:IF\s+NOT\s+EXISTS\s+)?([a-z0-9_]+)|DROP\s+INDEX\s+(?:IF\s+EXISTS\s+)?([a-z0-9_]+)|CREATE\s+TABLE\s+([a-z0-9_]+)\s*\(/g;
     for (const match of sql.matchAll(events)) {
-      const [, dropped, constraint, constraintKind, uniqueIndex, droppedIndex, table] = match;
-      if (dropped !== undefined) names.delete(dropped);
+      const [, renamedFrom, renamedTo, dropped, constraint, constraintKind, uniqueIndex, droppedIndex, table] = match;
+      if (renamedFrom !== undefined && renamedTo !== undefined) {
+        const kind = names.get(renamedFrom);
+        if (kind === undefined) problems.push(`RENAME CONSTRAINT ${renamedFrom}: no such constraint at that point.`);
+        else {
+          names.delete(renamedFrom);
+          names.set(renamedTo, kind);
+        }
+      } else if (dropped !== undefined) names.delete(dropped);
       else if (droppedIndex !== undefined) names.delete(droppedIndex);
       else if (constraint !== undefined && constraintKind !== undefined) {
         const kind: DerivedKind = constraintKind.startsWith("CHECK")

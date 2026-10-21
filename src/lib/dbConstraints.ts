@@ -176,6 +176,10 @@ export const UNTRIPPABLE_CONSTRAINTS: Readonly<Record<string, string>> = Object.
     "Setting keys are written by application code and migrations. A settings screen edits values only, never keys.",
   staff_password_needs_email_check:
     "A login account is created with its email in the same statement, and a roster person has no password. Only a forged request or a database edit gives one without the other.",
+  attendance_clock_out_entered_by_matches_check:
+    "A clock-out writes the time and the person who typed it together. " + FIXED_TOGETHER,
+  movement_returned_recorded_by_matches_check:
+    "A return writes the time and the person who typed it together. " + FIXED_TOGETHER,
   movement_entered_device_kind_valid_check: "The kind is copied from the signed-in session's device. " + SET_BY_APP,
   movement_entered_device_pair_check: "A device and its kind are written together. " + FIXED_TOGETHER,
   staff_active_matches_deactivated_check: "Deactivating sets both columns together. " + FIXED_TOGETHER,
@@ -202,10 +206,12 @@ export const UNTRIPPABLE_CONSTRAINTS: Readonly<Record<string, string>> = Object.
   visitor_link_time_matches_link_check: "Linking a visitor to a portal client writes all three columns. " + FIXED_TOGETHER,
 
   // ---- foreign keys to staff ----
-  attendance_record_entered_by_fkey: SESSION_STAFF,
+  attendance_clock_in_entered_by_fkey: SESSION_STAFF,
+  attendance_clock_out_entered_by_fkey: SESSION_STAFF,
   attendance_record_staff_id_fkey: PICKED_STAFF,
   movement_approved_by_fkey: PICKED_STAFF,
   movement_entered_by_fkey: SESSION_STAFF,
+  movement_returned_recorded_by_fkey: SESSION_STAFF,
   audit_log_actor_staff_id_fkey: SESSION_STAFF,
   case_request_requested_by_fkey: SESSION_STAFF,
   device_registered_by_fkey: SESSION_STAFF,

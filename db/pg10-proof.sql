@@ -20,16 +20,17 @@
 -- psql reports  psql:pg10-proof.sql:LINE: ERROR: ...  Find LINE below. The line
 -- inside the source file is  LINE - first + 1.  Lines are counted in THIS file.
 --
---   001_foundation.sql               lines    36 -   165
---   002_staff_auth.sql               lines   167 -   255
---   003_visits.sql                   lines   257 -   415
---   004_enquiries.sql                lines   417 -   464
---   005_attendance.sql               lines   466 -   567
---   006_audit_log.sql                lines   569 -   610
---   007_handovers.sql                lines   612 -   699
---   008_case_links.sql               lines   701 -   782
---   009_attendance_device.sql        lines   784 -   854
---   010_roster_movements_backdating.sql lines   856 -  1010
+--   001_foundation.sql               lines    37 -   166
+--   002_staff_auth.sql               lines   168 -   256
+--   003_visits.sql                   lines   258 -   416
+--   004_enquiries.sql                lines   418 -   465
+--   005_attendance.sql               lines   467 -   568
+--   006_audit_log.sql                lines   570 -   611
+--   007_handovers.sql                lines   613 -   700
+--   008_case_links.sql               lines   702 -   783
+--   009_attendance_device.sql        lines   785 -   855
+--   010_roster_movements_backdating.sql lines   857 -  1011
+--   011_entered_by_per_event.sql     lines  1013 -  1063
 -- ============================================================================
 \set ON_ERROR_STOP on
 \echo '>>> applying 001_foundation.sql'
@@ -1006,5 +1007,57 @@ CREATE INDEX movement_record_idx ON movement (attendance_record_id, left_at);
 CREATE TRIGGER movement_touch_updated_at
   BEFORE UPDATE ON movement
   FOR EACH ROW EXECUTE PROCEDURE touch_updated_at();
+
+COMMIT;
+\echo '>>> applying 011_entered_by_per_event.sql'
+-- 011 who typed each EVENT, not just each record.
+--
+-- WHY. 010 gave attendance_record one entered_by. But a record is two events, the
+-- arrival and the departure, and with one or two front-desk people they are often
+-- typed by different people (one copies the morning's arrivals from the paper book,
+-- the other clocks people out through the day). "Who typed this" is the
+-- accountability mechanism for the whole feature, so it must say which event. The
+-- same is true of a movement: whoever records the return may not be whoever recorded
+-- the departure.
+--
+-- Nothing outside this repository reads these columns and the server holds no
+-- attendance data, so the rename is safe and no data needs carrying across.
+--
+-- Append-only: 001 to 010 are not touched. The server receives 010 and 011 together.
+
+BEGIN;
+
+-- 1. The arrival. entered_by now means "who typed the ARRIVAL", and the honest name
+--    prevents permanent confusion. A column rename keeps its NOT NULL (from 010) and
+--    its foreign key, but PostgreSQL does not rename the foreign key's NAME, and a
+--    constraint name is part of the application's contract (dbConstraints.ts), so it
+--    is renamed to match.
+ALTER TABLE attendance_record
+  RENAME COLUMN entered_by TO clock_in_entered_by;
+ALTER TABLE attendance_record
+  RENAME CONSTRAINT attendance_record_entered_by_fkey TO attendance_clock_in_entered_by_fkey;
+
+-- 2. The departure: who typed the clock-out. Present exactly when the clock-out time
+--    is: a departure with nobody to answer for it cannot be stored, and neither can a
+--    name against a departure that has not happened.
+ALTER TABLE attendance_record
+  ADD COLUMN clock_out_entered_by uuid;
+ALTER TABLE attendance_record
+  ADD CONSTRAINT attendance_clock_out_entered_by_fkey
+    FOREIGN KEY (clock_out_entered_by) REFERENCES staff (id);
+ALTER TABLE attendance_record
+  ADD CONSTRAINT attendance_clock_out_entered_by_matches_check
+    CHECK ((clock_out_at IS NULL) = (clock_out_entered_by IS NULL));
+
+-- 3. A movement's return: who typed it, present exactly when returned_at is. (The
+--    departure's author is movement.entered_by, from 010.)
+ALTER TABLE movement
+  ADD COLUMN returned_recorded_by uuid;
+ALTER TABLE movement
+  ADD CONSTRAINT movement_returned_recorded_by_fkey
+    FOREIGN KEY (returned_recorded_by) REFERENCES staff (id);
+ALTER TABLE movement
+  ADD CONSTRAINT movement_returned_recorded_by_matches_check
+    CHECK ((returned_at IS NULL) = (returned_recorded_by IS NULL));
 
 COMMIT;

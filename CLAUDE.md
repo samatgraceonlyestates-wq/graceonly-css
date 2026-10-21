@@ -44,6 +44,10 @@ WINS and that line is stale.
   clocks people OUT one at a time as they leave through the day.
 - She types a name. A person entered before MUST be suggested as she types
   ("divi" offers "Divine Mike"): she never retypes a known name. (Not built yet.)
+  HOW: the roster is 20-30 people and will stay small, so the application LOADS
+  it and matches in memory. NO name-prefix or trigram index, and no database
+  extension (cPanel will not install one on PG10). Matching in the application is
+  also what gives fuzzy duplicate detection, which no index would give here.
 - A MOVEMENT BOOK also exists. When a staff member leaves the premises during the
   day they sign out and sign back in. The front desk records where they went,
   what for, who approved it, the time they left and the time they returned. An
@@ -63,15 +67,29 @@ WINS and that line is stale.
   reads it.
 - WITHDRAWN: screen 08 does NOT mark PERSONAL clock-ins (marking every row would
   be noise). REPLACED BY: screen 08 MUST SHOW WHO ENTERED EACH RECORD
-  (`attendance_record.entered_by`). One person typing everyone else's attendance is
-  the thing that must be visible. The same goes for a back-dated entry and a
-  correction (their reasons are recorded).
+  (`attendance_record.clock_in_entered_by` for the arrival and
+  `clock_out_entered_by` for the departure: with two front-desk people they are
+  often different people, and "who typed this" is the accountability mechanism for
+  the whole feature). A movement likewise carries `entered_by` (the departure) and
+  `returned_recorded_by` (the return). One person typing everyone else's
+  attendance is the thing that must be visible. The same goes for a back-dated
+  entry and a correction (their reasons are recorded).
 - Screen 07 ("My Attendance") has almost no audience now: nobody it describes
   signs in. Do NOT delete it yet. It will be REPURPOSED into a "who is in right
   now" board (present, out on a movement, not yet in). That is a later job.
 - Enforced in the APPLICATION, not the database (each has a comment at the schema):
   a movement lies inside its shift; a record created for an earlier day carries a
   `backdate_reason` (now() cannot appear in a CHECK).
+- BACK-DATING MEANS AN EARLIER LAGOS DAY, NOT A LATE ENTRY. A record created for a
+  Lagos calendar day before today needs a `backdate_reason`. Typing this
+  morning's arrivals at 10:30 is ordinary work and must NEVER ask for a reason,
+  however late in the day it is typed: test the Lagos DATE of the clock-in
+  against today's Lagos date (`lagosDateOf`), never elapsed time.
+- A ROSTER PERSON GAINING A PASSWORD is a deliberate ADMINISTRATIVE act, never a
+  side effect of anything: not of entering an email, not of attendance entry, not
+  of a role grant. Nothing else may write `staff.password_hash` on a roster row.
+  (Today the only writers are the create-staff script and a person's own password
+  change; a roster person cannot reach the latter.)
 
 ## Design tokens — from Figma, exact
 
@@ -429,8 +447,9 @@ of fidelity. Recorded so nobody "fixes" them back:
   desk's own browser, never "where the staff member was". The kind is a snapshot,
   not a live lookup, so relabelling a device later never rewrites history (same
   reason as `visit.client_name_logged`). Migration 010 replaces the two
-  constraints that assumed self-service: a record now ALWAYS has `entered_by`,
-  and a missing device no longer needs a `correction_reason`.
+  constraints that assumed self-service: a record now ALWAYS has a
+  `clock_in_entered_by` (renamed from `entered_by` in 011), and a missing
+  device no longer needs a `correction_reason`.
 - SUPERSEDED, WITHDRAWN: "screen 08 must visibly mark PERSONAL clock-ins". It is
   replaced by "screen 08 must show WHO ENTERED each record" (top of this file).
 - THE TIGHTENING SWITCH, the `setting` row
@@ -549,12 +568,24 @@ allowed before the first server apply). `npm run db:proof:check` fails if it is 
   closed rule. It reshapes attendance (see "ATTENDANCE: HOW IT REALLY WORKS") by
   DROPPING two constraints of 005/009 (new names are used, nothing is re-added
   under an old name) and adding columns and a table. The cPanel server already
-  has 001-009, so it receives 010 ALONE, never `pg10-proof.sql` (that file is for a
-  FRESH database and re-creates everything). Applying 010 there is done outside
-  this repo's sessions.
+  has 001-009, so it receives 010 and 011 (one file at a time), never
+  `pg10-proof.sql` (that file is for a FRESH database and re-creates everything).
+  Applying them there is done outside this repo's sessions.
   010 leaves two rules to the APPLICATION, each commented in the migration: a
   movement lies inside its shift, and a record created for an earlier Lagos day
   carries `backdate_reason`.
+  `011_entered_by_per_event.sql` renames `attendance_record.entered_by` to
+  `clock_in_entered_by`, adds `attendance_record.clock_out_entered_by` and
+  `movement.returned_recorded_by` (each present exactly when its time is). The
+  server receives 010 and 011 together, outside these sessions.
+- NEVER DROP OR RECREATE THE LOCAL `public` SCHEMA (STANDING RULE). It holds the
+  owner's real local login, whose password was typed at a prompt and cannot be
+  recreated, and his sessions. Verify migrations in THROWAWAY schemas inside the
+  same database (`CREATE SCHEMA shot_x`; apply with
+  `PGOPTIONS="-c search_path=shot_x"`; drop the scratch schema afterwards): both
+  "all from the top" and "the old ones, then the new one alone". Then apply the new
+  migration ON TOP of the real schema. This overrides "Start over" in
+  `db/README.md`, which is for the owner to run, never Claude.
 - SETTING KEYS are `<domain>.<name>`: exactly one dot, lower snake case within
   each part, and the domain is the area of the app the setting governs
   (`attendance`, later `visits`, `complaints`, ...). Enforced by
@@ -657,7 +688,7 @@ allowed before the first server apply). `npm run db:proof:check` fails if it is 
   visit status, attendance state, durations, totals, KPIs); plaintext
   passwords or tokens (hashes only); staff phone, address or salary.
 - Attendance is the front desk's COPY of the paper book. It proves what the
-  front desk TYPED (`entered_by` says who), not that the person was present; the
+  front desk TYPED (`clock_in_entered_by` / `clock_out_entered_by` say who), not that the person was present; the
   paper is the record. Label it so.
 - TODO (portal owner): the create-case endpoint should accept CSS's idempotency
   key (`case_request.id`), record a `source_ref` (the CSS visit id) and offer a

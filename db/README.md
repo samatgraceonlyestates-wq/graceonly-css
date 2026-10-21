@@ -69,6 +69,11 @@ done
 
 ## Start over (destroys all data in the local database)
 
+**For the owner only. Claude never runs this**: it would destroy the owner's local
+login, which cannot be recreated (CLAUDE.md, "NEVER DROP OR RECREATE THE LOCAL
+`public` SCHEMA"). To test a migration, use a throwaway schema in the same
+database.
+
 Run this, then apply the migrations again from the top. Never patch a
 half-applied database.
 
@@ -131,13 +136,13 @@ No server address, user or password belongs in the repository.
 `.gitattributes` pins `db/**` to LF so a fresh checkout on Windows does not
 produce CRLF SQL.
 
-## Which file goes where (the server gets 010 alone)
+## Which file goes where (the server gets 010 and 011, not the proof file)
 
 `pg10-proof.sql` is for a FRESH, EMPTY database. The cPanel server already has
 `001` to `009`, so it must NOT be given the proof file: it would try to create
-everything again and fail. It receives `db/migrations/010_roster_movements_backdating.sql`
-ON ITS OWN, and every later migration the same way, one file at a time, in
-filename order. (Locally, either route gives the same schema: both were applied
+everything again and fail. It receives `db/migrations/010_roster_movements_backdating.sql` and then
+`011_entered_by_per_event.sql` (each on its own), and every later migration the
+same way, one file at a time, in filename order. (Locally, either route gives the same schema: both were applied
 and compared column for column and constraint for constraint.)
 
 ## Look at it
