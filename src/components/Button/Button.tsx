@@ -15,6 +15,9 @@ type Props = {
   type?: "button" | "submit";
   // Native disabled (buttons only, not links): dimmed, no pointer, not focusable.
   disabled?: boolean;
+  // For a button that changes the page it is on (never with href). Kept to one
+  // handler: forms still submit through the form's own action.
+  onClick?: () => void;
   className?: string;
   children: ReactNode;
 };
@@ -27,6 +30,7 @@ export function Button({
   href,
   type = "button",
   disabled = false,
+  onClick,
   className,
   children,
 }: Props) {
@@ -47,7 +51,7 @@ export function Button({
   }
 
   return (
-    <button type={type} className={classes} disabled={disabled}>
+    <button type={type} className={classes} disabled={disabled} onClick={onClick}>
       {children}
     </button>
   );

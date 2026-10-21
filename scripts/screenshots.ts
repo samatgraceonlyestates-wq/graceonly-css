@@ -5,6 +5,15 @@
 //   npm run shots:account                      (once: the local-only account)
 //   npm run shots                              (every signed-in page)
 //   npm run shots -- /attendance /dashboard    (just these)
+//   npm run shots -- --scenario=scripts/shots-arrivals.ts
+//                                              (drive a page: a module whose default
+//                                               export gets { open, shot, problem })
+//
+// SHOTS_DATABASE_URL (optional) points the SERVER at another database, for a
+// scenario that WRITES (it must not write to the owner's local data). It must
+// point at this machine (assertLocalDatabaseUrl); a throwaway schema is chosen with
+// "?options=-c%20search_path%3Dshot_e2e" on the URL. The screenshot account must
+// exist in it. Nothing here ever touches the cPanel server.
 //
 // Pictures go to screenshots/ (git-ignored, never committed): <page>-desktop.png
 // and <page>-phone.png. The run FAILS (exit 1) on a console error, a page error,
@@ -21,8 +30,10 @@
 import { spawn, spawnSync, type ChildProcess } from "node:child_process";
 import { mkdirSync, rmSync } from "node:fs";
 import { createServer } from "node:net";
-import { join } from "node:path";
-import { chromium, type Browser, type BrowserContext } from "@playwright/test";
+import { join, resolve } from "node:path";
+import { pathToFileURL } from "node:url";
+import { chromium, type Browser, type BrowserContext, type Page } from "@playwright/test";
+import { assertLocalDatabaseUrl } from "../src/lib/localDatabase.ts";
 
 const PORT = 3457;
 const BASE = `http://localhost:${PORT}`;
@@ -89,6 +100,10 @@ function serverEnv(): NodeJS.ProcessEnv {
   const env = { ...process.env };
   delete env.CSS_SHOT_EMAIL;
   delete env.CSS_SHOT_PASSWORD;
+  if (process.env.SHOTS_DATABASE_URL) {
+    assertLocalDatabaseUrl(process.env.SHOTS_DATABASE_URL);
+    env.DATABASE_URL = process.env.SHOTS_DATABASE_URL;
+  }
   return env;
 }
 
@@ -173,8 +188,28 @@ async function signIn(browser: Browser): Promise<Awaited<ReturnType<BrowserConte
   return state;
 }
 
+/** What a scenario module gets: pages already signed in, with the same failure watching as the sweep. */
+export interface ScenarioHelpers {
+  base: string;
+  open(viewport: (typeof VIEWPORTS)[number]["name"]): Promise<Page>;
+  /** Grows the viewport to the page's height (so a fixed bar sits at the bottom) and saves a picture. */
+  shot(page: Page, name: string): Promise<void>;
+  /** Records a failed expectation; the run then exits 1. */
+  problem(message: string): void;
+}
+
+async function fitAndShoot(page: Page, viewport: { width: number; height: number }, file: string): Promise<void> {
+  const height = await page.evaluate(() => document.documentElement.scrollHeight);
+  await page.setViewportSize({ width: viewport.width, height: Math.min(Math.max(height, viewport.height), 6000) });
+  await page.screenshot({ path: file });
+  console.log(`  ${file}`);
+}
+
 async function main(): Promise<void> {
-  const pages = process.argv.slice(2).length > 0 ? process.argv.slice(2) : DEFAULT_PAGES;
+  const args = process.argv.slice(2);
+  const scenarioPath = args.find((arg) => arg.startsWith("--scenario="))?.slice("--scenario=".length);
+  const named = args.filter((arg) => !arg.startsWith("--"));
+  const pages = named.length > 0 ? named : scenarioPath ? [] : DEFAULT_PAGES;
   for (const path of pages) if (!path.startsWith("/")) throw new Error(`Pages are paths starting with "/": ${path}`);
 
   build();
@@ -208,13 +243,38 @@ async function main(): Promise<void> {
         // first screenful ends, in the middle of the page. Grow the viewport to the
         // page's height instead, so a fixed bar sits at the bottom as it would on a
         // phone scrolled to the end.
-        const height = await page.evaluate(() => document.documentElement.scrollHeight);
-        await page.setViewportSize({ width: viewport.width, height: Math.min(Math.max(height, viewport.height), 6000) });
-        await page.screenshot({ path: file });
-        console.log(`  ${file}`);
+        await fitAndShoot(page, viewport, file);
         await page.close();
       }
       await context.close();
+    }
+
+    if (scenarioPath) {
+      const opened: BrowserContext[] = [];
+      const scenario = (await import(pathToFileURL(resolve(scenarioPath)).href)).default as (helpers: ScenarioHelpers) => Promise<void>;
+      await scenario({
+        base: BASE,
+        problem: (message) => problems.push(`[scenario] ${message}`),
+        async open(name) {
+          const viewport = VIEWPORTS.find((candidate) => candidate.name === name)!;
+          const context = await browser.newContext({
+            storageState: state,
+            viewport: { width: viewport.width, height: viewport.height },
+            isMobile: viewport.mobile,
+            hasTouch: viewport.mobile,
+            deviceScaleFactor: 1,
+          });
+          opened.push(context);
+          watch(context, `scenario ${name}`);
+          return context.newPage();
+        },
+        async shot(page, name) {
+          const size = page.viewportSize() ?? { width: 1280, height: 900 };
+          const viewport = size.width < 768 ? VIEWPORTS[1] : VIEWPORTS[0];
+          await fitAndShoot(page, viewport, join(OUT_DIR, `${name}.png`));
+        },
+      });
+      for (const context of opened) await context.close();
     }
   } finally {
     await browser.close();

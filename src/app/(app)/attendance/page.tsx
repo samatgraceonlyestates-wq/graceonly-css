@@ -209,6 +209,13 @@ export default async function MyAttendancePage({
         }
         lede={LEDE[scenario]}
         ledeHiddenOnMobile
+        // PLACEHOLDER entry point (not in Figma): the front desk reaches the arrivals
+        // sheet from here until this screen becomes the "who is in right now" board.
+        actions={
+          <Button variant="row-action" href="/attendance/arrivals">
+            Enter arrivals →
+          </Button>
+        }
       />
 
       {/* ---------- the clock ---------- */}

@@ -88,6 +88,16 @@ export async function requireRole(role: RoleCode): Promise<{ user: SessionUser; 
   return { user, allowed: decideAccess(user, { role }).ok };
 }
 
+/**
+ * The gate for a screen several roles may use (the front desk and the owner enter
+ * attendance). Same contract as requireRole: signed out or obliged to change their
+ * password still redirect; `allowed` is true if they hold ANY of the roles.
+ */
+export async function requireAnyRole(roles: readonly RoleCode[]): Promise<{ user: SessionUser; allowed: boolean }> {
+  const user = await requireSession();
+  return { user, allowed: roles.some((role) => decideAccess(user, { role }).ok) };
+}
+
 export async function setSessionCookie(token: string): Promise<void> {
   (await cookies()).set(SESSION_COOKIE, token, sessionCookieOptions(process.env.NODE_ENV));
 }

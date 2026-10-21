@@ -91,6 +91,46 @@ WINS and that line is stale.
   (Today the only writers are the create-staff script and a person's own password
   change; a roster person cannot reach the latter.)
 
+### The batch arrival entry screen (BUILT; UNDESIGNED, not in Figma)
+
+/attendance/arrivals, reached from a placeholder "Enter arrivals" button on 07.
+FRONT_DESK or ADMIN only (requireAnyRole, before the roster loads; the save action
+gates itself again). Files: `clockTime.ts` (the time field), `rosterMatch.ts`
+(suggestions and the duplicate rule), `arrivalBatch.ts` (the rules, behind an
+`ArrivalStore` interface), `arrivalStore.ts` (SQL), `attendance/arrivals/`.
+
+- She picks a day (default today, Lagos) and types rows: name, time in. Save writes
+  the whole page in ONE transaction. EVERY row is validated first and EVERY problem
+  is reported against its row; if there is any problem, or any name awaiting
+  confirmation, NOTHING is written. Blank rows are ignored.
+- TIME FIELD: plain text, exactly 8:15, 08:15 or 0815 (24-hour). Anything else is
+  refused with a message, never guessed ("815" and "8:15pm" are refused).
+- THE DAY: a future day is refused; a time later than now today is refused. An
+  EARLIER LAGOS DAY needs a reason (stored as backdate_reason on every record in
+  the batch) and takes a time out per row (required: a record with no clock-out is
+  an open shift, and a person may have only one). TODAY takes arrivals only and
+  never asks for a reason, however late it is typed.
+- ROSTER: a typed name that exists is that person; one nobody has creates a roster
+  person (name only). SUGGESTIONS match any word of the name, in the application.
+  "CLOSE" (needs confirming as a different person before a new entry is made): after
+  normalising, within 1 edit (2 when the longer name is 12+ characters; a swap of
+  neighbouring letters is 1), or the same words in another order, or one a PARTIAL of
+  the other (every word the start of a different word). Equal means the same person,
+  no question. Close is a question, never an answer: the screen never decides.
+- ONE RECORD PER PERSON PER LAGOS DAY is the APPLICATION's rule (the database only
+  forbids a second OPEN shift). The people involved are locked FOR UPDATE in id order
+  before it is checked. A person appearing twice in a page, or still recorded as in
+  from an earlier day (for today's arrivals), is refused by name.
+- Each record carries clock_in_entered_by (and clock_out_entered_by for an earlier
+  day) = the signed-in user. The device columns stay NULL: no device is registered.
+  One audit_log row per record, and per new roster person (ids only, never names).
+- Keyboard: Enter or Tab moves on; past the last field a new row appears; arrows
+  move through suggestions and Enter takes the highlighted one (a single suggestion
+  is already highlighted). Tab never takes a suggestion. Enter never submits.
+- Verified with `scripts/shots-arrivals.ts` against a THROWAWAY schema (seed:
+  `scripts/shots-arrivals.seed.sql`; `SHOTS_DATABASE_URL` must be local). Never run
+  a writing scenario against the owner's local `public` data.
+
 ## Design tokens — from Figma, exact
 
 Source: https://www.figma.com/design/yWUjcYUogDXQqBJ1uKAd1B/CSS-%E2%80%94-Customer-Support-System--GEL-?node-id=3-21

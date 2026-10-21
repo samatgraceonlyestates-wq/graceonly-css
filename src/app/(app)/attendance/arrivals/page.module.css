@@ -1,0 +1,324 @@
+/* UNDESIGNED (not in Figma). Mobile first; desktop from 768px. Tokens only. */
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--fold-space-10);
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--fold-space-14);
+}
+
+/* ---- the day ---- */
+.controls {
+  display: flex;
+  flex-direction: column;
+  gap: var(--fold-space-12);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--fold-space-6);
+  min-width: 0;
+}
+
+.label {
+  color: var(--fold-dusk);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+}
+
+.note {
+  color: var(--fold-dusk);
+  font-size: 13px;
+}
+
+.noteError {
+  color: var(--fold-status-red);
+  font-weight: 600;
+}
+
+/* ---- inputs (the same look as TextField, at 40px so thirty rows fit) ---- */
+.input {
+  width: 100%;
+  height: 40px;
+  padding: 0 var(--fold-space-14);
+  border: 1px solid var(--fold-silver);
+  border-radius: var(--fold-radius-pill);
+  background: var(--fold-canvas);
+  color: var(--fold-dusk);
+  font: inherit;
+  /* Keep at 16px: iOS zooms the page on focus for anything smaller. */
+  font-size: 16px;
+}
+
+.input::placeholder {
+  color: var(--fold-smoke);
+  opacity: 1;
+}
+
+.input:focus-visible {
+  outline: 2px solid var(--fold-gold);
+  outline-offset: 2px;
+}
+
+.inputError {
+  border-color: var(--fold-status-red);
+}
+
+.dateInput {
+  max-width: 220px;
+}
+
+/* ---- the sheet ---- */
+.sheet {
+  display: flex;
+  flex-direction: column;
+  gap: var(--fold-space-12);
+}
+
+.headings {
+  display: none;
+}
+
+.rows {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* Phone: the name and the time in share a line. An earlier day wraps its time out
+   to a second line under the time in. */
+.row {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr) 88px;
+  grid-template-areas:
+    "num name in"
+    ".   .    out";
+  align-items: center;
+  column-gap: var(--fold-space-8);
+  row-gap: var(--fold-space-6);
+  padding: var(--fold-space-8) 0;
+  border-bottom: 1px solid var(--fold-silver);
+}
+
+.row.today {
+  grid-template-areas: "num name in";
+}
+
+.row:last-child {
+  border-bottom: 0;
+}
+
+/* A rail in the card's padding, so a flagged row does not shift its content. */
+.rowFlagged {
+  box-shadow: -8px 0 0 -4px var(--fold-status-red);
+}
+
+.num {
+  grid-area: num;
+  color: var(--fold-dusk);
+  font-size: 12px;
+  font-weight: 600;
+  text-align: right;
+}
+
+.nameCell {
+  position: relative;
+  grid-area: name;
+  min-width: 0;
+}
+
+.timeIn {
+  grid-area: in;
+  padding: 0 var(--fold-space-10);
+  text-align: center;
+}
+
+.timeOut {
+  grid-area: out;
+  padding: 0 var(--fold-space-10);
+  text-align: center;
+}
+
+/* Everything under a row's inputs spans the row. */
+.errors,
+.hint,
+.prompt {
+  grid-column: 1 / -1;
+  grid-row: auto;
+}
+
+.errors {
+  margin: 0;
+  padding: 0 0 0 var(--fold-space-32);
+  list-style: none;
+  color: var(--fold-status-red);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.hint {
+  margin: 0;
+  padding-left: var(--fold-space-32);
+  color: var(--fold-dusk);
+  font-size: 13px;
+}
+
+.hintWarn {
+  color: var(--fold-status-amber-ink);
+  font-weight: 600;
+}
+
+.prompt {
+  display: flex;
+  flex-direction: column;
+  gap: var(--fold-space-8);
+  margin-left: var(--fold-space-32);
+  padding: var(--fold-space-10) var(--fold-space-14);
+  border-radius: var(--fold-radius-card);
+  background: var(--fold-mist);
+  color: var(--fold-dusk);
+  font-size: 13px;
+}
+
+.prompt p {
+  margin: 0;
+}
+
+.prompt strong {
+  color: var(--fold-burgundy);
+  font-weight: 600;
+}
+
+.promptActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--fold-space-8);
+}
+
+/* ---- the suggestions ---- */
+.options {
+  position: absolute;
+  z-index: 5;
+  top: calc(100% + 4px);
+  right: 0;
+  left: 0;
+  margin: 0;
+  padding: var(--fold-space-4);
+  border-radius: var(--fold-radius-card);
+  background: var(--fold-white);
+  box-shadow: var(--fold-shadow-card);
+  list-style: none;
+}
+
+.option {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--fold-space-12);
+  padding: var(--fold-space-10) var(--fold-space-12);
+  border-radius: var(--fold-space-8);
+  color: var(--fold-burgundy);
+  font-size: 15px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.optionActive {
+  background: var(--fold-mist);
+}
+
+.optionDept {
+  color: var(--fold-dusk);
+  font-size: 12px;
+  font-weight: 400;
+}
+
+/* ---- the foot of the sheet ---- */
+.footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--fold-space-12);
+  padding-top: var(--fold-space-4);
+}
+
+.footer .note {
+  flex-basis: 100%;
+}
+
+@media (min-width: 768px) {
+  .page {
+    gap: var(--fold-space-24);
+  }
+
+  .controls {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: var(--fold-space-16) var(--fold-space-24);
+  }
+
+  .reasonField {
+    flex: 1;
+    min-width: 280px;
+  }
+
+  .controls .note {
+    flex-basis: 100%;
+  }
+
+  .input {
+    height: 44px;
+  }
+
+  .headings,
+  .row {
+    display: grid;
+    grid-template-columns: 40px minmax(0, 1fr) 120px 120px;
+    grid-template-areas: "num name in out";
+    column-gap: var(--fold-space-12);
+  }
+
+  .headings.today,
+  .row.today {
+    grid-template-columns: 40px minmax(0, 1fr) 140px;
+    grid-template-areas: "num name in";
+  }
+
+  .headings {
+    padding: 0 0 var(--fold-space-8);
+    border-bottom: 1px solid var(--fold-silver);
+    color: var(--fold-dusk);
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.4px;
+    text-transform: uppercase;
+  }
+
+  .headings span:first-child {
+    text-align: right;
+  }
+
+  .headings span:nth-child(n + 3) {
+    padding: 0 var(--fold-space-10);
+    text-align: center;
+  }
+
+  .errors,
+  .hint {
+    padding-left: 52px;
+  }
+
+  .prompt {
+    margin-left: 52px;
+  }
+}
