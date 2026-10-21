@@ -112,3 +112,46 @@ describe("matchName", () => {
     assert.equal(m.kind === "close" ? m.candidates.length : 0, 3);
   });
 });
+
+import { personDetails } from "./rosterMatch.ts";
+
+describe("personDetails: telling two people of one name apart", () => {
+  it("a unique name shows just the department", () => {
+    const details = personDetails([person("1", "Divine Mike", "Front desk"), person("2", "Peter Obi")]);
+    assert.equal(details.get("1"), "Front desk");
+    assert.equal(details.get("2"), "");
+  });
+
+  it("two people with one name are told apart by department and when they were added", () => {
+    const details = personDetails([
+      { id: "a", name: "Ada Okafor", department: "Legal", since: "2026-03-02" },
+      { id: "b", name: "ada  OKAFOR", department: "Finance", since: "2026-10-12" },
+    ]);
+    assert.equal(details.get("a"), "Legal · added 2 Mar 2026");
+    assert.equal(details.get("b"), "Finance · added 12 Oct 2026");
+  });
+
+  it("a missing department is said so, and added-on tells them apart", () => {
+    const details = personDetails([
+      { id: "a", name: "Ada Okafor", department: null, since: "2026-03-02" },
+      { id: "b", name: "Ada Okafor", department: null, since: "2026-10-12" },
+    ]);
+    assert.equal(details.get("a"), "no department · added 2 Mar 2026");
+    assert.notEqual(details.get("a"), details.get("b"));
+  });
+
+  it("when even those are the same, they are numbered, so they can still be chosen", () => {
+    const details = personDetails([
+      { id: "a", name: "Ada Okafor", department: "Legal", since: "2026-10-12" },
+      { id: "b", name: "Ada Okafor", department: "Legal", since: "2026-10-12" },
+    ]);
+    const labels = [details.get("a"), details.get("b")].sort();
+    assert.deepEqual(labels, ["Legal · added 12 Oct 2026 · 1 of 2", "Legal · added 12 Oct 2026 · 2 of 2"]);
+  });
+
+  it("every person of a shared name gets a label that is unique within the group", () => {
+    const group = Array.from({ length: 4 }, (_, i) => ({ id: String(i), name: "Ada Okafor", department: i < 2 ? "Legal" : "Finance", since: "2026-10-12" }));
+    const labels = [...personDetails(group).values()];
+    assert.equal(new Set(labels).size, 4);
+  });
+});

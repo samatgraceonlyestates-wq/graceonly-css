@@ -85,7 +85,9 @@ export default async function scenario({ base, open, shot, problem }: ScenarioHe
   await page.getByLabel("Row 5 name", { exact: true }).click(); // leave row 4's time
 
   let body = await text(page);
-  expect(body.includes("Close to"), "desktop: 'Divine Mikel' should ask whether it is the same person");
+  expect(body.includes("Did you mean") && body.includes("Divine Mike"), "desktop: 'Divine Mikel' should ask \"Did you mean Divine Mike?\"");
+  expect(await page.getByRole("button", { name: /^Yes, Divine Mike/ }).count() === 1, "desktop: the existing person should be offered as a choice");
+  expect(/\w+day, \d+ \w+ \d{4}/.test(body), "desktop: the day should be shown in words beside the picker");
   expect(body.includes("Time in: Type the time as"), "desktop: '815' should be flagged as soon as it is left");
   expect(body.includes("New person: will be added to the roster."), "desktop: a new name should say it is new");
   await shot(page, "arrivals-2-flags-desktop");
@@ -99,12 +101,27 @@ export default async function scenario({ base, open, shot, problem }: ScenarioHe
 
   // Fix both and save: "Divine Mikel" is confirmed a different person.
   await page.getByLabel("Row 2 time in", { exact: true }).fill("0830");
-  await page.getByRole("button", { name: "A different person" }).click();
+  await page.getByRole("button", { name: "No, a different person" }).click();
   expect((await text(page)).includes("New person, confirmed different from Divine Mike."), "desktop: the confirmation should be shown");
   await page.getByRole("button", { name: /^Save 4 arrivals$/ }).click();
   await page.getByText("4 arrivals saved").waitFor({ timeout: 20_000 });
   expect((await text(page)).includes("2 people were added to the roster"), "desktop: two new people (Divine Mikel, Brand New Person)");
   await shot(page, "arrivals-4-saved-desktop");
+
+  // Two people called Ada Okafor: the list must tell them apart, and she can pick either.
+  await page.getByLabel("Row 1 name", { exact: true }).click();
+  await page.keyboard.type("ada ok");
+  await page.getByRole("option", { name: /Ada Okafor/ }).first().waitFor();
+  const options = await page.getByRole("option").allInnerTexts();
+  expect(options.length === 2 && options.some((o) => o.includes("Legal")) && options.some((o) => o.includes("Finance")), `desktop: both Adas should be listed with their departments, got ${JSON.stringify(options)}`);
+  expect(options.every((o) => /added/.test(o)), "desktop: and when they were added");
+  await shot(page, "arrivals-10-same-name-desktop");
+  await page.keyboard.press("ArrowDown");
+  await page.keyboard.press("ArrowDown");
+  await page.keyboard.press("Enter");
+  await page.keyboard.type("0020");
+  await page.getByRole("button", { name: /^Save 1 arrival$/ }).click();
+  await page.getByText("1 arrival saved").waitFor({ timeout: 20_000 });
 
   // The same person again today: refused, naming them.
   await page.getByLabel("Row 1 name", { exact: true }).click();

@@ -75,6 +75,14 @@
   max-width: 220px;
 }
 
+/* The day in words, beside the picker: it cannot be misread the way 10/21/2026 can. */
+.longDate {
+  margin: 0;
+  color: var(--fold-burgundy);
+  font-size: 16px;
+  font-weight: 600;
+}
+
 /* ---- the sheet ---- */
 .sheet {
   display: flex;
@@ -258,6 +266,11 @@
 @media (min-width: 768px) {
   .page {
     gap: var(--fold-space-24);
+  }
+
+  .longDate {
+    align-self: center;
+    margin-top: 18px; /* sits level with the input, under its label */
   }
 
   .controls {

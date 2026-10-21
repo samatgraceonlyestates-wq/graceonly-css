@@ -6,8 +6,6 @@
 // Timestamps are built relative to `now` so the elapsed times and ages shown
 // on screen always agree with the check-in / raised-at values behind them.
 
-import { weekdayIndexMonFirst } from "@/lib/format";
-
 export type Direction = "up" | "down";
 export type Stat = { value: number; delta: { direction: Direction; text: string } };
 
@@ -262,104 +260,6 @@ export function getAttendanceSample(now: Date): { staff: SampleStaff[]; lateAfte
     lateAfterAt: new Date(
       nowMinute - (DESIGN_NOW_MINUTES - DESIGN_LATE_AFTER_MINUTES) * MINUTE,
     ).toISOString(),
-  };
-}
-
-export type MyAttendanceScenario = "not-clocked-in" | "on-shift" | "complete";
-
-export type SampleWeekDay = {
-  date: string; // ISO instant on that calendar day
-  kind: "past" | "today" | "future";
-  clockInAt: string | null;
-  clockOutAt: string | null;
-  onLeave: boolean;
-  lateAfterAt: string;
-};
-
-// Mon to Fri history for the days before today. The Thursday leave and the
-// Tuesday late come from the Figma mockup; Friday only appears when the whole
-// week is already in the past (a weekend).
-const WEEK_HISTORY: Array<{ clockIn: string; clockOut: string } | "leave"> = [
-  { clockIn: "08:52", clockOut: "17:14" },
-  { clockIn: "09:23", clockOut: "17:08" },
-  { clockIn: "08:45", clockOut: "17:02" },
-  "leave",
-  { clockIn: "07:30", clockOut: "15:42" },
-];
-
-// The signed-in person's own attendance (screen 07). The record for TODAY is
-// the very one the register (08) shows for the same person (Sam Okonkwo), so
-// the two screens cannot disagree. The week is the real Mon to Fri of the
-// current week: earlier days are sample history, today is live, later days
-// are empty. Same anchoring as the register: times shift with `now`.
-//
-// TODO: `scenario` is a SAMPLE-ONLY preview switch (/attendance?scenario=...)
-// so all three shift states can be seen without a backend. In the default
-// "on-shift" scenario the record matches the register; in the others it
-// deliberately does not. Remove it when real data exists.
-export function getMyAttendanceSample(now: Date, scenario: MyAttendanceScenario = "on-shift") {
-  const nowMinute = Math.floor(now.getTime() / MINUTE) * MINUTE;
-  const register = getAttendanceSample(now);
-  const me = register.staff.find((person) => person.id === "s2"); // Sam Okonkwo
-  if (!me) throw new Error("sample staff s2 is missing");
-
-  const minutesOf = (hhmm: string) => {
-    const [h, m] = hhmm.split(":").map(Number);
-    return h * 60 + m;
-  };
-  // The same design time, k days before today, anchored like the register.
-  const daysAgo = (k: number, hhmm: string) =>
-    new Date(nowMinute - (DESIGN_NOW_MINUTES - minutesOf(hhmm) + k * 1440) * MINUTE).toISOString();
-
-  let todayIn = me.clockInAt;
-  let todayOut: string | null = null;
-  if (scenario === "not-clocked-in") todayIn = null;
-  if (scenario === "complete") {
-    todayIn = new Date(nowMinute - 9 * HOUR).toISOString();
-    todayOut = new Date(nowMinute - 30 * MINUTE).toISOString();
-  }
-
-  const todayIndex = weekdayIndexMonFirst(now);
-  const week: SampleWeekDay[] = [0, 1, 2, 3, 4].map((i) => {
-    const k = todayIndex - i; // days before today; negative means later this week
-    const date = new Date(nowMinute - k * 1440 * MINUTE).toISOString();
-    if (k < 0) {
-      return { date, kind: "future", clockInAt: null, clockOutAt: null, onLeave: false, lateAfterAt: date };
-    }
-    if (k === 0) {
-      return {
-        date,
-        kind: "today",
-        clockInAt: todayIn,
-        clockOutAt: todayOut,
-        onLeave: false,
-        lateAfterAt: register.lateAfterAt,
-      };
-    }
-    const history = WEEK_HISTORY[i];
-    if (history === "leave") {
-      return { date, kind: "past", clockInAt: null, clockOutAt: null, onLeave: true, lateAfterAt: date };
-    }
-    return {
-      date,
-      kind: "past",
-      clockInAt: daysAgo(k, history.clockIn),
-      clockOutAt: daysAgo(k, history.clockOut),
-      onLeave: false,
-      lateAfterAt: daysAgo(k, "09:15"),
-    };
-  });
-
-  return {
-    asOf: now.toISOString(),
-    user: currentUser,
-    today: { clockInAt: todayIn, clockOutAt: todayOut, lateAfterAt: register.lateAfterAt },
-    week,
-    // TODO: placeholders. Earlier weeks of the month (no late days), and the
-    // week and month targets, which will come from HR policy.
-    monthPriorMs: 114 * HOUR + 42 * MINUTE,
-    weekTargetMs: 40 * HOUR,
-    monthTargetMs: 160 * HOUR,
   };
 }
 

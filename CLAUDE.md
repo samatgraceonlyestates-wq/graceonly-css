@@ -74,9 +74,8 @@ WINS and that line is stale.
   `returned_entered_by` (the return). ONE PATTERN everywhere: `<event>_entered_by`. One person typing everyone else's
   attendance is the thing that must be visible. The same goes for a back-dated
   entry and a correction (their reasons are recorded).
-- Screen 07 ("My Attendance") has almost no audience now: nobody it describes
-  signs in. Do NOT delete it yet. It will be REPURPOSED into a "who is in right
-  now" board (present, out on a movement, not yet in). That is a later job.
+- Screen 07 is now the TODAY BOARD: "who is in right now", and where the front desk
+  clocks people out one at a time and closes the day (built; see below).
 - Enforced in the APPLICATION, not the database (each has a comment at the schema):
   a movement lies inside its shift; a record created for an earlier day carries a
   `backdate_reason` (now() cannot appear in a CHECK).
@@ -127,9 +126,60 @@ gates itself again). Files: `clockTime.ts` (the time field), `rosterMatch.ts`
 - Keyboard: Enter or Tab moves on; past the last field a new row appears; arrows
   move through suggestions and Enter takes the highlighted one (a single suggestion
   is already highlighted). Tab never takes a suggestion. Enter never submits.
+- THE DAY IS ALWAYS SHOWN IN WORDS beside the picker ("Wednesday, 21 October 2026",
+  formatLongDate): the picker uses the browser's locale, and 10/21/2026 read
+  day-first is the 10th of December. Never rely on the picker's own formatting.
+- A CLOSE NAME OFFERS THE EXISTING PERSON: "Did you mean Ada Okafor (Legal)?" with a
+  "Yes, Ada Okafor" button that takes that person, and "No, a different person".
+  Over-asking is cheap and is preferred to a near-duplicate on the roster.
+- TWO PEOPLE WITH ONE NAME are told apart in the suggestions and the prompt by
+  department and when they were added (personDetails), then "1 of 2". Refusing the
+  ambiguity is right; leaving her unable to resolve it is not.
+- THE CAPITALISATION OF A TYPED NAME IS NEVER CHANGED, DELIBERATELY. Names are stored
+  exactly as typed (cleanDisplayName only tidies spacing); comparison ignores case
+  (normaliseName) but storage never does. Reason: every auto-capitalisation rule is
+  wrong some of the time and silently, and these are real people's names ("van der
+  Merwe", "O'Brien", "Obi-Eze", "de Souza"). The one concession is the on-screen
+  keyboard's own hint (autoCapitalize="words" on the name field): it is visible as she
+  types and she can correct it; the application itself never rewrites a name. If
+  that hint proves wrong in practice, set it to "off", never add a rewrite on save.
 - Verified with `scripts/shots-arrivals.ts` against a THROWAWAY schema (seed:
   `scripts/shots-arrivals.seed.sql`; `SHOTS_DATABASE_URL` must be local). Never run
   a writing scenario against the owner's local `public` data.
+
+### The today board (BUILT; UNDESIGNED, not in Figma): screen 07, repurposed
+
+/attendance (the nav's "Attendance" link). FRONT_DESK or ADMIN (requireAnyRole before
+anything loads; the actions gate themselves again). Files: `todayBoard.ts` (the
+grouping, pure), `departures.ts` (the clock-out and no-sign-out rules, behind a
+`DepartureStore`), `departureStore.ts` (SQL), `attendance/page.tsx`,
+`ClockOutControl.tsx`, `EndOfDay.tsx`, `attendance/actions.ts`.
+
+- For TODAY in Lagos it shows four groups and a count of each, all DERIVED, never
+  stored: IN now; OUT on a movement (the movement table exists, no screen enters
+  movements yet, so this reads empty for now); GONE for the day; NO SIGN-OUT. An open
+  shift left from an EARLIER day is shown IN, flagged "open since <day>": it is the
+  forgotten shift, and it blocks that person's next arrival.
+- CLOCK OUT, one person at a time: the time defaults to NOW (from the server's render
+  time, so a wrong browser clock cannot put a future time in the box) but is editable.
+  It is a time of day on the record's OWN Lagos day (an earlier day's open shift takes
+  its time on that day, with no default). Refused: not after their time in; in the
+  future; out on an open movement (record the return first); before a movement of
+  theirs ended (a movement lies inside its shift; the database cannot check that, this
+  does). Records clock_out_entered_by (the signed-in user: the arrival and the
+  departure can be different people). One audit_log row. The record is locked FOR
+  UPDATE and the write is guarded "still open", so two users cannot both win.
+- NO SIGN-OUT (migration 013, `signout_missing_at`/`signout_missing_by`): the
+  CLOSED-BUT-NO-TIME state. It is always an EXPLICIT act: per person ("<name> never
+  signed out", in the clock-out panel) or the end-of-day panel, which lists the people
+  and asks for confirmation. The app NEVER does it silently. THE HOURS OF SUCH A SHIFT
+  ARE UNKNOWN: never zero, never guessed (not to the end of the day, not to a usual
+  finishing time). Any total, week or timesheet that includes one must say so or leave
+  it out and say so. There is no undo on the board yet.
+- Ticking durations use the shared useNow interval (<Duration />); the board adds no
+  timer. It does not refresh by itself: it updates after her own actions only.
+- Verified with `scripts/shots-board.ts` (seed: `scripts/shots-board.seed.sql`) against
+  a THROWAWAY schema, like the arrivals screen.
 
 ## Design tokens — from Figma, exact
 
@@ -364,35 +414,10 @@ do not mirror the defect in CSS.
   times of day therefore move with now, and the sample's late line moves
   with them (same offset from the day's start as 09:15 has from 10:42), so
   the "after HH:MM" caption is computed. Real data uses the fixed 09:15 rule.
-- (STALE AUDIENCE: nobody 07 describes signs in; it is to be repurposed into a
-  "who is in right now" board. See "ATTENDANCE: HOW IT REALLY WORKS". The
-  behaviour below describes the built sample screen only.)
-- My Attendance (07) lives at /attendance (the nav's "Attendance" link). Its
-  shift has THREE states, derived by shiftState from one record (clock-in and
-  clock-out): not clocked in, on shift, shift complete. Figma draws only
-  on-shift; the other two reuse the same layout and are undesigned. No break
-  state exists. The lede copy is per state: the design's "Clock in to start
-  the day..." line is the not-clocked-in one; "You're on shift..." and
-  "You've clocked out for today..." are new. Clock in / Clock out render
-  enabled and wired to nothing (TODO, no backend); a complete shift has no
-  action.
-- 07's record for today is the SAME one 08 shows for the same person (Sam
-  Okonkwo): one source in sampleData.ts. TODO: /attendance?scenario=
-  not-clocked-in|on-shift|complete is a SAMPLE-ONLY preview switch so all
-  three states can be seen; the other two deliberately disagree with 08. It
-  is honoured only when NODE_ENV !== "production"; a production build never
-  reads the query string. Remove it when the attendance backend exists.
-- 07's week rows are the real Mon to Fri of the current week, computed from
-  the calendar: earlier days are sample history, today is live, later days
-  are empty. NOTE: the Figma frame's week table is off by one day against
-  its own clock. The clock says "Friday, 16 October 2026" (a Friday), but the
-  table runs "Monday 13 ... Thursday 16 ... Friday 17 (today)".
-- 07's week total, month total and the percentage all tick with the open
-  shift (Duration plusMs, TargetPercent, on the shared interval). Targets
-  (40h, 160h) and the earlier-weeks month base are placeholders. Late days
-  is counted from the week. The mobile frame shows only the week total (in
-  the card title); Month total and Late days are kept, stacked under the
-  week card, like the other mobile omissions.
+- Screen 07 is now the TODAY BOARD (see "The today board" under "ATTENDANCE: HOW IT
+  REALLY WORKS"). The old sample-driven "My Attendance" (its shift states, week
+  table, totals, targets and the /attendance?scenario= switch) is REMOVED, with its
+  sample data and TargetPercent. Figma frames 31:2 / 31:90 no longer describe it.
 - The big clock (LiveClock) reads the shared useNow at minute granularity; it
   is the one use of the 100px display type (56px, capped at 14.3vw, on mobile).
 - 08's department filters are derived from the staff data, in order of first
@@ -408,7 +433,7 @@ do not mirror the defect in CSS.
   --table-card-pad-x/-pad-y/-gap/-col-gap on an ancestor of the table.
   Screen CSS that overrides a shared cell's colour or size uses `.row .x`
   (two classes) so it wins regardless of stylesheet order.
-- More extension points, added for 07: Card padding="xl" (40px, 24px on
+- More extension points, built for the retired 07 sample screen (some are now unused): Card padding="xl" (40px, 24px on
   mobile); Button size="large" (the clock in / out action); StatusPill
   size="large", dotOnly (dot plus screen-reader label) and tone="neutral"
   (silver, "nothing to report yet"); Duration plusMs (a running total that
@@ -421,7 +446,7 @@ do not mirror the defect in CSS.
   case's age freezes at resolvedAt, neutral) and --complaint-age-weight (size
   by className, as before).
 - Table has exactly TWO mobile layouts, chosen by mobileLayout: "cards"
-  (03, 08) and "rules" (07's week list: ruled rows inside one card). If a
+  (03, 08) and "rules" (the retired 07 week list: ruled rows inside one card; now unused). If a
   THIRD mobile layout is ever needed, stop and tell the owner: the primitive
   is wrong, not short of another flag.
 - Design colours that do not survive a contrast check, so far: status
@@ -450,13 +475,6 @@ of fidelity. Recorded so nobody "fixes" them back:
 - "On leave" is burgundy-steel everywhere. Figma's 07 draws it silver, a
   silver label on a silver fill (invisible, and unlike 08, which uses steel):
   drift, corrected here; the Figma file should be fixed at source.
-- 07's mobile week card is 24px padded (the shared Card), not Figma's 20px.
-- 07's week table is FLUID (Table --table-layout: auto), not Figma's fixed pixel
-  columns. Figma 31:2 draws the Status column at x=584 inside a 568px inner
-  width, i.e. OUTSIDE its own card; copied as fixed widths (584px in total) the
-  table overflowed the card and its row rules ran out into the gap beside the
-  totals. Only the Day column keeps a width (196px). The body grid is also Figma's
-  616:568 split (31:27 / 31:77), not two equal halves. Fix the Figma file at source.
 
 ## Decisions (owner)
 
@@ -608,7 +626,7 @@ allowed before the first server apply). `npm run db:proof:check` fails if it is 
   closed rule. It reshapes attendance (see "ATTENDANCE: HOW IT REALLY WORKS") by
   DROPPING two constraints of 005/009 (new names are used, nothing is re-added
   under an old name) and adding columns and a table. The cPanel server already
-  has 001-009, so it receives 010, 011 and 012 (one file at a time), never
+  has 001-009, so it receives 010 to 013 (one file at a time), never
   `pg10-proof.sql` (that file is for a FRESH database and re-creates everything).
   Applying them there is done outside this repo's sessions.
   010 leaves two rules to the APPLICATION, each commented in the migration: a
@@ -619,7 +637,11 @@ allowed before the first server apply). `npm run db:proof:check` fails if it is 
   `movement.returned_recorded_by` (each present exactly when its time is).
   `012_movement_entered_by_names.sql` then renamed movement's two author columns to
   `left_entered_by` and `returned_entered_by` (and their constraints) to match. The
-  server receives 010, 011 and 012 together, outside these sessions.
+  server receives 010 to 013 together, outside these sessions.
+  `013_signout_missing.sql` adds the third attendance state, "closed but never signed
+  out" (`signout_missing_at`, `signout_missing_by`; never with a clock-out time) and
+  rebuilds `attendance_one_open_shift_key` to exclude it. The server receives 010 to
+  013 together, one file at a time, outside these sessions.
 - NEVER DROP OR RECREATE THE LOCAL `public` SCHEMA (STANDING RULE). It holds the
   owner's real local login, whose password was typed at a prompt and cannot be
   recreated, and his sessions. Verify migrations in THROWAWAY schemas inside the
@@ -793,7 +815,7 @@ Playfair and Poppins), and "Existing" versus "New" as visitor types (that is
 04 New Visit                  27:2   / mobile 27:59
 05 Visit Detail               28:2   / mobile 28:80
 06 Complaint Queue            29:2   / mobile 29:62
-07 My Attendance (staff)      31:2   / mobile 31:90
+07 Today board (front desk)   NOT in Figma (the old 31:2 / 31:90 "My Attendance" is retired)
 08 Attendance Register (admin) 32:2  / mobile 32:168
 
 ## Working rules

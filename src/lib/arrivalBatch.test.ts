@@ -33,7 +33,7 @@ class MemoryStore implements ArrivalStore {
   records: NewAttendanceRecord[] = [];
   audits: Audit[] = [];
   /** Existing shifts from "before this test", keyed by staff id. */
-  history: ExistingShift[] = [];
+  history: (Omit<ExistingShift, "signoutMissing"> & { signoutMissing?: boolean })[] = [];
   created: { id: string; name: string }[] = [];
   locks: string[][] = [];
   /** Throw on the Nth createRecord (1-based), to prove a failure part-way rolls back. */
@@ -60,10 +60,10 @@ class MemoryStore implements ArrivalStore {
         this.locks.push([...ids]);
       },
       shiftsFor: async (ids, day) =>
-        [...this.history, ...this.records.map((r) => ({ staffId: r.staffId, clockInAt: r.clockInAt, clockOutAt: r.clockOutAt }))].filter(
+        [...this.history.map((h) => ({ ...h, signoutMissing: h.signoutMissing ?? false })), ...this.records.map((r) => ({ staffId: r.staffId, clockInAt: r.clockInAt, clockOutAt: r.clockOutAt, signoutMissing: false }))].filter(
           (shift) =>
             ids.includes(shift.staffId) &&
-            ((shift.clockInAt >= day.start && shift.clockInAt < day.end) || shift.clockOutAt === null),
+            ((shift.clockInAt >= day.start && shift.clockInAt < day.end) || (shift.clockOutAt === null && !shift.signoutMissing)),
         ),
       createPerson: async ({ id, name }) => {
         this.staff.push({ id, name, department: null });
@@ -302,6 +302,15 @@ describe("one record per person per Lagos day", () => {
     const result = failed(await run(batch([row("Divine Mike", "08:00")])));
     assert.equal(result.problems[0]!.message, "Divine Mike is still recorded as in since 19 Oct 2026. Clock them out first.");
     untouched(store);
+  });
+
+  it("a person marked NEVER SIGNED OUT is not still in: they can arrive the next day (013)", async () => {
+    const { store, run } = setup();
+    // Monday: arrived, never signed out, marked at the end of that day.
+    store.history.push({ staffId: "p1", clockInAt: new Date(Date.UTC(2026, 9, 19, 8, 0)), clockOutAt: null, signoutMissing: true });
+    const result = await run(batch([row("Divine Mike", "08:00")]));
+    assert.equal(result.ok, true, "a closed record without a time does not block today");
+    assert.equal(store.records.length, 1);
   });
 
   it("but a CLOSED record for an earlier day is unaffected by someone's open shift on another day", async () => {

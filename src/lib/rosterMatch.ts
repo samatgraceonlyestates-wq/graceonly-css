@@ -21,13 +21,24 @@
 // different one?" and the screen never decides for her. Equal after normalising
 // means the same person, with no question.
 //
-// Over-asking costs one click. Under-asking puts a near-duplicate on the roster, and
+// Over-asking costs one click, and the prompt OFFERS the existing person ("Did you
+// mean Ada Okafor?"), so that click does work.
+//
+// The capitalisation of a typed name is NEVER changed here or anywhere (see
+// CLAUDE.md): comparison uses normaliseName; storage uses cleanDisplayName, which
+// only tidies spacing.
+//
+// Under-asking puts a near-duplicate on the roster, and
 // every monthly total for that person is then wrong. So the rule leans to asking.
+
+import { formatIsoDate } from "./format.ts";
 
 export interface RosterName {
   id: string;
   name: string;
   department: string | null;
+  /** The Lagos day this person was added to the roster (YYYY-MM-DD), if known. Tells two people of one name apart. */
+  since?: string | null;
 }
 
 /** Lower case, no accents, letters and digits only, single spaces. Used to COMPARE names, never to store them. */
@@ -90,6 +101,36 @@ export function isClose(a: string, b: string): boolean {
   const wb = wordsOf(b);
   if (wa.length > 1 && wa.length === wb.length && [...wa].sort().join(" ") === [...wb].sort().join(" ")) return true;
   return wa.length <= wb.length ? isPartialOf(wa, wb) : isPartialOf(wb, wa);
+}
+
+/**
+ * What to show beside each person so that two people with the SAME name can be told
+ * apart: their department, and when they were added; and, only if even those are
+ * the same, "1 of 2". A name that is unique shows just the department. Refusing an
+ * ambiguous name is right, but only if she can resolve it from the list.
+ */
+export function personDetails(roster: readonly RosterName[]): Map<string, string> {
+  const groups = new Map<string, RosterName[]>();
+  for (const person of roster) {
+    const key = normaliseName(person.name);
+    groups.set(key, [...(groups.get(key) ?? []), person]);
+  }
+  const details = new Map<string, string>();
+  for (const group of groups.values()) {
+    if (group.length === 1) {
+      const only = group[0]!;
+      details.set(only.id, only.department ?? "");
+      continue;
+    }
+    const parts = (person: RosterName) =>
+      [person.department ?? "no department", person.since ? `added ${formatIsoDate(person.since)}` : null].filter(Boolean).join(" · ");
+    const ordered = [...group].sort((a, b) => (a.since ?? "").localeCompare(b.since ?? "") || a.id.localeCompare(b.id));
+    for (const person of ordered) {
+      const same = ordered.filter((other) => parts(other) === parts(person));
+      details.set(person.id, same.length > 1 ? `${parts(person)} · ${same.indexOf(person) + 1} of ${same.length}` : parts(person));
+    }
+  }
+  return details;
 }
 
 export type NameMatch =

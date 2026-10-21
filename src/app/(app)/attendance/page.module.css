@@ -1,68 +1,83 @@
-/* Mobile first (Figma 31:90). Desktop (Figma 31:2) from 768px up. */
+/* UNDESIGNED (the today board is not in Figma). Mobile first; desktop from 768px.
+   Tokens only. */
 .page {
   display: flex;
   flex-direction: column;
+  gap: var(--fold-space-14);
+}
+
+/* ---- the four counts ---- */
+.tiles {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--fold-space-10);
 }
 
-.desktopInline {
-  display: none;
-}
-
-.mobileInline {
-  display: inline;
-}
-
-/* ---------- the clock card ---------- */
-
-.clock {
+/* ---- a section ---- */
+.section,
+.endOfDay {
   display: flex;
   flex-direction: column;
-  gap: var(--fold-space-16);
+  gap: var(--fold-space-12);
 }
 
-.clockLeft {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: var(--fold-space-16);
-}
-
-/* 56px on a 390 screen, scaling down on narrower ones so it cannot overflow. */
-.time {
+.sectionTitle {
   color: var(--fold-burgundy);
-  font-size: min(56px, 14.3vw);
-  font-weight: 700;
-  letter-spacing: -2.5px;
-  line-height: normal;
-  white-space: nowrap;
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: -0.54px;
 }
 
-.date {
-  display: none;
+.sectionCount {
+  margin-left: var(--fold-space-6);
+  color: var(--fold-dusk);
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0;
 }
 
-.clockRight {
+.sectionNote,
+.empty {
+  margin: 0;
+  color: var(--fold-dusk);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.list {
   display: flex;
   flex-direction: column;
-  gap: var(--fold-space-16);
+  margin: 0;
+  padding: 0;
+  list-style: none;
 }
 
-.io {
+/* One person. Phone: the name, then their facts, then the action, stacked.
+   Desktop: one line. */
+.item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--fold-space-8);
+  padding: var(--fold-space-14) 0;
+  border-bottom: 1px solid var(--fold-silver);
+}
+
+.item:last-child {
+  border-bottom: 0;
+}
+
+.fact {
   display: flex;
-  gap: var(--fold-space-32);
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--fold-space-8);
+  margin: 0;
+  color: var(--fold-dusk);
+  font-size: 13px;
 }
 
-.block {
-  display: flex;
-  flex: 1;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 2px;
-  min-width: 0;
-}
-
-.blockLabel {
+.factLabel {
+  min-width: 78px;
   color: var(--fold-dusk);
   font-size: 10px;
   font-weight: 600;
@@ -70,229 +85,151 @@
   text-transform: uppercase;
 }
 
-.blockValue {
-  color: var(--fold-burgundy);
-  font-size: 22px;
-  font-weight: 700;
-  letter-spacing: -0.66px;
-  white-space: nowrap;
+.older {
+  color: var(--fold-status-amber-ink);
+  font-weight: 600;
 }
 
-/* An empty time: dusk, not Figma's smoke. */
-.blockValue.muted {
+.unknown {
+  color: var(--fold-dusk);
+  font-weight: 600;
+}
+
+.actionCell {
+  display: flex;
+}
+
+/* ---- the clock-out panel (spans the whole row) ---- */
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--fold-space-10);
+  grid-column: 1 / -1;
+  padding: var(--fold-space-12) var(--fold-space-14);
+  border-radius: var(--fold-radius-card);
+  background: var(--fold-mist);
   color: var(--fold-dusk);
 }
 
-.blockSub {
+.panelForm {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--fold-space-10);
+}
+
+.panelField {
+  display: flex;
+  flex-direction: column;
+  gap: var(--fold-space-6);
+}
+
+.label {
   color: var(--fold-dusk);
   font-size: 10px;
-}
-
-/* ---------- week card ---------- */
-
-.body {
-  display: flex;
-  flex-direction: column;
-  gap: var(--fold-space-10);
-}
-
-.week {
-  display: flex;
-  flex-direction: column;
-  gap: var(--fold-space-12);
-}
-
-.weekHeader {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.weekTitle {
-  color: var(--fold-burgundy);
-  font-size: 18px;
   font-weight: 600;
-  letter-spacing: -0.54px;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
 }
 
-.range {
-  display: none;
+.input {
+  width: 110px;
+  height: 40px;
+  padding: 0 var(--fold-space-14);
+  border: 1px solid var(--fold-silver);
+  border-radius: var(--fold-radius-pill);
+  background: var(--fold-white);
   color: var(--fold-dusk);
-  font-size: 12px;
+  font: inherit;
+  /* Keep at 16px: iOS zooms the page on focus for anything smaller. */
+  font-size: 16px;
+  text-align: center;
 }
 
-/* No avatars in this table, so rows are text height (16px) plus padding.
-   --table-layout: auto, NOT the Table's default `fixed`. Figma draws the columns
-   at fixed x positions (Day 0, Clock in 196, Clock out 322, Duration 458, Status
-   584) inside a 568px-wide card, so its Status column already sits OUTSIDE the
-   card. Copied as fixed pixel widths they total 584px; in the desktop two-column
-   layout the card is only 432 to 543px inside, `fixed` obeys the widths, the
-   table becomes 584px and its row rules run out of the card (and the Status
-   column collapses to nothing). With `auto` the columns share whatever the card
-   has. Only the Day column keeps a width (196px, on its header cell). */
-.weekTable {
-  --table-cell-min-height: 16px;
-  --table-layout: auto;
+.input::placeholder {
+  color: var(--fold-smoke);
+  opacity: 1;
 }
 
-/* The times, the duration and the status pill never wrap; the day name may, when
-   the card is at its narrowest. Two classes so it beats the Table's cell styles. */
-.row .nowrap {
-  white-space: nowrap;
+.input:focus-visible {
+  outline: 2px solid var(--fold-gold);
+  outline-offset: 2px;
 }
 
-/* On mobile the day cell carries the whole row: a dot and the day on the left,
-   the clock-in time and duration on the right. */
-.dot {
-  display: inline-flex;
+.panelNote {
+  margin: 0;
+  color: var(--fold-dusk);
+  font-size: 13px;
+  line-height: 1.5;
 }
 
-.dayLabel {
-  display: flex;
-  align-items: center;
-  gap: var(--fold-space-10);
-}
-
-.dayName {
-  color: var(--fold-burgundy);
+.panelError {
+  margin: 0;
+  color: var(--fold-status-red);
   font-size: 13px;
   font-weight: 600;
 }
 
-/* Later days and "not yet": dusk and regular. Two classes so they win. */
-.dayName.upcoming {
+/* ---- end of day ---- */
+.confirm {
+  display: flex;
+  flex-direction: column;
+  gap: var(--fold-space-10);
+  padding: var(--fold-space-12) var(--fold-space-14);
+  border-radius: var(--fold-radius-card);
+  background: var(--fold-mist);
+}
+
+.confirmText {
+  margin: 0;
   color: var(--fold-dusk);
-  font-weight: 400;
+  font-size: 13px;
+  line-height: 1.5;
 }
 
-.summary {
-  color: var(--fold-dusk);
-  font-size: 12px;
-}
-
-@media (max-width: 767px) {
-  .row .cellDay {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-  }
-}
-
-/* `.row .x` (two classes) so these beat the Table's own cell styles. */
-.row .strong {
+.confirmText strong {
   color: var(--fold-burgundy);
   font-weight: 600;
 }
 
-/* A late clock-in time: amber ink, since it is text on white. */
-.row .late {
-  color: var(--fold-status-amber-ink);
-}
-
-/* ---------- totals ---------- */
-
-.totals {
+.confirmActions {
   display: flex;
-  flex-direction: column;
-  gap: var(--fold-space-10);
+  flex-wrap: wrap;
+  gap: var(--fold-space-8);
 }
-
-/* ---------- desktop ---------- */
 
 @media (min-width: 768px) {
   .page {
     gap: var(--fold-space-24);
   }
 
-  .desktopInline {
-    display: inline;
+  .tiles {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: var(--fold-space-16);
   }
 
-  .mobileInline {
-    display: none;
-  }
-
-  .clock {
-    flex-direction: row;
+  .item {
+    grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr) minmax(0, 1.2fr) minmax(0, 1.2fr) auto;
     align-items: center;
-    justify-content: space-between;
+    column-gap: var(--fold-space-16);
   }
 
-  .clockLeft {
-    gap: var(--fold-space-10);
+  /* A row with no action (out, gone, no sign-out) has four cells. */
+  .item > :nth-child(4):last-child {
+    grid-column: 4 / -1;
   }
 
-  .time {
-    font-size: 100px;
-    letter-spacing: -5px;
-    line-height: 0.91;
-  }
-
-  .date {
-    display: block;
-    color: var(--fold-dusk);
-    font-size: 18px;
-    letter-spacing: -0.54px;
-  }
-
-  .clockRight {
-    align-items: flex-end;
-    gap: var(--fold-space-24);
-  }
-
-  .block {
-    flex: none;
-    align-items: flex-end;
+  .fact {
+    flex-direction: column;
+    align-items: flex-start;
     gap: var(--fold-space-4);
   }
 
-  .blockValue {
-    font-size: 32px;
-    letter-spacing: -0.96px;
+  .factLabel {
+    min-width: 0;
   }
 
-  .blockSub {
-    font-size: 11px;
-  }
-
-  .body {
-    gap: var(--fold-space-16);
-  }
-
-  .week {
-    gap: var(--fold-space-16);
-  }
-
-  .weekTitle {
-    font-size: 24px;
-    letter-spacing: -0.72px;
-  }
-
-  .range {
-    display: inline;
-  }
-
-  .dot,
-  .summary {
-    display: none;
-  }
-
-  .dayName {
-    font-size: 14px;
-  }
-
-  .totals {
-    gap: var(--fold-space-16);
-  }
-}
-
-/* Two columns only where there is room; stacked below that. */
-@media (min-width: 1024px) {
-  .body {
-    display: grid;
-    /* Figma 31:27 / 31:77: the week card is 616px and the totals 568px (a 616:568
-       split, not two equal halves), which gives the table 48px more room. */
-    grid-template-columns: minmax(0, 616fr) minmax(0, 568fr);
-    align-items: start;
+  .actionCell {
+    justify-content: flex-end;
   }
 }

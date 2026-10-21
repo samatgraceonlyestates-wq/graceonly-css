@@ -8,14 +8,15 @@
 // check (attendance_clock_in_device_pair_check) requires both or neither. When a
 // desk device exists, the session carries it and this is where it is written.
 import { query, sql, transaction as dbTransaction } from "./db.ts";
+import { lagosDateOf } from "./lagosTime.ts";
 import type { ArrivalStore, ArrivalTx, ExistingShift } from "./arrivalBatch.ts";
 import type { RosterName } from "./rosterMatch.ts";
 
 /** Everyone who is active: the roster the arrivals screen suggests from. */
 export async function loadArrivalRoster(): Promise<RosterName[]> {
-  const { rows } = await query<{ id: string; full_name: string; department: string | null }>(sql`
-    SELECT id, full_name, department FROM staff WHERE is_active ORDER BY full_name`);
-  return rows.map((row): RosterName => ({ id: row.id, name: row.full_name, department: row.department }));
+  const { rows } = await query<{ id: string; full_name: string; department: string | null; created_at: Date }>(sql`
+    SELECT id, full_name, department, created_at FROM staff WHERE is_active ORDER BY full_name`);
+  return rows.map((row): RosterName => ({ id: row.id, name: row.full_name, department: row.department, since: lagosDateOf(row.created_at) }));
 }
 
 export const pgArrivalStore: ArrivalStore = {
@@ -24,9 +25,9 @@ export const pgArrivalStore: ArrivalStore = {
       const tx: ArrivalTx = {
         // Inside the transaction, so the names it resolves against are the ones it locks.
         async loadRoster() {
-          const { rows } = await db.query<{ id: string; full_name: string; department: string | null }>(sql`
-            SELECT id, full_name, department FROM staff WHERE is_active ORDER BY full_name`);
-          return rows.map((row): RosterName => ({ id: row.id, name: row.full_name, department: row.department }));
+          const { rows } = await db.query<{ id: string; full_name: string; department: string | null; created_at: Date }>(sql`
+            SELECT id, full_name, department, created_at FROM staff WHERE is_active ORDER BY full_name`);
+          return rows.map((row): RosterName => ({ id: row.id, name: row.full_name, department: row.department, since: lagosDateOf(row.created_at) }));
         },
 
         async lockPeople(ids) {
@@ -36,12 +37,21 @@ export const pgArrivalStore: ArrivalStore = {
         },
 
         async shiftsFor(ids, day) {
-          const { rows } = await db.query<{ staff_id: string; clock_in_at: Date; clock_out_at: Date | null }>(sql`
-            SELECT staff_id, clock_in_at, clock_out_at
+          // OPEN means no clock-out AND not marked never-signed-out (013).
+          const { rows } = await db.query<{ staff_id: string; clock_in_at: Date; clock_out_at: Date | null; signout_missing_at: Date | null }>(sql`
+            SELECT staff_id, clock_in_at, clock_out_at, signout_missing_at
               FROM attendance_record
              WHERE staff_id = ANY(${[...ids]}::uuid[])
-               AND ((clock_in_at >= ${day.start} AND clock_in_at < ${day.end}) OR clock_out_at IS NULL)`);
-          return rows.map((row): ExistingShift => ({ staffId: row.staff_id, clockInAt: row.clock_in_at, clockOutAt: row.clock_out_at }));
+               AND ((clock_in_at >= ${day.start} AND clock_in_at < ${day.end})
+                    OR (clock_out_at IS NULL AND signout_missing_at IS NULL))`);
+          return rows.map(
+            (row): ExistingShift => ({
+              staffId: row.staff_id,
+              clockInAt: row.clock_in_at,
+              clockOutAt: row.clock_out_at,
+              signoutMissing: row.signout_missing_at !== null,
+            }),
+          );
         },
 
         async createPerson({ id, name }) {

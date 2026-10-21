@@ -19,12 +19,6 @@ export function getClockParts(now: Date) {
   };
 }
 
-// Monday is 0 ... Sunday is 6, in the office time zone.
-export function weekdayIndexMonFirst(now: Date): number {
-  const short = new Intl.DateTimeFormat("en-US", { timeZone: TIME_ZONE, weekday: "short" }).format(now);
-  return ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].indexOf(short);
-}
-
 export const NO_TIME = "— : —";
 
 // "08:47" (24-hour) for an ISO timestamp, or the empty-time placeholder.
@@ -75,6 +69,22 @@ export function formatIsoDate(value: string): string {
   if (!match) return value;
   const month = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][Number(match[2]) - 1];
   return month ? `${Number(match[3])} ${month} ${match[1]}` : value;
+}
+
+const WEEKDAYS_LONG = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+const MONTHS_LONG = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+
+// "2026-10-21" -> "Wednesday, 21 October 2026". The day is split, never parsed in a
+// time zone, and spelled out in words, so it cannot be misread the way 10/21/2026
+// can (day first, that is the 10th of December). Anything that is not a real
+// calendar date comes back as "".
+export function formatLongDate(value: string): string {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (!match) return "";
+  const [year, month, day] = [Number(match[1]), Number(match[2]), Number(match[3])];
+  const date = new Date(Date.UTC(year, month - 1, day));
+  if (date.getUTCFullYear() !== year || date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day) return "";
+  return `${WEEKDAYS_LONG[(date.getUTCDay() + 6) % 7]}, ${day} ${MONTHS_LONG[month - 1]} ${year}`;
 }
 
 // The first name for a greeting or a button ("Check in Lara"). A leading title

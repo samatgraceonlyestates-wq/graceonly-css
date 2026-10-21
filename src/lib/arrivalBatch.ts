@@ -87,6 +87,8 @@ export interface ExistingShift {
   staffId: string;
   clockInAt: Date;
   clockOutAt: Date | null;
+  /** Marked as never signed out (013): closed, with no time. NOT an open shift. */
+  signoutMissing: boolean;
 }
 
 export interface NewAttendanceRecord {
@@ -105,7 +107,7 @@ export interface ArrivalTx {
   loadRoster(): Promise<RosterName[]>;
   /** SELECT ... FOR UPDATE on these staff rows, in id order. */
   lockPeople(ids: readonly string[]): Promise<void>;
-  /** These people's records that start inside the day, plus any shift of theirs still open. */
+  /** These people's records that start inside the day, plus any shift of theirs still OPEN (no clock-out and not marked never signed out). */
   shiftsFor(ids: readonly string[], day: { start: Date; end: Date }): Promise<ExistingShift[]>;
   createPerson(input: { id: string; name: string; actorId: string }): Promise<void>;
   createRecord(record: NewAttendanceRecord): Promise<void>;
@@ -297,7 +299,7 @@ export async function saveArrivalBatch(input: ArrivalBatchInput, deps: ArrivalDe
         }
         // Today's arrival is an OPEN shift, and a person may have only one open
         // shift at a time. (An earlier day's record is closed, so this cannot clash.)
-        const stillOpen = isEarlierDay ? undefined : mine.find((shift) => shift.clockOutAt === null);
+        const stillOpen = isEarlierDay ? undefined : mine.find((shift) => shift.clockOutAt === null && !shift.signoutMissing);
         if (stillOpen !== undefined) {
           problems.push({
             row: index,

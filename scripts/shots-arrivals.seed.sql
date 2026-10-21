@@ -19,7 +19,7 @@ INSERT INTO shot_e2e.staff_role (staff_id, role_code)
   SELECT staff_id, role_code FROM public.staff_role
    WHERE staff_id = (SELECT id FROM public.staff WHERE email = 'screenshots@css.localhost');
 
--- A roster of 24 people: no password, no email.
+-- A roster of 26 people: no password, no email.
 INSERT INTO shot_e2e.staff (id, full_name, department)
   SELECT gen_random_uuid(), n, d FROM (VALUES
     ('Divine Mike','Front desk'), ('Peter Obi','Admin'), ('Amaka Obi','Legal'), ('Chukwuemeka Eze','Partners'),
@@ -27,5 +27,7 @@ INSERT INTO shot_e2e.staff (id, full_name, department)
     ('Grace Nkem','HR'), ('Chidera Nnamdi','Legal'), ('Amaka Obi-Eze','Finance'), ('Tunde Bello','Finance'),
     ('Ngozi Adeyemi','Front desk'), ('Ifeanyi Okeke','Admin'), ('Zainab Musa','Partners'), ('Emeka Nwankwo','Finance'),
     ('Funke Adebisi','Legal'), ('Kelechi Ibe','Front desk'), ('Halima Garba','HR'), ('Obinna Eze','Partners'),
-    ('Yetunde Cole','Finance'), ('Segun Alabi','Admin'), ('Ada Onuoha','Legal'), ('Musa Danjuma','Front desk')
+    ('Yetunde Cole','Finance'), ('Segun Alabi','Admin'), ('Ada Onuoha','Legal'), ('Musa Danjuma','Front desk'),
+    -- two different people with ONE name: the suggestions must tell them apart
+    ('Ada Okafor','Legal'), ('Ada Okafor','Finance')
   ) AS t(n, d);

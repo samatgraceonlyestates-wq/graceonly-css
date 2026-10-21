@@ -20,18 +20,19 @@
 -- psql reports  psql:pg10-proof.sql:LINE: ERROR: ...  Find LINE below. The line
 -- inside the source file is  LINE - first + 1.  Lines are counted in THIS file.
 --
---   001_foundation.sql               lines    38 -   167
---   002_staff_auth.sql               lines   169 -   257
---   003_visits.sql                   lines   259 -   417
---   004_enquiries.sql                lines   419 -   466
---   005_attendance.sql               lines   468 -   569
---   006_audit_log.sql                lines   571 -   612
---   007_handovers.sql                lines   614 -   701
---   008_case_links.sql               lines   703 -   784
---   009_attendance_device.sql        lines   786 -   856
---   010_roster_movements_backdating.sql lines   858 -  1012
---   011_entered_by_per_event.sql     lines  1014 -  1064
---   012_movement_entered_by_names.sql lines  1066 -  1095
+--   001_foundation.sql               lines    39 -   168
+--   002_staff_auth.sql               lines   170 -   258
+--   003_visits.sql                   lines   260 -   418
+--   004_enquiries.sql                lines   420 -   467
+--   005_attendance.sql               lines   469 -   570
+--   006_audit_log.sql                lines   572 -   613
+--   007_handovers.sql                lines   615 -   702
+--   008_case_links.sql               lines   704 -   785
+--   009_attendance_device.sql        lines   787 -   857
+--   010_roster_movements_backdating.sql lines   859 -  1013
+--   011_entered_by_per_event.sql     lines  1015 -  1065
+--   012_movement_entered_by_names.sql lines  1067 -  1096
+--   013_signout_missing.sql          lines  1098 -  1147
 -- ============================================================================
 \set ON_ERROR_STOP on
 \echo '>>> applying 001_foundation.sql'
@@ -1091,5 +1092,56 @@ ALTER TABLE movement RENAME CONSTRAINT movement_entered_by_fkey TO movement_left
 ALTER TABLE movement RENAME COLUMN returned_recorded_by TO returned_entered_by;
 ALTER TABLE movement RENAME CONSTRAINT movement_returned_recorded_by_fkey TO movement_returned_entered_by_fkey;
 ALTER TABLE movement RENAME CONSTRAINT movement_returned_recorded_by_matches_check TO movement_returned_entered_by_matches_check;
+
+COMMIT;
+\echo '>>> applying 013_signout_missing.sql'
+-- 013 a shift that was never signed out.
+--
+-- WHY. The paper book will have people who went home without signing out. Until now
+-- a record had two states: OPEN (no clock-out: still here) and CLOSED (a clock-out
+-- time). A person may have only one open shift, so a forgotten sign-out could never
+-- be put right: it stayed open for ever and blocked that person's next arrival.
+--
+-- A record now has THREE states:
+--   still here               clock_out_at IS NULL     signout_missing_at IS NULL
+--   left at a time           clock_out_at IS NOT NULL signout_missing_at IS NULL
+--   NEVER SIGNED OUT         clock_out_at IS NULL     signout_missing_at IS NOT NULL
+-- The third is CLOSED but has no time. It is a fact about the BOOK ("no sign-out was
+-- written"), not about the person ("left"), and it is what the front desk marks, as
+-- an explicit act, at the end of the day. It records WHEN it was marked and BY WHOM.
+--
+-- THE HOURS OF SUCH A SHIFT ARE UNKNOWN. They must never be treated as zero hours,
+-- and never guessed: not to the end of the day, not to a usual finishing time, not to
+-- the last movement. A total, a week or a timesheet that includes one must say it
+-- includes a shift with unknown hours, or leave it out and say so. There is no column
+-- for an estimate, on purpose.
+
+BEGIN;
+
+ALTER TABLE attendance_record
+  ADD COLUMN signout_missing_at timestamptz,
+  ADD COLUMN signout_missing_by uuid;
+
+-- Both set or both null: a marking always says who made it.
+ALTER TABLE attendance_record
+  ADD CONSTRAINT attendance_signout_missing_by_fkey
+    FOREIGN KEY (signout_missing_by) REFERENCES staff (id);
+ALTER TABLE attendance_record
+  ADD CONSTRAINT attendance_signout_missing_pair_check
+    CHECK ((signout_missing_at IS NULL) = (signout_missing_by IS NULL));
+
+-- "Never signed out" and "left at a time" are different answers to the same
+-- question, so a record cannot be both.
+ALTER TABLE attendance_record
+  ADD CONSTRAINT attendance_signout_missing_no_clock_out_check
+    CHECK (signout_missing_at IS NULL OR clock_out_at IS NULL);
+
+-- One OPEN shift per person, as before. A record that was never signed out is
+-- closed, so it is excluded: it must not stop that person arriving the next day.
+-- The index is rebuilt under the same name (an index, not a constraint, so there is
+-- no DROP/ADD CONSTRAINT of one name here).
+DROP INDEX attendance_one_open_shift_key;
+CREATE UNIQUE INDEX attendance_one_open_shift_key ON attendance_record (staff_id)
+  WHERE clock_out_at IS NULL AND signout_missing_at IS NULL;
 
 COMMIT;

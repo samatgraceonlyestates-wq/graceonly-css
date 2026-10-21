@@ -1,13 +1,13 @@
 "use client";
 
-import { useActionState, useEffect, useId, useRef, useState, type KeyboardEvent } from "react";
+import { useActionState, useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { Button } from "@/components/Button/Button";
 import { Card } from "@/components/Card/Card";
 import { Notice } from "@/components/Notice/Notice";
 import { parseClockTime } from "@/lib/clockTime";
 import { cx } from "@/lib/cx";
-import { formatIsoDate } from "@/lib/format";
-import { matchName, suggest, type RosterName } from "@/lib/rosterMatch";
+import { formatIsoDate, formatLongDate } from "@/lib/format";
+import { matchName, personDetails, suggest, type RosterName } from "@/lib/rosterMatch";
 import { saveArrivalsAction, type ArrivalsState } from "./actions";
 import styles from "./page.module.css";
 
@@ -61,6 +61,9 @@ const isBlank = (row: RowState) => row.name.trim() === "" && row.timeIn.trim() =
 
 export function ArrivalsForm({ roster, today }: { roster: RosterName[]; today: string }) {
   const listId = useId();
+  // What tells two people of one name apart (department, when added): shown in the
+  // suggestions and in the "did you mean" prompt.
+  const details = useMemo(() => personDetails(roster), [roster]);
   const [generation, setGeneration] = useState(0);
   const [date, setDate] = useState(today);
   const [reason, setReason] = useState("");
@@ -247,6 +250,11 @@ export function ArrivalsForm({ roster, today }: { roster: RosterName[]; today: s
             aria-describedby={`${listId}-day-note`}
           />
         </div>
+        {/* The picker shows the browser's own format (10/21/2026), which read day-first
+            is the 10th of December. The day is therefore ALWAYS spelled out here. */}
+        <p className={styles.longDate} aria-live="polite">
+          {formatLongDate(date) || "Choose a day."}
+        </p>
         {isEarlier ? (
           <div className={cx(styles.field, styles.reasonField)}>
             <label className={styles.label} htmlFor={`${listId}-reason`}>
@@ -384,7 +392,7 @@ export function ArrivalsForm({ roster, today }: { roster: RosterName[]; today: s
                           }}
                         >
                           <span>{person.name}</span>
-                          {person.department ? <span className={styles.optionDept}>{person.department}</span> : null}
+                          {details.get(person.id) ? <span className={styles.optionDept}>{details.get(person.id)}</span> : null}
                         </li>
                       ))}
                     </ul>
@@ -440,25 +448,27 @@ export function ArrivalsForm({ roster, today }: { roster: RosterName[]; today: s
                 ) : null}
 
                 {prompt !== null ? (
-                  <div className={styles.prompt} role="group" aria-label={`Row ${index + 1}: is this a new person?`}>
+                  <div className={styles.prompt} role="group" aria-label={`Row ${index + 1}: is this someone already on the roster?`}>
                     <p>
-                      Close to{" "}
-                      <strong>
-                        {prompt.candidates
-                          .slice(0, 3)
-                          .map((c) => c.name + (c.department ? ` (${c.department})` : ""))
-                          .join(", ")}
-                      </strong>
-                      . Is this the same person?
+                      {prompt.candidates.length === 1 ? "Did you mean " : "Did you mean one of these? "}
+                      {prompt.candidates.slice(0, 3).map((candidate, at) => (
+                        <span key={candidate.id}>
+                          {at > 0 ? ", " : ""}
+                          <strong>{candidate.name}</strong>
+                          {details.get(candidate.id) ? ` (${details.get(candidate.id)})` : ""}
+                        </span>
+                      ))}
+                      ?
                     </p>
                     <div className={styles.promptActions}>
                       {prompt.candidates.slice(0, 3).map((candidate) => (
-                        <Button key={candidate.id} variant="row-action" onClick={() => choose(index, candidate)}>
-                          Same as {candidate.name}
+                        <Button key={candidate.id} size="compact" onClick={() => choose(index, candidate)}>
+                          Yes, {candidate.name}
+                          {details.get(candidate.id) ? ` · ${details.get(candidate.id)}` : ""}
                         </Button>
                       ))}
                       <Button variant="row-action" onClick={() => update(index, { confirmNew: true })}>
-                        A different person
+                        No, a different person
                       </Button>
                     </div>
                   </div>
