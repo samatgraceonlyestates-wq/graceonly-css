@@ -671,6 +671,26 @@ Playfair and Poppins), and "Existing" versus "New" as visitor types (that is
 
 ## Working rules
 
+- VISUAL CHECKING (amended rule). A BOUNDED run is allowed and expected: one
+  command that starts the app, does its checks, and shuts it down before
+  returning, leaving no process behind. A server LEFT ALIVE in a background shell
+  is still forbidden. The owner runs the dev server himself on the default port
+  (3000); nothing started for a check may collide with it or outlive its command.
+  - `npm run shots:account` (once) makes a LOCAL-ONLY screenshot account; its
+    credentials are CSS_SHOT_EMAIL / CSS_SHOT_PASSWORD in `.env.local`, never in
+    the repo or a picture. It REFUSES to run unless DATABASE_URL is localhost
+    (`src/lib/localDatabase.ts`, checked before the database layer loads and again
+    against the server's own address). Never loosen that guard.
+  - `npm run shots [-- /path ...]` builds, starts the PRODUCTION build on port
+    3457, signs in, captures each page at desktop (1280) and phone (390) into
+    `screenshots/` (git-ignored, never committed), and stops the server on every
+    exit path. It fails on any console error, page error, failed or 4xx/5xx
+    request, or sideways scroll. Run it from PowerShell: Git Bash rewrites a
+    leading `/path` argument into a Windows path.
+  - Any change to a screen ends with capturing it at both widths and READING the
+    images before reporting: say what was looked at and what was seen. A clean
+    screenshot proves layout, not behaviour: it never shows a button is wired.
+
 - Never commit secrets. The portal service key lives in the environment.
   - The variables are CSS_PORTAL_BASE_URL and CSS_PORTAL_SERVICE_KEY (the key
     is `<id>.<secret>`). NOTE: the portal repo's key-generation script labels
