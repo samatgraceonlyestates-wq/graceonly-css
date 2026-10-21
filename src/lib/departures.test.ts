@@ -40,6 +40,9 @@ class MemoryStore implements DepartureStore {
       clockInAt: lagos(21, 7, 15),
       clockOutAt: null,
       signoutMissingAt: null,
+      voidedAt: null,
+      clockOutByName: null,
+      signoutMissingByName: null,
       hasOpenMovement: false,
       lastMovementAt: null,
       ...extra,
@@ -151,12 +154,27 @@ describe("clocking one person out", () => {
     store.add("r1", "Gone Person", { clockOutAt: lagos(21, 9) });
     store.add("r2", "Marked Person", { signoutMissingAt: lagos(21, 9) });
     const gone = await clockOutPerson({ recordId: "r1", timeOut: "10:00" }, deps);
-    assert.deepEqual(gone, { ok: false, message: "Gone Person is already clocked out, at 09:00." });
+    assert.deepEqual(gone, { ok: false, message: "Gone Person was already clocked out at 09:00." });
     const marked = await clockOutPerson({ recordId: "r2", timeOut: "10:00" }, deps);
     assert.match(marked.ok ? "" : marked.message, /never signed out, so their record is closed/);
     const missing = await clockOutPerson({ recordId: "nope", timeOut: "10:00" }, deps);
     assert.equal(missing.ok, false);
     assert.equal(store.audits.length, 0);
+  });
+
+  it("a stale click names who got there first, and writes nothing", async () => {
+    const { store, deps } = setup();
+    store.add("r1", "Peter Obi", { clockOutAt: lagos(21, 10, 47), clockOutByName: "Desk B" });
+    store.add("r2", "Chidi Eze", { signoutMissingAt: lagos(21, 9), signoutMissingByName: "Desk B" });
+    store.add("r3", "Wrong Person", { voidedAt: lagos(21, 9) });
+    const closed = await clockOutPerson({ recordId: "r1", timeOut: "10:50" }, deps);
+    assert.deepEqual(closed, { ok: false, message: "Peter Obi was already clocked out at 10:47 by Desk B." });
+    const marked = await clockOutPerson({ recordId: "r2", timeOut: "10:50" }, deps);
+    assert.equal(marked.ok ? "" : marked.message, "Chidi Eze was marked as never signed out by Desk B, so their record is closed.");
+    const removed = await clockOutPerson({ recordId: "r3", timeOut: "10:50" }, deps);
+    assert.equal(removed.ok ? "" : removed.message, "Wrong Person's record has been removed.");
+    assert.equal(store.audits.length, 0, "no second write");
+    assert.equal(store.records.get("r1")!.clockOutAt!.toISOString(), "2026-10-21T09:47:00.000Z", "the first clock-out is untouched");
   });
 
   it("refuses while they are out on a movement, and before a movement that ended later", async () => {

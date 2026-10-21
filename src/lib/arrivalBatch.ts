@@ -51,6 +51,8 @@ export interface ArrivalRowInput {
   timeIn: string;
   /** Only for an earlier day. */
   timeOut: string;
+  /** Only for an earlier day, instead of a time out: they never signed out. The shift is CLOSED with no time (013); its hours are unknown. */
+  neverSignedOut: boolean;
   /** She has said this name is a DIFFERENT person from the close ones shown. */
   confirmNew: boolean;
 }
@@ -95,8 +97,10 @@ export interface NewAttendanceRecord {
   id: string;
   staffId: string;
   clockInAt: Date;
-  /** Null for today's arrivals: the clock-out is entered later, one person at a time. */
+  /** Null for today's arrivals (the clock-out is entered later, one person at a time) and for a shift that was never signed out. */
   clockOutAt: Date | null;
+  /** Never signed out (013): closed with NO time, written already marked. Its hours are unknown. */
+  signoutMissing: boolean;
   clockInEnteredBy: string;
   clockOutEnteredBy: string | null;
   backdateReason: string | null;
@@ -107,7 +111,7 @@ export interface ArrivalTx {
   loadRoster(): Promise<RosterName[]>;
   /** SELECT ... FOR UPDATE on these staff rows, in id order. */
   lockPeople(ids: readonly string[]): Promise<void>;
-  /** These people's records that start inside the day, plus any shift of theirs still OPEN (no clock-out and not marked never signed out). */
+  /** These people's records that start inside the day, plus any shift of theirs still OPEN (no clock-out, not marked never signed out). REMOVED (voided) records are never included: they do not exist for this rule. */
   shiftsFor(ids: readonly string[], day: { start: Date; end: Date }): Promise<ExistingShift[]>;
   createPerson(input: { id: string; name: string; actorId: string }): Promise<void>;
   createRecord(record: NewAttendanceRecord): Promise<void>;
@@ -148,11 +152,13 @@ export function parseBatchPayload(raw: unknown): ArrivalBatchInput | null {
   for (const item of parsed.rows) {
     if (!isRecord(item)) return null;
     const { name, personId, timeIn, timeOut, confirmNew } = item;
+    const neverSignedOut = item.neverSignedOut ?? false;
+    if (typeof neverSignedOut !== "boolean") return null;
     if (typeof name !== "string" || typeof timeIn !== "string" || typeof timeOut !== "string") return null;
     if (personId !== null && typeof personId !== "string") return null;
     if (typeof confirmNew !== "boolean") return null;
     if (name.length > 1000 || timeIn.length > 50 || timeOut.length > 50) return null;
-    rows.push({ name, personId, timeIn, timeOut, confirmNew });
+    rows.push({ name, personId, timeIn, timeOut, neverSignedOut, confirmNew });
   }
   return { date: parsed.date, reason: parsed.reason, rows };
 }
@@ -163,7 +169,7 @@ export function parseBatchPayload(raw: unknown): ArrivalBatchInput | null {
 const DATE_SHAPE = /^\d{4}-\d{2}-\d{2}$/;
 
 function isBlankRow(row: ArrivalRowInput): boolean {
-  return row.name.trim() === "" && row.timeIn.trim() === "" && row.timeOut.trim() === "";
+  return row.name.trim() === "" && row.timeIn.trim() === "" && row.timeOut.trim() === "" && !row.neverSignedOut;
 }
 
 function fail(formProblem: string | null, problems: RowProblem[] = [], confirmations: NameConfirmation[] = []): BatchResult {
@@ -201,6 +207,7 @@ export async function saveArrivalBatch(input: ArrivalBatchInput, deps: ArrivalDe
   // --- The rows ------------------------------------------------------------
   if (input.rows.length > BATCH_LIMITS.maxRows) return fail(`A page holds at most ${BATCH_LIMITS.maxRows} rows. Save this page and start another.`);
   const filled = input.rows.map((row, index) => ({ row, index })).filter(({ row }) => !isBlankRow(row));
+  const filledRows = new Map(filled.map(({ row, index }) => [index, row]));
   if (filled.length === 0) return fail("Enter at least one arrival.");
 
   const problems: RowProblem[] = [];
@@ -210,11 +217,19 @@ export async function saveArrivalBatch(input: ArrivalBatchInput, deps: ArrivalDe
     if (!parsedIn.ok) problems.push({ row: index, field: "timeIn", message: parsedIn.message });
     let outAt: Date | null = null;
     if (isEarlierDay) {
-      // An earlier day is reconstructed whole, so it takes a time out. It has to: a
-      // record with no clock-out is an OPEN shift, and a person may have only one.
-      const parsedOut = parseClockTime(row.timeOut);
-      if (!parsedOut.ok) problems.push({ row: index, field: "timeOut", message: parsedOut.message });
-      else outAt = lagosInstantAt(input.date, parsedOut.hhmm);
+      // An earlier day is reconstructed whole, so it takes a time out, OR "never signed
+      // out". One or the other: a record with neither would be an OPEN shift, and a
+      // person may have only one. "Never signed out" closes the record with NO time: its
+      // hours are unknown, never zero and never guessed (013).
+      if (row.neverSignedOut) {
+        if (row.timeOut.trim() !== "") problems.push({ row: index, field: "timeOut", message: "Give a time out or choose Never signed out, not both." });
+      } else {
+        const parsedOut = parseClockTime(row.timeOut);
+        if (!parsedOut.ok) problems.push({ row: index, field: "timeOut", message: parsedOut.message });
+        else outAt = lagosInstantAt(input.date, parsedOut.hhmm);
+      }
+    } else if (row.neverSignedOut) {
+      problems.push({ row: index, field: "timeOut", message: "Never signed out is only for an earlier day. For today, use the end-of-day action on the board." });
     } else if (row.timeOut.trim() !== "") {
       problems.push({ row: index, field: "timeOut", message: "Time out is only taken for an earlier day. Clock people out from the register." });
     }
@@ -331,6 +346,7 @@ export async function saveArrivalBatch(input: ArrivalBatchInput, deps: ArrivalDe
         staffId: person.id,
         clockInAt: at.inAt,
         clockOutAt: at.outAt,
+        signoutMissing: filledRows.get(index)!.neverSignedOut,
         clockInEnteredBy: actorId,
         clockOutEnteredBy: at.outAt === null ? null : actorId,
         backdateReason: isEarlierDay ? reason : null,
@@ -344,6 +360,7 @@ export async function saveArrivalBatch(input: ArrivalBatchInput, deps: ArrivalDe
           staff_id: person.id,
           clock_in_at: record.clockInAt.toISOString(),
           clock_out_at: record.clockOutAt === null ? null : record.clockOutAt.toISOString(),
+          signout_missing: record.signoutMissing,
           backdate_reason: record.backdateReason,
           via: "arrival entry",
         },

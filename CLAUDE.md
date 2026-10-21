@@ -123,6 +123,15 @@ gates itself again). Files: `clockTime.ts` (the time field), `rosterMatch.ts`
 - Each record carries clock_in_entered_by (and clock_out_entered_by for an earlier
   day) = the signed-in user. The device columns stay NULL: no device is registered.
   One audit_log row per record, and per new roster person (ids only, never names).
+- THE CLOSE-NAME PROMPT IS ANSWERED FROM THE KEYBOARD, in the row's flow: leaving the
+  name (Enter or Tab) with a close name moves focus INTO the prompt; Y takes the first
+  person offered (1, 2, 3 the others), N says a different person, Left and Right move
+  between the buttons, and focus then goes on to the time in. One reach for the mouse
+  per near-duplicate is the friction that makes people stop using a tool.
+- "NEVER SIGNED OUT" ON AN EARLIER DAY is a per-row choice INSTEAD of a time out (those
+  exact words): N in the Time out box (or a checkbox, for touch) closes the record with
+  NO time, already marked (013); its hours are unknown. Refused with a time out, and
+  refused for today (the board's end-of-day action closes today).
 - Keyboard: Enter or Tab moves on; past the last field a new row appears; arrows
   move through suggestions and Enter takes the highlighted one (a single suggestion
   is already highlighted). Tab never takes a suggestion. Enter never submits.
@@ -143,6 +152,8 @@ gates itself again). Files: `clockTime.ts` (the time field), `rosterMatch.ts`
   keyboard's own hint (autoCapitalize="words" on the name field): it is visible as she
   types and she can correct it; the application itself never rewrites a name. If
   that hint proves wrong in practice, set it to "off", never add a rewrite on save.
+  The owner CONFIRMED keeping it on: it suggests, she sees it, and the stored name is
+  never rewritten. The app changing a name silently stays forbidden.
 - Verified with `scripts/shots-arrivals.ts` against a THROWAWAY schema (seed:
   `scripts/shots-arrivals.seed.sql`; `SHOTS_DATABASE_URL` must be local). Never run
   a writing scenario against the owner's local `public` data.
@@ -175,11 +186,62 @@ grouping, pure), `departures.ts` (the clock-out and no-sign-out rules, behind a
   and asks for confirmation. The app NEVER does it silently. THE HOURS OF SUCH A SHIFT
   ARE UNKNOWN: never zero, never guessed (not to the end of the day, not to a usual
   finishing time). Any total, week or timesheet that includes one must say so or leave
-  it out and say so. There is no undo on the board yet.
+  it out and say so. It can be undone (unmarked, or given a time) under "Corrections".
 - Ticking durations use the shared useNow interval (<Duration />); the board adds no
-  timer. It does not refresh by itself: it updates after her own actions only.
+  timer of its own. LIVE REFRESH (BoardRefresher): the board re-reads the server about
+  every 30 seconds on a beat of that SAME shared clock, so there is ONE shared poll and
+  useNow.ts stays the only ticking interval. It does nothing while the tab is hidden
+  (refreshDue), and a tab that comes back visible refreshes at once. A refresh keeps
+  client state, so a panel she has open survives it; the correction panel keeps the
+  VERSION of the record it was opened with, so a change by the other front-desk person
+  meanwhile is refused cleanly rather than overwritten.
+- Any DAY can be shown (`/attendance?day=YYYY-MM-DD`, not in the future): the same
+  board for the records that started that day, titled "Who was in", with the day in words.
+  Corrections work on any day. Only today shows the end-of-day panel and open shifts
+  carried from earlier days.
 - Verified with `scripts/shots-board.ts` (seed: `scripts/shots-board.seed.sql`) against
   a THROWAWAY schema, like the arrivals screen.
+
+### Corrections (BUILT; UNDESIGNED), migration 014
+
+She will type 09:30 where the book says 08:30. A mistake that cannot be fixed makes her
+keep a second paper list, and then CSS is decoration. Files: `corrections.ts` (the
+rules, behind a `CorrectionStore`), `correctionStore.ts` (SQL), `RowActions.tsx` (the
+"Correct…" panel on every row of the board), `attendance/actions.ts`.
+
+- WHAT CAN BE FIXED, from the board, for any day: the time in; the time out (or giving a
+  time to a shift marked never signed out); REOPEN a shift closed by mistake; UNMARK a
+  never-signed-out; REMOVE a record entered for the wrong person.
+- EVERY CORRECTION REQUIRES A REASON. No exception, no default text, no silent fix. The
+  reason is the control, not a permission gate: FRONT_DESK and ADMIN may both correct,
+  because the person who typed the mistake is the person who notices it, usually within a
+  minute. The reason is checked FIRST, before anything is read.
+- Every correction records who and when (`corrected_by`, `corrected_at`,
+  `correction_reason`: all three together or none, enforced by the database; they hold the
+  LATEST correction) and writes an audit_log row with the before and after (the full
+  history). The person and the record are locked FOR UPDATE, and the version the person
+  was looking at (the row's `updated_at` as text, to the microsecond) goes back with the
+  form: a record someone else changed meanwhile is refused with a clear message, nothing
+  written. A stale clock-out says who got there first ("Peter Obi was already clocked out
+  at 10:47 by <name>"). Never a database error, never a silent double write.
+- A CORRECTED RECORD IS VISIBLY MARKED WHEREVER IT IS LISTED: a "Corrected" pill and
+  "Changed at 11:14 by <name>: <reason>" in its row. SCREEN 08 MUST DO THE SAME when it
+  reads real data (it is still sample-driven): a reader of the register must see that a
+  time was changed, by whom and why, without going looking.
+- Reopening or unmarking puts the record back to OPEN, and a person may have only ONE open
+  shift: if they already have one it is refused, naming it ("already recorded as in since
+  21 Oct 2026, and a person can have only one open shift. Clock that one out first.").
+- A time lies on the record's own Lagos day, is not in the future, keeps the shift in order
+  (in before out) and a movement inside its shift (the database cannot check that).
+- WRONG-PERSON RECORDS ARE A VOID, NOT A DELETE. The row stays (`voided_at`), with its
+  reason and who removed it. A deleted row cannot be audited (audit_log points at it by id)
+  and other rows point at a record (movements); staff and what points at them are never
+  deleted here. The clutter objection is answered by leaving a voided record out of EVERY
+  list, count, the one-record-a-day check and the open-shift index: it appears only in the
+  board's "Removed records" list. Any new query of attendance_record MUST exclude
+  `voided_at IS NOT NULL` the same way. A record with movements cannot be removed.
+- Verified with `scripts/shots-corrections.ts` (seed: `scripts/shots-corrections.seed.sql`,
+  after the arrivals and board seeds) against a THROWAWAY schema.
 
 ## Design tokens — from Figma, exact
 
@@ -626,7 +688,7 @@ allowed before the first server apply). `npm run db:proof:check` fails if it is 
   closed rule. It reshapes attendance (see "ATTENDANCE: HOW IT REALLY WORKS") by
   DROPPING two constraints of 005/009 (new names are used, nothing is re-added
   under an old name) and adding columns and a table. The cPanel server already
-  has 001-009, so it receives 010 to 013 (one file at a time), never
+  has 001-009, so it receives 010 to 014 (one file at a time), never
   `pg10-proof.sql` (that file is for a FRESH database and re-creates everything).
   Applying them there is done outside this repo's sessions.
   010 leaves two rules to the APPLICATION, each commented in the migration: a
@@ -637,11 +699,15 @@ allowed before the first server apply). `npm run db:proof:check` fails if it is 
   `movement.returned_recorded_by` (each present exactly when its time is).
   `012_movement_entered_by_names.sql` then renamed movement's two author columns to
   `left_entered_by` and `returned_entered_by` (and their constraints) to match. The
-  server receives 010 to 013 together, outside these sessions.
+  server receives 010 to 014 together, outside these sessions.
   `013_signout_missing.sql` adds the third attendance state, "closed but never signed
   out" (`signout_missing_at`, `signout_missing_by`; never with a clock-out time) and
   rebuilds `attendance_one_open_shift_key` to exclude it. The server receives 010 to
   013 together, one file at a time, outside these sessions.
+  `014_corrections.sql` adds `corrected_at`/`corrected_by` (with the existing
+  `correction_reason`: all three or none) and `voided_at` (a removed record), and rebuilds
+  `attendance_one_open_shift_key` again to exclude removed records. The server receives
+  010 to 014, one file at a time.
 - NEVER DROP OR RECREATE THE LOCAL `public` SCHEMA (STANDING RULE). It holds the
   owner's real local login, whose password was typed at a prompt and cannot be
   recreated, and his sessions. Verify migrations in THROWAWAY schemas inside the

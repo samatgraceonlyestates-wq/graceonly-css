@@ -14,11 +14,11 @@ import type { Page } from "@playwright/test";
 import type { ScenarioHelpers } from "./screenshots.ts";
 
 const ROSTER_FOR_PHONE = [
-  "Amaka Obi", "Chukwuemeka Eze", "Faith Udo", "Mariam Yusuf", "Blessing Ike", "Daniel Johnson", "Grace Nkem", "Chidera Nnamdi",
+  "Amaka Obi", "Chukwuemeka Eze", "Mariam Yusuf", "Blessing Ike", "Daniel Johnson", "Grace Nkem", "Chidera Nnamdi",
   "Amaka Obi-Eze", "Tunde Bello", "Ngozi Adeyemi", "Ifeanyi Okeke", "Zainab Musa", "Emeka Nwankwo", "Funke Adebisi", "Kelechi Ibe",
   "Halima Garba", "Obinna Eze", "Yetunde Cole", "Segun Alabi", "Ada Onuoha", "Musa Danjuma",
 ];
-const NEW_FOR_PHONE = ["Zeta Quill", "Ximena Roe", "Wanjiru Kai", "Vikram Shah", "Ulrich Boateng", "Tamsin Reed", "Sunita Rao", "Rafiq Hasan"];
+const NEW_FOR_PHONE = ["Zeta Quill", "Ximena Roe", "Wanjiru Kai", "Vikram Shah", "Ulrich Boateng", "Tamsin Reed", "Sunita Rao", "Rafiq Hasan", "Quentin Voss"];
 
 export default async function scenario({ base, open, shot, problem }: ScenarioHelpers): Promise<void> {
   const expect = (condition: boolean, message: string) => {
@@ -45,7 +45,7 @@ export default async function scenario({ base, open, shot, problem }: ScenarioHe
   expect((await text(phone)).includes("Save 30 arrivals"), "phone: the button should offer to save 30 arrivals");
   await phone.getByRole("button", { name: "Save 30 arrivals" }).click();
   await phone.getByText("30 arrivals saved").waitFor({ timeout: 20_000 });
-  expect((await text(phone)).includes("8 people were added to the roster"), "phone: 8 new people should have been added");
+  expect((await text(phone)).includes("9 people were added to the roster"), "phone: 9 new people should have been added");
   await shot(phone, "arrivals-6-saved-phone");
 
   // ---------------------------------------------------------------- desktop: suggestions, errors, prompts, refusals
@@ -71,13 +71,18 @@ export default async function scenario({ base, open, shot, problem }: ScenarioHe
   await page.keyboard.type("815");
   await page.keyboard.press("Enter");
 
-  // Row 3: a near-duplicate name.
+  // Row 3: a near-duplicate name. Leaving it (Tab) with a close name moves focus INTO the prompt.
   await page.keyboard.type("Divine Mikel");
   await page.keyboard.press("Tab");
-  await page.keyboard.type("0830");
-  await page.keyboard.press("Enter");
+  expect(
+    await page.evaluate(() => document.activeElement?.textContent?.startsWith("Yes, Divine Mike") === true),
+    "desktop: Tab from a close name should land on the prompt's Yes button, not on the time",
+  );
+  // (Left unanswered for now, so the screenshots show the prompt.)
+  await page.getByLabel("Row 3 time in", { exact: true }).fill("0830");
 
   // Row 4: a brand-new person.
+  await page.getByLabel("Row 4 name", { exact: true }).click();
   await page.keyboard.type("Brand New Person");
   await page.keyboard.press("Enter");
   await page.keyboard.type("0905");
@@ -101,7 +106,14 @@ export default async function scenario({ base, open, shot, problem }: ScenarioHe
 
   // Fix both and save: "Divine Mikel" is confirmed a different person.
   await page.getByLabel("Row 2 time in", { exact: true }).fill("0830");
-  await page.getByRole("button", { name: "No, a different person" }).click();
+  // Answer with the keyboard: Enter on the name asks again, N says a different person, focus goes on to the time.
+  await page.getByLabel("Row 3 name", { exact: true }).click();
+  await page.keyboard.press("Enter");
+  await page.keyboard.press("n");
+  expect(
+    await page.evaluate(() => document.activeElement?.getAttribute("aria-label") === "Row 3 time in"),
+    "desktop: after N, focus should go on to the time in",
+  );
   expect((await text(page)).includes("New person, confirmed different from Divine Mike."), "desktop: the confirmation should be shown");
   await page.getByRole("button", { name: /^Save 4 arrivals$/ }).click();
   await page.getByText("4 arrivals saved").waitFor({ timeout: 20_000 });
@@ -123,6 +135,19 @@ export default async function scenario({ base, open, shot, problem }: ScenarioHe
   await page.getByRole("button", { name: /^Save 1 arrival$/ }).click();
   await page.getByText("1 arrival saved").waitFor({ timeout: 20_000 });
 
+  // The keyboard answers the "did you mean" prompt: Y takes the person offered, no mouse.
+  await page.getByLabel("Row 1 name", { exact: true }).click();
+  await page.keyboard.type("Faith Udoh");
+  await page.keyboard.press("Enter");
+  expect(await page.evaluate(() => document.activeElement?.textContent?.startsWith("Yes, Faith Udo") === true), "desktop: Enter on a close name should land on the prompt");
+  await shot(page, "arrivals-11-keyboard-prompt-desktop");
+  await page.keyboard.press("y");
+  expect((await page.getByLabel("Row 1 name", { exact: true }).inputValue()) === "Faith Udo", "desktop: Y should take Faith Udo");
+  expect(await page.evaluate(() => document.activeElement?.getAttribute("aria-label") === "Row 1 time in"), "desktop: and carry on at the time in");
+  await page.keyboard.type("0030");
+  await page.getByRole("button", { name: /^Save 1 arrival$/ }).click();
+  await page.waitForFunction(() => (document.querySelector('[aria-label="Row 1 name"]') as HTMLInputElement | null)?.value === "", null, { timeout: 20_000 });
+
   // The same person again today: refused, naming them.
   await page.getByLabel("Row 1 name", { exact: true }).click();
   await page.keyboard.type("Peter Obi");
@@ -141,8 +166,18 @@ export default async function scenario({ base, open, shot, problem }: ScenarioHe
   await page.getByText("Say why these are being entered after their day").waitFor({ timeout: 20_000 });
   await shot(page, "arrivals-8-earlier-day-needs-reason-desktop");
   await page.getByPlaceholder("e.g. copied from the book the next morning").fill("Copied from the book the next morning");
-  await page.getByRole("button", { name: /^Save 1 arrival$/ }).click();
-  await page.getByText("1 arrival saved for 16 Oct 2026").waitFor({ timeout: 20_000 });
+
+  // Row 2: never signed out, by keyboard: N in the Time out box means it. No time is typed.
+  await page.getByLabel("Row 2 name", { exact: true }).click();
+  await page.keyboard.type("Faith Udo");
+  await page.keyboard.press("Enter");
+  await page.keyboard.type("0800");
+  await page.keyboard.press("Enter");
+  await page.keyboard.press("n");
+  expect((await page.getByLabel("Row 2 time out", { exact: true }).inputValue()) === "Never signed out", "desktop: N in the Time out box should say Never signed out");
+  await shot(page, "arrivals-12-never-signed-out-desktop");
+  await page.getByRole("button", { name: /^Save 2 arrivals$/ }).click();
+  await page.getByText("2 arrivals saved for 16 Oct 2026").waitFor({ timeout: 20_000 });
 
   // A future day is refused (by the server as well as the screen).
   await page.getByLabel("Day").fill("2026-10-30");

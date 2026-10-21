@@ -4,6 +4,8 @@ import { revalidatePath } from "next/cache";
 import { ARRIVAL_ROLES } from "@/lib/arrivalBatch";
 import { requireAnyRole } from "@/lib/auth";
 import { DbError } from "@/lib/db";
+import { correctRecord } from "@/lib/corrections";
+import { pgCorrectionStore } from "@/lib/correctionStore";
 import { clockOutPerson, markNoSignout } from "@/lib/departures";
 import { pgDepartureStore } from "@/lib/departureStore";
 
@@ -52,6 +54,34 @@ export async function markNoSignoutAction(_previous: BoardActionState, formData:
       status: "done",
       message: `${result.marked} marked as not signed out.${note}`,
     };
+  } catch (caught) {
+    if (caught instanceof DbError) return error(`${caught.message} Nothing was changed. Reference ${caught.errorId}.`);
+    throw caught;
+  }
+}
+
+// Correct a record: a time in, a time out, undo a clock-out, undo a never-signed-out
+// mark, or remove a record entered for the wrong person. EVERY correction carries a
+// reason (checked in corrections.ts before anything is read). Both FRONT_DESK and ADMIN
+// may correct: the reason is the control, not a role. The version she was looking at
+// goes back with it, so a record someone else changed meanwhile is refused cleanly.
+export async function correctRecordAction(_previous: BoardActionState, formData: FormData): Promise<BoardActionState> {
+  const { user, allowed } = await requireAnyRole(ARRIVAL_ROLES);
+  if (!allowed) return error("Only the front desk can correct attendance.");
+
+  const text = (key: string) => {
+    const value = formData.get(key);
+    return typeof value === "string" ? value : "";
+  };
+
+  try {
+    const result = await correctRecord(
+      { recordId: text("recordId"), version: text("version"), kind: text("kind"), time: text("time"), reason: text("reason") },
+      { store: pgCorrectionStore, actorId: user.staffId, now: new Date() },
+    );
+    if (!result.ok) return error(result.message);
+    revalidatePath("/attendance");
+    return { status: "done", message: result.message };
   } catch (caught) {
     if (caught instanceof DbError) return error(`${caught.message} Nothing was changed. Reference ${caught.errorId}.`);
     throw caught;

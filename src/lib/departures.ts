@@ -34,6 +34,11 @@ export interface DepartureRecord {
   clockInAt: Date;
   clockOutAt: Date | null;
   signoutMissingAt: Date | null;
+  /** Removed (014): entered for the wrong person. It is not a shift. */
+  voidedAt: Date | null;
+  /** Who typed the clock-out, and who marked it never signed out: so a stale action can say who got there first. */
+  clockOutByName: string | null;
+  signoutMissingByName: string | null;
   hasOpenMovement: boolean;
   /** The latest time any movement of this record left or returned, or null if it has none. */
   lastMovementAt: Date | null;
@@ -59,7 +64,7 @@ export interface DepartureDeps {
   now: Date;
 }
 
-const isOpen = (record: DepartureRecord) => record.clockOutAt === null && record.signoutMissingAt === null;
+const isOpen = (record: DepartureRecord) => record.clockOutAt === null && record.signoutMissingAt === null && record.voidedAt === null;
 
 const STALE = "That record has changed. Reload the page and look again.";
 
@@ -75,8 +80,17 @@ export async function clockOutPerson(input: { recordId: string; timeOut: string 
     const [record] = await tx.recordsByIds([input.recordId]);
     if (record === undefined) return { ok: false, message: STALE };
 
-    if (record.signoutMissingAt !== null) return { ok: false, message: `${record.name} is marked as never signed out, so their record is closed.` };
-    if (record.clockOutAt !== null) return { ok: false, message: `${record.name} is already clocked out, at ${timeLabel(record.clockOutAt)}.` };
+    // A stale click (someone else got there first) is a clear message, never an error and
+    // never a second write: the record is locked, and these checks run under the lock.
+    if (record.voidedAt !== null) return { ok: false, message: `${record.name}'s record has been removed.` };
+    if (record.signoutMissingAt !== null) {
+      const by = record.signoutMissingByName ? ` by ${record.signoutMissingByName}` : "";
+      return { ok: false, message: `${record.name} was marked as never signed out${by}, so their record is closed.` };
+    }
+    if (record.clockOutAt !== null) {
+      const by = record.clockOutByName ? ` by ${record.clockOutByName}` : "";
+      return { ok: false, message: `${record.name} was already clocked out at ${timeLabel(record.clockOutAt)}${by}.` };
+    }
 
     // A time of day on the record's own Lagos day.
     const outAt = lagosInstantAt(lagosDateOf(record.clockInAt), parsed.hhmm);
@@ -123,7 +137,10 @@ export async function markNoSignout(input: { recordIds: readonly string[] }, dep
 
     for (const record of records) {
       if (!isOpen(record)) {
-        skipped.push({ name: record.name, reason: record.signoutMissingAt !== null ? "already marked as never signed out" : "already clocked out" });
+        skipped.push({
+          name: record.name,
+          reason: record.voidedAt !== null ? "removed" : record.signoutMissingAt !== null ? "already marked as never signed out" : "already clocked out",
+        });
         continue;
       }
       if (record.hasOpenMovement) {

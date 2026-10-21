@@ -42,6 +42,7 @@ export const pgArrivalStore: ArrivalStore = {
             SELECT staff_id, clock_in_at, clock_out_at, signout_missing_at
               FROM attendance_record
              WHERE staff_id = ANY(${[...ids]}::uuid[])
+               AND voided_at IS NULL
                AND ((clock_in_at >= ${day.start} AND clock_in_at < ${day.end})
                     OR (clock_out_at IS NULL AND signout_missing_at IS NULL))`);
           return rows.map(
@@ -62,10 +63,13 @@ export const pgArrivalStore: ArrivalStore = {
         async createRecord(record) {
           await db.query(sql`
             INSERT INTO attendance_record
-              (id, staff_id, clock_in_at, clock_out_at, clock_in_entered_by, clock_out_entered_by, backdate_reason)
+              (id, staff_id, clock_in_at, clock_out_at, clock_in_entered_by, clock_out_entered_by, backdate_reason,
+               signout_missing_at, signout_missing_by)
             VALUES
               (${record.id}, ${record.staffId}, ${record.clockInAt}, ${record.clockOutAt},
-               ${record.clockInEnteredBy}, ${record.clockOutEnteredBy}, ${record.backdateReason})`);
+               ${record.clockInEnteredBy}, ${record.clockOutEnteredBy}, ${record.backdateReason},
+               CASE WHEN ${record.signoutMissing}::boolean THEN now() END,
+               CASE WHEN ${record.signoutMissing}::boolean THEN ${record.clockInEnteredBy}::uuid END)`);
         },
 
         async audit({ actorId, entity, entityId, after }) {

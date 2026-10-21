@@ -109,7 +109,7 @@
   grid-template-columns: 24px minmax(0, 1fr) 88px;
   grid-template-areas:
     "num name in"
-    ".   .    out";
+    ".   nso  out";
   align-items: center;
   column-gap: var(--fold-space-8);
   row-gap: var(--fold-space-6);
@@ -154,6 +154,35 @@
   grid-area: out;
   padding: 0 var(--fold-space-10);
   text-align: center;
+}
+
+/* "Never signed out" shown in the Time out box: a choice, not a time, so it reads as one. */
+.neverSigned {
+  background: var(--fold-mist);
+  color: var(--fold-burgundy);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.neverToggle {
+  display: flex;
+  grid-area: nso;
+  align-items: center;
+  gap: var(--fold-space-6);
+  color: var(--fold-dusk);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.neverToggle input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--fold-burgundy);
+}
+
+.promptKeys {
+  color: var(--fold-dusk);
+  font-size: 12px;
 }
 
 /* Everything under a row's inputs spans the row. */
@@ -296,8 +325,8 @@
   .headings,
   .row {
     display: grid;
-    grid-template-columns: 40px minmax(0, 1fr) 120px 120px;
-    grid-template-areas: "num name in out";
+    grid-template-columns: 40px minmax(0, 1fr) 120px 150px 150px;
+    grid-template-areas: "num name in out nso";
     column-gap: var(--fold-space-12);
   }
 

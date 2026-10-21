@@ -176,6 +176,12 @@ export const UNTRIPPABLE_CONSTRAINTS: Readonly<Record<string, string>> = Object.
     "Setting keys are written by application code and migrations. A settings screen edits values only, never keys.",
   staff_password_needs_email_check:
     "A login account is created with its email in the same statement, and a roster person has no password. Only a forged request or a database edit gives one without the other.",
+  attendance_corrected_pair_check:
+    "A correction writes the person and the time together. " + FIXED_TOGETHER,
+  attendance_corrected_matches_reason_check:
+    "A correction writes its reason, person and time together, and the application refuses a correction with no reason before it writes. " + FIXED_TOGETHER,
+  attendance_voided_needs_correction_check:
+    "Removing a record is a correction and is written with its reason, person and time. " + FIXED_TOGETHER,
   attendance_signout_missing_pair_check:
     "Marking a shift as never signed out writes the time and the person who marked it together. " + FIXED_TOGETHER,
   attendance_signout_missing_no_clock_out_check:
@@ -213,6 +219,7 @@ export const UNTRIPPABLE_CONSTRAINTS: Readonly<Record<string, string>> = Object.
   attendance_clock_in_entered_by_fkey: SESSION_STAFF,
   attendance_clock_out_entered_by_fkey: SESSION_STAFF,
   attendance_signout_missing_by_fkey: SESSION_STAFF,
+  attendance_corrected_by_fkey: SESSION_STAFF,
   attendance_record_staff_id_fkey: PICKED_STAFF,
   movement_approved_by_fkey: PICKED_STAFF,
   movement_left_entered_by_fkey: SESSION_STAFF,

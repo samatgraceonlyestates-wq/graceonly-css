@@ -20,6 +20,12 @@ import styles from "./page.module.css";
 //   Arrow keys     move through the name suggestions; Enter takes the highlighted one
 //                  (a single suggestion is already highlighted, so "divi" Enter is enough)
 //   Enter          never submits the form: only the Save button does
+//   A close name   leaving the name field (Enter or Tab) with a name close to someone on
+//                  the roster moves focus INTO the "did you mean" prompt: Y takes the
+//                  first person offered (1, 2, 3 take the others), N says a different
+//                  person, and focus then goes on to the time. No mouse, no Tab hunt.
+//   Never signed   on an earlier day, N in the Time out box says "Never signed out"
+//                  (N again, or Backspace, undoes it). Phones tick the box instead.
 // Tab never takes a suggestion for her, so a name she meant to type in full is not
 // swapped for another. The names she types are checked against the roster with the
 // same rules as the server (rosterMatch.ts), so a near-duplicate is flagged here
@@ -33,6 +39,8 @@ interface RowState {
   personId: string | null;
   timeIn: string;
   timeOut: string;
+  /** Earlier day only: instead of a time out, they never signed out. */
+  neverSignedOut: boolean;
   confirmNew: boolean;
   /** She has been in and out of the name field: only then is the roster hint shown. */
   touched: boolean;
@@ -53,11 +61,12 @@ const blankRow = (generation: number, index: number): RowState => ({
   personId: null,
   timeIn: "",
   timeOut: "",
+  neverSignedOut: false,
   confirmNew: false,
   touched: false,
 });
 
-const isBlank = (row: RowState) => row.name.trim() === "" && row.timeIn.trim() === "" && row.timeOut.trim() === "";
+const isBlank = (row: RowState) => row.name.trim() === "" && row.timeIn.trim() === "" && row.timeOut.trim() === "" && !row.neverSignedOut;
 
 export function ArrivalsForm({ roster, today }: { roster: RosterName[]; today: string }) {
   const listId = useId();
@@ -79,7 +88,10 @@ export function ArrivalsForm({ roster, today }: { roster: RosterName[]; today: s
   const [arrowed, setArrowed] = useState<number | null>(null);
 
   const inputs = useRef(new Map<string, HTMLInputElement>());
+  const prompts = useRef(new Map<number, HTMLDivElement>());
+  // "3:name", "3:timeIn", "3:timeOut" or "prompt:3": where focus goes after the next render.
   const pendingFocus = useRef<string | null>(null);
+  const [, bump] = useState(0);
 
   const isEarlier = DATE_SHAPE.test(date) && date < today;
   const isFuture = DATE_SHAPE.test(date) && date > today;
@@ -114,7 +126,8 @@ export function ArrivalsForm({ roster, today }: { roster: RosterName[]; today: s
     const target = pendingFocus.current;
     if (target !== null) {
       pendingFocus.current = null;
-      inputs.current.get(target)?.focus();
+      if (target.startsWith("prompt:")) prompts.current.get(Number(target.slice(7)))?.querySelector("button")?.focus();
+      else inputs.current.get(target)?.focus();
     }
   });
 
@@ -158,18 +171,84 @@ export function ArrivalsForm({ roster, today }: { roster: RosterName[]; today: s
     setArrowed(null);
   }
 
+  /** She answered the "did you mean" prompt: carry on at the time, in the row's own flow. */
+  function answered(index: number) {
+    pendingFocus.current = `${index}:timeIn`;
+    bump((n) => n + 1);
+  }
+
+  /** Move focus into this row's prompt (it is shown first, if it was not already). */
+  function askPrompt(index: number) {
+    markTouched(index);
+    pendingFocus.current = `prompt:${index}`;
+    bump((n) => n + 1);
+  }
+
+  /** Is this row's name close to someone on the roster, and not yet answered? */
+  function needsAnswer(row: RowState): boolean {
+    if (row.name.trim() === "" || row.personId !== null || row.confirmNew) return false;
+    return matchName(row.name, roster).kind === "close";
+  }
+
+  // The prompt's own keys: Y (or 1) the first person offered, 2 and 3 the others, N a
+  // different person, Left and Right between the buttons. Enter or Space presses the
+  // focused button as usual.
+  function onPromptKeyDown(event: KeyboardEvent<HTMLDivElement>, index: number, candidates: RosterName[]) {
+    if (event.ctrlKey || event.altKey || event.metaKey) return;
+    const key = event.key.toLowerCase();
+    const pick = key === "y" ? 0 : key >= "1" && key <= "3" ? Number(key) - 1 : -1;
+    if (pick >= 0 && candidates[pick] !== undefined) {
+      event.preventDefault();
+      choose(index, candidates[pick]);
+      answered(index);
+    } else if (key === "n") {
+      event.preventDefault();
+      update(index, { confirmNew: true });
+      answered(index);
+    } else if (key === "arrowright" || key === "arrowleft") {
+      event.preventDefault();
+      const buttons = [...event.currentTarget.querySelectorAll("button")];
+      const at = buttons.indexOf(document.activeElement as HTMLButtonElement);
+      buttons[(at + (key === "arrowright" ? 1 : buttons.length - 1)) % buttons.length]?.focus();
+    }
+  }
+
   function onKeyDown(event: KeyboardEvent<HTMLInputElement>, index: number, field: Field, options: RosterName[]) {
     const row = rows[index]!;
     const open = field === "name" && options.length > 0 && row.personId === null;
     const active = arrowed ?? (options.length === 1 ? 0 : -1);
+    const plainTab = event.key === "Tab" && !event.shiftKey && !event.ctrlKey && !event.altKey && !event.metaKey;
+    const takingSuggestion = event.key === "Enter" && open && active >= 0 && options[active] !== undefined;
+
+    // Leaving the name with a close name unanswered: ask, with the keyboard, right here.
+    if (field === "name" && (event.key === "Enter" || plainTab) && !takingSuggestion && needsAnswer(row)) {
+      event.preventDefault();
+      askPrompt(index);
+      return;
+    }
+
+    // Earlier day, Time out box: N means "Never signed out" (no time), N or Backspace undoes it.
+    if (field === "timeOut" && !event.ctrlKey && !event.altKey && !event.metaKey) {
+      const key = event.key.toLowerCase();
+      if (key === "n") {
+        event.preventDefault();
+        update(index, { neverSignedOut: !row.neverSignedOut, timeOut: "" });
+        return;
+      }
+      if (row.neverSignedOut && (event.key === "Backspace" || event.key === "Delete")) {
+        event.preventDefault();
+        update(index, { neverSignedOut: false });
+        return;
+      }
+    }
 
     if (event.key === "Enter") {
       event.preventDefault(); // Enter never submits the page
-      if (open && active >= 0 && options[active]) {
-        choose(index, options[active]);
+      if (takingSuggestion) {
+        choose(index, options[active]!);
         moveOn(index, field);
       } else moveOn(index, field);
-    } else if (event.key === "Tab" && !event.shiftKey && !event.ctrlKey && !event.altKey && !event.metaKey) {
+    } else if (plainTab) {
       // Past the last field of the last row: a fresh row, if this one has anything in it.
       const lastField = fields[fields.length - 1];
       if (field === lastField && index === rows.length - 1 && !isBlank(row)) {
@@ -194,6 +273,7 @@ export function ArrivalsForm({ roster, today }: { roster: RosterName[]; today: s
       personId: row.personId,
       timeIn: row.timeIn,
       timeOut: isEarlier ? row.timeOut : "",
+      neverSignedOut: isEarlier && row.neverSignedOut,
       confirmNew: row.confirmNew,
     })),
   });
@@ -312,7 +392,7 @@ export function ArrivalsForm({ roster, today }: { roster: RosterName[]; today: s
               return parsed.ok ? null : parsed.message;
             };
             const inError = timeError("timeIn");
-            const outError = isEarlier ? timeError("timeOut") : null;
+            const outError = isEarlier && !row.neverSignedOut ? timeError("timeOut") : null;
 
             const onTime = (field: "timeIn" | "timeOut") => {
               // 8:15 and 0815 become 08:15, so she sees what was understood. Anything
@@ -417,22 +497,43 @@ export function ArrivalsForm({ roster, today }: { roster: RosterName[]; today: s
                 />
 
                 {isEarlier ? (
-                  <input
-                    ref={register(`${index}:timeOut`)}
-                    className={cx(styles.input, styles.timeOut, (flagged("timeOut") || outError !== null) && styles.inputError)}
-                    type="text"
-                    inputMode="numeric"
-                    aria-label={`Row ${index + 1} time out`}
-                    aria-invalid={flagged("timeOut") || outError !== null || undefined}
-                    autoComplete="off"
-                    enterKeyHint="next"
-                    placeholder="1700"
-                    value={row.timeOut}
-                    onChange={(event) => update(index, { timeOut: event.target.value })}
-                    onFocus={() => setFocused({ index, field: "timeOut" })}
-                    onBlur={() => onTime("timeOut")}
-                    onKeyDown={(event) => onKeyDown(event, index, "timeOut", [])}
-                  />
+                  <>
+                    <input
+                      ref={register(`${index}:timeOut`)}
+                      className={cx(
+                        styles.input,
+                        styles.timeOut,
+                        row.neverSignedOut && styles.neverSigned,
+                        (flagged("timeOut") || outError !== null) && styles.inputError,
+                      )}
+                      type="text"
+                      inputMode="numeric"
+                      aria-label={`Row ${index + 1} time out`}
+                      aria-invalid={flagged("timeOut") || outError !== null || undefined}
+                      autoComplete="off"
+                      enterKeyHint="next"
+                      placeholder="1700"
+                      // "Never signed out" is shown IN the box, read-only: it is a choice, not a time.
+                      readOnly={row.neverSignedOut}
+                      value={row.neverSignedOut ? "Never signed out" : row.timeOut}
+                      onChange={(event) => update(index, { timeOut: event.target.value })}
+                      onFocus={() => setFocused({ index, field: "timeOut" })}
+                      onBlur={() => onTime("timeOut")}
+                      onKeyDown={(event) => onKeyDown(event, index, "timeOut", [])}
+                    />
+                    {/* For touch and mouse. The keyboard uses N in the box above, so this is
+                        out of the Tab order and the typing flow is not lengthened. */}
+                    <label className={styles.neverToggle}>
+                      <input
+                        type="checkbox"
+                        tabIndex={-1}
+                        checked={row.neverSignedOut}
+                        onChange={(event) => update(index, { neverSignedOut: event.target.checked, timeOut: "" })}
+                        aria-label={`Row ${index + 1}: never signed out`}
+                      />
+                      <span>Never signed out</span>
+                    </label>
+                  </>
                 ) : null}
 
                 {rowFlags.length > 0 || inError !== null || outError !== null ? (
@@ -448,7 +549,16 @@ export function ArrivalsForm({ roster, today }: { roster: RosterName[]; today: s
                 ) : null}
 
                 {prompt !== null ? (
-                  <div className={styles.prompt} role="group" aria-label={`Row ${index + 1}: is this someone already on the roster?`}>
+                  <div
+                    ref={(element) => {
+                      if (element) prompts.current.set(index, element);
+                      else prompts.current.delete(index);
+                    }}
+                    className={styles.prompt}
+                    role="group"
+                    aria-label={`Row ${index + 1}: is this someone already on the roster?`}
+                    onKeyDown={(event) => onPromptKeyDown(event, index, prompt.candidates.slice(0, 3))}
+                  >
                     <p>
                       {prompt.candidates.length === 1 ? "Did you mean " : "Did you mean one of these? "}
                       {prompt.candidates.slice(0, 3).map((candidate, at) => (
@@ -461,16 +571,33 @@ export function ArrivalsForm({ roster, today }: { roster: RosterName[]; today: s
                       ?
                     </p>
                     <div className={styles.promptActions}>
-                      {prompt.candidates.slice(0, 3).map((candidate) => (
-                        <Button key={candidate.id} size="compact" onClick={() => choose(index, candidate)}>
+                      {prompt.candidates.slice(0, 3).map((candidate, at) => (
+                        <Button
+                          key={candidate.id}
+                          size="compact"
+                          onClick={() => {
+                            choose(index, candidate);
+                            answered(index);
+                          }}
+                        >
                           Yes, {candidate.name}
                           {details.get(candidate.id) ? ` · ${details.get(candidate.id)}` : ""}
+                          {prompt.candidates.length > 1 ? ` (${at + 1})` : ""}
                         </Button>
                       ))}
-                      <Button variant="row-action" onClick={() => update(index, { confirmNew: true })}>
+                      <Button
+                        variant="row-action"
+                        onClick={() => {
+                          update(index, { confirmNew: true });
+                          answered(index);
+                        }}
+                      >
                         No, a different person
                       </Button>
                     </div>
+                    <p className={styles.promptKeys}>
+                      Keys: Y for yes{prompt.candidates.length > 1 ? " (or 1, 2, 3)" : ""}, N for a different person.
+                    </p>
                   </div>
                 ) : hint !== null ? (
                   <p className={cx(styles.hint, hint.tone === "warn" && styles.hintWarn)}>{hint.text}</p>

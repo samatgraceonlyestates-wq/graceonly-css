@@ -96,6 +96,7 @@ const row = (name: string, timeIn: string, extra: Partial<ArrivalRowInput> = {})
   personId: null,
   timeIn,
   timeOut: "",
+  neverSignedOut: false,
   confirmNew: false,
   ...extra,
 });
@@ -261,6 +262,58 @@ describe("the day", () => {
     const result = failed(await run(batch([row("Divine Mike", "08:00", { timeOut: "17:00" })], "2026-10-21", ""), justAfterLagosMidnight));
     assert.match(result.formProblem ?? "", /Say why/, "the 21st is already an earlier day in Lagos");
     untouched(store);
+  });
+});
+
+describe("never signed out, on an earlier day (013)", () => {
+  it("is a choice INSTEAD of a time out: the record is closed with no time, and says so", async () => {
+    const { store, run } = setup();
+    const result = await run(batch([row("Divine Mike", "08:00", { neverSignedOut: true }), row("Peter Obi", "08:10", { timeOut: "17:00" })], EARLIER, "book"));
+    assert.equal(result.ok, true);
+    const [never, normal] = store.records;
+    assert.equal(never!.signoutMissing, true);
+    assert.equal(never!.clockOutAt, null, "no time: the hours are unknown, never guessed");
+    assert.equal(never!.clockOutEnteredBy, null);
+    assert.equal(normal!.signoutMissing, false);
+    assert.notEqual(normal!.clockOutAt, null);
+    const audit = store.audits.find((a) => a.entityId === never!.id)!;
+    assert.equal(audit.after.signout_missing, true);
+    assert.equal(audit.after.clock_out_at, null);
+  });
+
+  it("is refused together with a time out (one or the other)", async () => {
+    const { store, run } = setup();
+    const result = failed(await run(batch([row("Divine Mike", "08:00", { neverSignedOut: true, timeOut: "17:00" })], EARLIER, "book")));
+    assert.match(result.problems[0]!.message, /not both/);
+    untouched(store);
+  });
+
+  it("is refused for TODAY: the board's end-of-day action is how today is closed", async () => {
+    const { store, run } = setup();
+    const result = failed(await run(batch([row("Divine Mike", "08:00", { neverSignedOut: true })])));
+    assert.match(result.problems[0]!.message, /only for an earlier day/);
+    untouched(store);
+  });
+
+  it("an earlier day still needs a time out OR never signed out, never neither", async () => {
+    const { store, run } = setup();
+    const result = failed(await run(batch([row("Divine Mike", "08:00")], EARLIER, "book")));
+    assert.equal(result.problems[0]!.field, "timeOut");
+    untouched(store);
+  });
+
+  it("a person who never signed out on that day is not 'still in': nothing about it blocks the batch", async () => {
+    const { store, run } = setup();
+    const first = await run(batch([row("Divine Mike", "08:00", { neverSignedOut: true })], EARLIER, "book"));
+    assert.equal(first.ok, true);
+    assert.equal(store.records.length, 1);
+  });
+
+  it("the payload accepts the flag, and refuses a non-boolean", () => {
+    const base = { name: "A", personId: null, timeIn: "8:00", timeOut: "", confirmNew: false };
+    assert.equal(parseBatchPayload(JSON.stringify({ date: TODAY, reason: "", rows: [{ ...base, neverSignedOut: true }] }))?.rows[0]?.neverSignedOut, true);
+    assert.equal(parseBatchPayload(JSON.stringify({ date: TODAY, reason: "", rows: [base] }))?.rows[0]?.neverSignedOut, false, "absent means false");
+    assert.equal(parseBatchPayload(JSON.stringify({ date: TODAY, reason: "", rows: [{ ...base, neverSignedOut: "yes" }] })), null);
   });
 });
 

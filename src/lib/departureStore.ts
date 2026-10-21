@@ -5,7 +5,7 @@
 // SERVER-ONLY (db.ts throws if loaded in a browser).
 import { query, sql, transaction as dbTransaction } from "./db.ts";
 import type { DepartureRecord, DepartureStore, DepartureTx } from "./departures.ts";
-import { lagosDayRange } from "./lagosTime.ts";
+import { lagosDateOf, lagosDayRange } from "./lagosTime.ts";
 import { groupBoard, type Board, type BoardMovement, type BoardRecord } from "./todayBoard.ts";
 
 /**
@@ -13,8 +13,11 @@ import { groupBoard, type Board, type BoardMovement, type BoardRecord } from "./
  * from an earlier day (no clock-out and not marked never-signed-out), and every open
  * movement. The grouping is derived in todayBoard.ts; nothing about it is stored.
  */
-export async function loadTodayBoard(now: Date): Promise<Board> {
-  const day = lagosDayRange(now);
+export async function loadDayBoard(dayOrNow: string | Date, now: Date): Promise<Board> {
+  const range = lagosDayRange(dayOrNow);
+  const isToday = range.date === lagosDateOf(now);
+  // The version is the row's updated_at as TEXT (microseconds): a JavaScript Date keeps
+  // only milliseconds, which could not be compared back to the row.
   const records = await query<{
     id: string;
     staff_id: string;
@@ -23,12 +26,19 @@ export async function loadTodayBoard(now: Date): Promise<Board> {
     clock_in_at: Date;
     clock_out_at: Date | null;
     signout_missing_at: Date | null;
+    version: string;
+    corrected_at: Date | null;
+    corrected_by_name: string | null;
+    correction_reason: string | null;
+    voided_at: Date | null;
   }>(sql`
-    SELECT r.id, r.staff_id, s.full_name, s.department, r.clock_in_at, r.clock_out_at, r.signout_missing_at
+    SELECT r.id, r.staff_id, s.full_name, s.department, r.clock_in_at, r.clock_out_at, r.signout_missing_at,
+           r.updated_at::text AS version, r.corrected_at, c.full_name AS corrected_by_name, r.correction_reason, r.voided_at
       FROM attendance_record r
       JOIN staff s ON s.id = r.staff_id
-     WHERE (r.clock_in_at >= ${day.start} AND r.clock_in_at < ${day.end})
-        OR (r.clock_out_at IS NULL AND r.signout_missing_at IS NULL)`);
+      LEFT JOIN staff c ON c.id = r.corrected_by
+     WHERE (r.clock_in_at >= ${range.start} AND r.clock_in_at < ${range.end})
+        OR (${isToday}::boolean AND r.clock_out_at IS NULL AND r.signout_missing_at IS NULL AND r.voided_at IS NULL)`);
   const movements = await query<{
     attendance_record_id: string;
     left_at: Date;
@@ -51,6 +61,11 @@ export async function loadTodayBoard(now: Date): Promise<Board> {
         clockInAt: row.clock_in_at,
         clockOutAt: row.clock_out_at,
         signoutMissingAt: row.signout_missing_at,
+        version: row.version,
+        correctedAt: row.corrected_at,
+        correctedByName: row.corrected_by_name,
+        correctionReason: row.correction_reason,
+        voidedAt: row.voided_at,
       }),
     ),
     movements.rows.map(
@@ -63,7 +78,13 @@ export async function loadTodayBoard(now: Date): Promise<Board> {
       }),
     ),
     now,
+    range.date,
   );
+}
+
+/** Today's board (Lagos). */
+export function loadTodayBoard(now: Date): Promise<Board> {
+  return loadDayBoard(now, now);
 }
 
 export const pgDepartureStore: DepartureStore = {
@@ -83,15 +104,21 @@ export const pgDepartureStore: DepartureStore = {
             clock_in_at: Date;
             clock_out_at: Date | null;
             signout_missing_at: Date | null;
+            voided_at: Date | null;
+            clock_out_by: string | null;
+            signout_missing_by: string | null;
             has_open_movement: boolean;
             last_movement_at: Date | null;
           }>(sql`
-            SELECT r.id, r.staff_id, s.full_name, r.clock_in_at, r.clock_out_at, r.signout_missing_at,
+            SELECT r.id, r.staff_id, s.full_name, r.clock_in_at, r.clock_out_at, r.signout_missing_at, r.voided_at,
+                   co.full_name AS clock_out_by, sm.full_name AS signout_missing_by,
                    EXISTS (SELECT 1 FROM movement m WHERE m.attendance_record_id = r.id AND m.returned_at IS NULL) AS has_open_movement,
                    (SELECT max(greatest(m.left_at, coalesce(m.returned_at, m.left_at)))
                       FROM movement m WHERE m.attendance_record_id = r.id) AS last_movement_at
               FROM attendance_record r
               JOIN staff s ON s.id = r.staff_id
+              LEFT JOIN staff co ON co.id = r.clock_out_entered_by
+              LEFT JOIN staff sm ON sm.id = r.signout_missing_by
              WHERE r.id = ANY(${[...ids]}::uuid[])`);
           return rows.map(
             (row): DepartureRecord => ({
@@ -101,6 +128,9 @@ export const pgDepartureStore: DepartureStore = {
               clockInAt: row.clock_in_at,
               clockOutAt: row.clock_out_at,
               signoutMissingAt: row.signout_missing_at,
+              voidedAt: row.voided_at,
+              clockOutByName: row.clock_out_by,
+              signoutMissingByName: row.signout_missing_by,
               hasOpenMovement: row.has_open_movement,
               lastMovementAt: row.last_movement_at,
             }),
@@ -113,7 +143,7 @@ export const pgDepartureStore: DepartureStore = {
           const { rows } = await db.query(sql`
             UPDATE attendance_record
                SET clock_out_at = ${clockOutAt}, clock_out_entered_by = ${actorId}
-             WHERE id = ${id} AND clock_out_at IS NULL AND signout_missing_at IS NULL
+             WHERE id = ${id} AND clock_out_at IS NULL AND signout_missing_at IS NULL AND voided_at IS NULL
          RETURNING id`);
           return rows.length === 1;
         },
@@ -124,7 +154,7 @@ export const pgDepartureStore: DepartureStore = {
           const { rows } = await db.query<{ signout_missing_at: Date }>(sql`
             UPDATE attendance_record
                SET signout_missing_at = now(), signout_missing_by = ${actorId}
-             WHERE id = ${id} AND clock_out_at IS NULL AND signout_missing_at IS NULL
+             WHERE id = ${id} AND clock_out_at IS NULL AND signout_missing_at IS NULL AND voided_at IS NULL
          RETURNING signout_missing_at`);
           return rows[0]?.signout_missing_at ?? null;
         },

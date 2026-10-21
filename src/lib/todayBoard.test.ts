@@ -14,6 +14,11 @@ const record = (id: string, name: string, extra: Partial<BoardRecord> = {}): Boa
   clockInAt: at(21, 8),
   clockOutAt: null,
   signoutMissingAt: null,
+  version: "v1",
+  correctedAt: null,
+  correctedByName: null,
+  correctionReason: null,
+  voidedAt: null,
   ...extra,
 });
 const movement = (recordId: string): BoardMovement => ({ recordId, leftAt: at(21, 10), destination: "Bank", purpose: "Lodgement", approvedByName: "Peter Obi" });
@@ -82,5 +87,65 @@ describe("groupBoard: today's board, derived and never stored", () => {
   it("sorts each group by name, ignoring case", () => {
     const board = groupBoard([record("1", "bola Ade"), record("2", "Ada Obi"), record("3", "Chidi Eze")], [], NOW);
     assert.deepEqual(names(board.inNow), ["Ada Obi", "bola Ade", "Chidi Eze"]);
+  });
+});
+
+describe("groupBoard: another day, corrections and removed records", () => {
+  it("an earlier DAY shows only the records that started on it, and a still-open one is flagged as forgotten", () => {
+    const board = groupBoard(
+      [
+        record("1", "Monday Gone", { clockInAt: at(19, 8), clockOutAt: at(19, 17) }),
+        record("2", "Monday Forgot", { clockInAt: at(19, 9) }),
+        record("3", "Tuesday Person", { clockInAt: at(20, 8) }),
+        record("4", "Today Person"),
+      ],
+      [],
+      NOW,
+      "2026-10-19",
+    );
+    assert.equal(board.isToday, false);
+    assert.equal(board.day, "2026-10-19");
+    assert.deepEqual(names(board.gone), ["Monday Gone"]);
+    assert.deepEqual(names(board.inNow), ["Monday Forgot"]);
+    assert.equal(board.inNow[0]!.olderDay, true);
+    assert.equal(board.counts.in + board.counts.gone, 2);
+  });
+
+  it("an earlier day does not carry other days' open shifts, but today does", () => {
+    const records = [record("1", "Forgot", { clockInAt: at(19, 8) }), record("2", "Today Person")];
+    assert.deepEqual(names(groupBoard(records, [], NOW, "2026-10-20").inNow), []);
+    assert.deepEqual(names(groupBoard(records, [], NOW).inNow), ["Forgot", "Today Person"]);
+  });
+
+  it("a REMOVED record is in its own list only: not IN, not GONE, not in any count", () => {
+    const board = groupBoard(
+      [
+        record("1", "Wrong Person", { voidedAt: at(21, 9), correctedAt: at(21, 9), correctedByName: "Desk B", correctionReason: "Wrong person" }),
+        record("2", "Right Person"),
+      ],
+      [],
+      NOW,
+    );
+    assert.deepEqual(names(board.removed), ["Wrong Person"]);
+    assert.deepEqual(names(board.inNow), ["Right Person"]);
+    assert.deepEqual(board.counts, { in: 1, out: 0, gone: 0, noSignout: 0 });
+    assert.equal(board.removed[0]!.correctionReason, "Wrong person");
+  });
+
+  it("a removed open record from an earlier day does not show as IN", () => {
+    const board = groupBoard([record("1", "Wrong Person", { clockInAt: at(19, 8), voidedAt: at(19, 9) })], [], NOW);
+    assert.equal(board.inNow.length, 0);
+  });
+
+  it("carries the correction (who, when, why) and the version on every person, so a list can show it", () => {
+    const board = groupBoard(
+      [record("1", "Corrected Person", { correctedAt: at(21, 10), correctedByName: "Desk B", correctionReason: "Book says 08:30", version: "2026-10-21 10:00:00.123456+01" })],
+      [],
+      NOW,
+    );
+    const person = board.inNow[0]!;
+    assert.equal(person.correctedByName, "Desk B");
+    assert.equal(person.correctionReason, "Book says 08:30");
+    assert.equal(person.version, "2026-10-21 10:00:00.123456+01");
   });
 });
