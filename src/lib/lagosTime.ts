@@ -107,14 +107,18 @@ function offsetMillis(instant: Date): number {
   return asIfUtc - (instant.getTime() - instant.getUTCMilliseconds());
 }
 
-/** The instant at which the Lagos wall clock first reads 00:00:00 on the given date. */
-function startOfLagosDate(year: number, month: number, day: number): Date {
-  const wanted = Date.UTC(year, month - 1, day);
-  // Guess with the offset at the UTC midnight, then correct once with the offset
-  // at the guess. Two passes settle any zone whose offset changes at midnight.
+/** The instant at which the Lagos wall clock first reads the given date and time. */
+function instantFromWall(year: number, month: number, day: number, hour = 0, minute = 0, second = 0): Date {
+  const wanted = Date.UTC(year, month - 1, day, hour, minute, second);
+  // Guess with the offset at the UTC reading, then correct once with the offset
+  // at the guess. Two passes settle any zone whose offset changes at that hour.
   let guess = wanted - offsetMillis(new Date(wanted));
   guess = wanted - offsetMillis(new Date(guess));
   return new Date(guess);
+}
+
+function startOfLagosDate(year: number, month: number, day: number): Date {
+  return instantFromWall(year, month, day);
 }
 
 function nextDate(year: number, month: number, day: number): { year: number; month: number; day: number } {
@@ -146,4 +150,53 @@ export function lagosDaysRange(firstDay: string, lastDay: string): { first: stri
   const last = lagosDayRange(lastDay);
   if (last.start.getTime() < first.start.getTime()) throw new RangeError("The last day is before the first day.");
   return { first: first.date, last: last.date, start: first.start, end: last.end };
+}
+
+// ---------------------------------------------------------------------------
+// Time of day, weeks and months, in Lagos. Same rule as above: dates are
+// "YYYY-MM-DD" strings, calendar arithmetic is done on the numbers (in UTC, so no
+// machine time zone can touch it), and instants come out of the one conversion.
+
+/** Seconds since 00:00:00 on the Lagos clock for this instant (0 to 86399). */
+export function lagosSecondsOfDay(instant: Date): number {
+  if (Number.isNaN(instant.getTime())) throw new RangeError("Invalid date.");
+  const clock = wallClock(instant);
+  return clock.hour * 3600 + clock.minute * 60 + clock.second;
+}
+
+const LOCAL_TIME = /^([01]\d|2[0-3]):([0-5]\d)$/;
+
+/** The instant at which the Lagos clock reads `hhmm` ("09:15") on the Lagos date `date`. */
+export function lagosInstantAt(date: string, hhmm: string): Date {
+  const { year, month, day } = parseDate(date);
+  const match = LOCAL_TIME.exec(hhmm);
+  if (match === null) throw new RangeError("Expected a time as HH:MM.");
+  return instantFromWall(year, month, day, Number(match[1]), Number(match[2]));
+}
+
+/** The calendar date `days` after (or before, if negative) `date`. */
+export function lagosAddDays(date: string, days: number): string {
+  const { year, month, day } = parseDate(date);
+  const moved = new Date(Date.UTC(year, month - 1, day + days));
+  return formatDate(moved.getUTCFullYear(), moved.getUTCMonth() + 1, moved.getUTCDate());
+}
+
+/** 0 for Monday ... 6 for Sunday. */
+export function lagosWeekdayIndex(date: string): number {
+  const { year, month, day } = parseDate(date);
+  return (new Date(Date.UTC(year, month - 1, day)).getUTCDay() + 6) % 7;
+}
+
+/** The Monday to Sunday week that contains `date`. */
+export function lagosWeekOf(date: string): { first: string; last: string } {
+  const first = lagosAddDays(date, -lagosWeekdayIndex(date));
+  return { first, last: lagosAddDays(first, 6) };
+}
+
+/** The calendar month that contains `date`, first to last day. */
+export function lagosMonthOf(date: string): { first: string; last: string } {
+  const { year, month } = parseDate(date);
+  const first = formatDate(year, month, 1);
+  const lastDay = new Date(Date.UTC(year, month, 0)).getUTCDate();
+  return { first, last: formatDate(year, month, lastDay) };
 }
