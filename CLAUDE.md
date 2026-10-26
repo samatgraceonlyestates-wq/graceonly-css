@@ -455,11 +455,64 @@ pure), `phoneNumber.ts` (E.164), `visits/new/`, `visits/page.tsx`, `visits/[id]/
   derived from the rows. 05 is the VISIT (its id), with the client's LIVE portal data beside it; a
   portal failure there never hides the visit.
 - THE DASHBOARD reads real counts (visits today, in the building now, yesterday's total as a
-  caption; no "vs yesterday" delta: today is part of a day). Open complaints and Docs released
-  show a dash and "Not connected yet" / "Not recorded in CSS yet": no invented number.
+  caption; no "vs yesterday" delta: today is part of a day). Docs released counts today's live
+  document handovers. Open complaints shows a dash and "Not connected yet": no invented number.
 - Verified with `scripts/shots-visits.ts` (seed: `scripts/shots-visits.seed.sql`, after the
   arrivals seed) against a THROWAWAY schema, with a STAND-IN PORTAL on 127.0.0.1 started by the
   scenario's `prepare()` and switched DOWN mid-run. Never the real portal.
+
+## DOCUMENT HANDOVERS (BUILT): on the visit, screen 05, migration 018
+
+What was physically handed to a client, to whom, and what the portal said about it. Files:
+`handovers.ts` (the rules, `judgeRelease`, the six documents, the gate-answer wording),
+`handoverStore.ts` (SQL), `visits/[id]/HandoverCard.tsx`, `visits/[id]/handoverActions.ts`.
+FRONT_DESK, LEGAL or ADMIN (`HANDOVER_ROLES`). It lives on the VISIT that produced it: there is
+no separate documents section.
+
+- SILENCE IS NOT PERMISSION. The release decision is the PORTAL's (see Decisions). An off gate,
+  a portal that cannot be reached, an answer about another client, an answer that leaves out the
+  purchase or a document: NONE of these is ever read as "allowed". Nothing on the screen says a
+  document MAY be handed over; the banner says "do not release" while the gate is off.
+- ONLY A CLIENT receives documents: a visit with a `portal_client_id`. A non-client's visit
+  (including a "said they were a client" visit that was NOT VERIFIED or NO_MATCH) is refused
+  before the portal is asked, and the database refuses it too (`handover_visit_is_client_fkey`,
+  a composite key to `visit (id, portal_client_id)`, the case_request pattern).
+- WHAT: the portal's SIX slots with its own labels (`HANDOVER_DOCUMENTS`, tested equal to
+  portal.ts), a quantity each (1 to 20). OTHER is not offered: release-check cannot be asked
+  about it. WHICH PURCHASE: chosen from the portal's live list on the page; none when the
+  portal could not list them. Shown later by label from the live summary; CSS stores only the
+  opaque purchase id.
+- THE GATE ANSWER is a SNAPSHOT taken by the SAVE ITSELF: `release-check` is called inside the
+  action, at the moment of recording (the page's banner is never reused), and stored as it came
+  in `gate_answer` with the portal's `gate_request_id`, never guessed, never defaulted:
+  CHECKED_ALLOWED (every gated document allowed), NOT_GATED (none gated), CHECKED_BLOCKED,
+  GATE_OFF (409 GATE_NOT_ACTIVE: today's answer), UNAVAILABLE (could not ask, or a malformed or
+  someone else's answer).
+- CHECKED_BLOCKED STOPS THE DESK: nothing is recorded, whatever she confirms, and the refusal
+  names each document and why. (It cannot fire while the gate is off; it is built and tested.)
+- GATE_OFF and UNAVAILABLE are RECORDED, because the documents left either way, but only after
+  she confirms "Record it as NOT VERIFIED" (the save asks the portal AGAIN; that answer is the
+  one stored). Wherever such a record is shown it says "NOBODY VERIFIED THIS RELEASE". This
+  supersedes 007's comment that only CHECKED_ALLOWED or NOT_GATED may be recorded (owner's
+  decision).
+- CORRECTIONS APPEND; THE TRIGGERS ARE NOT RELAXED. handover, handover_item and
+  handover_correction refuse UPDATE, DELETE and TRUNCATE. A wrong record is WITHDRAWN by one
+  `handover_correction` row (reason required, who, when; at most one per record); the original
+  stays, struck through, ALWAYS listed WITH its correction, and counts for nothing. If the
+  release did happen differently, the right one is recorded as a NEW handover naming the withdrawn
+  one (`replaces_handover_id`, written on INSERT, once per record), which asks the portal again: a
+  correction never carries an old gate answer onto other documents. Why a separate table and not
+  a self-reference or a status: see 018's header.
+- A VISIT WITH LIVE HANDOVERS CANNOT BE REMOVED (withdraw them first). The visit row is locked
+  FOR UPDATE while a handover is written, so the two cannot race.
+- AUDIT rows carry codes, quantities, the answer and ids: no client data, no purchase id.
+- "Issued by the portal" (05) is what EXISTS (/clients/{id}/documents) and says it is not a
+  release decision. The dashboard's "Docs released" counts today's live handovers and how many
+  nobody verified.
+- Verified with `scripts/shots-handovers.ts` (after the arrivals and visits seeds) against a
+  THROWAWAY schema, with the stand-in portal (`scripts/portalStub.ts`, shared with
+  shots-visits.ts) switched through gate off, allowing, blocking and down; it also tries UPDATE
+  and DELETE on the three tables directly and requires the trigger's refusal (SQLSTATE 23001).
 
 ## Design tokens — from Figma, exact
 
@@ -757,6 +810,9 @@ of fidelity. Recorded so nobody "fixes" them back:
   handed over, and a desk-level override makes it not a gate. The same
   thinking is why "unknown, do not release" is the answer while the gate is
   off, and why `handover.gate_answer` only ever records what the portal said.
+  SILENCE IS NOT PERMISSION: an off gate or an unanswered check is never an
+  allow. A handover recorded anyway is marked NOT VERIFIED; CHECKED_BLOCKED is
+  never recorded (see "DOCUMENT HANDOVERS").
 - Stack: PostgreSQL via the plain `pg` driver, with SQL migration files. NO
   Prisma, NO Supabase (no Supabase Auth, no RLS), NO Tailwind. Roles are
   enforced in the application. Ask before any dependency beyond `pg` itself.
@@ -871,8 +927,8 @@ redirects), `src/proxy.ts` + `proxyDecision.ts`, `staffAdmin.ts` + `scripts/crea
 SQL migrations live in `db/migrations/`, applied in filename order, one logical
 group per file, each in its own transaction. They target PostgreSQL 10.23 (end
 of life, so plan an upgrade; they run unchanged on later versions) and need no
-extension. 001-017 have been applied to the LOCAL dev database (PostgreSQL 18); 001-016
-are reported applied on the cPanel server (017 is pending, applied outside these
+extension. 001-018 have been applied to the LOCAL dev database (PostgreSQL 18); 001-017
+are reported applied on the cPanel server (018 is pending, applied outside these
 sessions, never by Claude). The files have NOT been verified on PostgreSQL 10 by us: a local pass proves syntax and
 logic, not PG10 compatibility. How to create, apply and reset the local database
 is in `db/README.md`. Claude never touches the cPanel server. What deploying CSS needs (the
@@ -902,9 +958,9 @@ The server took the proof file ONCE (001-009) and NEVER takes it again. Later mi
 to it as a GENERATED PENDING FILE (`npm run db:pending`, `db:pending:check`;
 `db/build-pending.mjs`, sharing `db/bundle.mjs` with the proof builder): the migrations it does
 not have yet, verbatim with the same markers and line ranges. It took `db/pending-010-016.sql`
-(now history: kept as what was applied, never applied again). The CURRENT one is
-`db/pending-017-017.sql`, applied once on top of 001-016. Not a migration; never in
-`db/migrations/`. When the server has taken it, the next one covers what comes after 017
+and `db/pending-017-017.sql` (now history: kept as what was applied, never applied again). The
+CURRENT one is `db/pending-018-018.sql`, applied once on top of 001-017. Not a migration; never
+in `db/migrations/`. When the server has taken it, the next one covers what comes after 018
 (`FIRST`/`LAST` and `TAKEN` in `db/build-pending.mjs`).
 
 - MIGRATIONS ARE APPEND-ONLY. AFTER THE NEXT SERVER APPLY, `db/migrations/` IS
@@ -958,6 +1014,15 @@ not have yet, verbatim with the same markers and line ranges. It took `db/pendin
   Verified from the top and 001-016-then-017 in throwaway schemas (identical schemas; each
   constraint tripped on purpose), applied to the local `public` schema. The server receives it
   as `db/pending-017-017.sql`.
+  `018_handover_corrections.sql` makes handovers client-only in the database
+  (`handover.portal_client_id` NOT NULL, `handover_visit_is_client_fkey`), adds
+  `replaces_handover_id` (`handover_replaced_once_key`, `handover_not_replacing_itself_check`),
+  `handover_note_not_blank_check`, and the APPEND-ONLY `handover_correction` table (reason, who,
+  when; `handover_correction_once_key`; its own no-change and no-truncate triggers). It does NOT
+  touch 007's triggers. Verified from the top and by the server's route (001-009, the 010-016
+  pending file, 017, then 018) in throwaway schemas, with every rule tripped on purpose (an
+  UPDATE and a DELETE refused by the triggers), and applied to the local `public` schema. The
+  server receives it as `db/pending-018-018.sql`.
 - NEVER DROP OR RECREATE THE LOCAL `public` SCHEMA (STANDING RULE). It holds the
   owner's real local login, whose password was typed at a prompt and cannot be
   recreated, and his sessions. Verify migrations in THROWAWAY schemas inside the
@@ -987,7 +1052,7 @@ not have yet, verbatim with the same markers and line ranges. It took `db/pendin
   keys; a new value is an INSERT, not a migration.
 - Triggers use `EXECUTE PROCEDURE` (`EXECUTE FUNCTION` is 11+).
 - Append-only tables (`audit_log`, `visit_event`, `handover`,
-  `handover_item`) are guarded by a trigger AND must be granted to the
+  `handover_item`, `handover_correction`) are guarded by a trigger AND must be granted to the
   application role without UPDATE, DELETE or TRUNCATE (a deployment step).
 - HARD RULE, DATABASE ERRORS. Two lists, and they are different:
   - NEVER OUT, NEVER LOGGED: a PostgreSQL error's `message`, `detail`, `hint`,
@@ -1090,10 +1155,11 @@ not have yet, verbatim with the same markers and line ranges. It took `db/pendin
 The PRD is the original spec. It and the built screens diverge in three ways.
 This is the honest scope picture; update it as items are built or dropped.
 
-PRD requirements the eight screens do NOT cover (six; item 4 is now partly built):
+PRD requirements the eight screens do NOT cover (six; items 1 and 4 are now partly built):
 
-1. Document release: recording a handover (6.2, FR-3.1 to 3.5) and its history.
-   Schema exists (`007_handovers`). The gate is the portal's (see Decisions).
+1. Document release: recording a handover IS BUILT, on the visit (see "DOCUMENT
+   HANDOVERS"). NOT built: a handover history across visits or clients, and
+   OTHER (unattached) documents. The gate is the portal's (see Decisions).
 2. Complaint lodging and the admin workflow (6.3, FR-2): lodge mid-visit,
    status moves, internal notes, reply to the complainant, and the emails to
    admin. 06 is a read-only list. These go through the portal's case endpoints

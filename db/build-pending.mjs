@@ -4,8 +4,9 @@
 // applied ONCE, on top of what the server has, never on an empty database and never twice.
 //
 // What the server has taken so far (TAKEN below): db/pg10-proof.sql for 001-009, then
-// db/pending-010-016.sql. That file is now HISTORY: it stays in the repo as what was applied
-// (010-016 are append-only, so it never changes) and is not applied again.
+// db/pending-010-016.sql, then db/pending-017-017.sql. Those files are now HISTORY: they stay in
+// the repo as what was applied (the migrations are append-only, so they never change) and are
+// not applied again.
 //
 //   node db/build-pending.mjs            write it  (npm run db:pending)
 //   node db/build-pending.mjs --check    exit 1 if it is stale  (npm run db:pending:check)
@@ -18,10 +19,10 @@ import { join } from "node:path";
 import { bundle, DB_DIR, fail, migrationNames, rangeLines, writeOrCheck } from "./bundle.mjs";
 
 const TOOL = "build-pending";
-const FIRST = 17;
-const LAST = 17;
+const FIRST = 18;
+const LAST = 18;
 // What the server already took, in order, so the header can say it.
-const TAKEN = ["db/pg10-proof.sql (001-009)", "db/pending-010-016.sql (010-016)"];
+const TAKEN = ["db/pg10-proof.sql (001-009)", "db/pending-010-016.sql (010-016)", "db/pending-017-017.sql (017)"];
 
 const pad = (n) => String(n).padStart(3, "0");
 const OUT_NAME = `pending-${pad(FIRST)}-${pad(LAST)}.sql`;

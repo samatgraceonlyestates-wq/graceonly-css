@@ -16,8 +16,11 @@
 //  - "Payment status" is retitled "Documentation fee". The portal refuses
 //    property balance, last receipt and payment history on purpose; the fee is
 //    the only money CSS may show.
-//  - "Documents today" is what the portal has ISSUED. It is not a release
+//  - "Documents today" is retitled "Issued by the portal": what EXISTS, not a release
 //    decision. The release position has its own banner.
+//  - UNDESIGNED: DOCUMENT HANDOVERS (HandoverCard, handovers.ts) live here, on the visit that
+//    produced them, not in a documents section of their own. Silence is not permission: the
+//    card never says a document may be handed over; the portal is asked again on every save.
 //  - UNDESIGNED: the lookup outcome (a visit checked in while the portal was down says NOT
 //    VERIFIED), the corrections card, the removed state and the real timeline.
 import type { Metadata } from "next";
@@ -31,12 +34,14 @@ import { requireSession } from "@/lib/auth";
 import { timeLabel } from "@/lib/departureTime";
 import { formatDuration, formatIsoDate } from "@/lib/format";
 import { lagosDateOf } from "@/lib/lagosTime";
+import { loadHandovers } from "@/lib/handoverStore";
 import { formatPhone } from "@/lib/phoneNumber";
 import { loadVisitDetail } from "@/lib/visitDetail";
 import { lengthOf } from "@/lib/visitLog";
 import { isUuid, LOOKUP_TEXT, reasonLabel, typeLabel } from "@/lib/visits";
 import { loadVisit, type VisitDetail } from "@/lib/visitStore";
 import { CheckOutAction } from "./CheckOutAction";
+import { HandoverCard, type HandoverCardRow } from "./HandoverCard";
 import { DocumentsPanel, FeePanel, ReleaseBanner, Timeline, type TimelineEntry } from "./Panels";
 import { VisitCorrect, type VisitState } from "./VisitCorrect";
 import styles from "./page.module.css";
@@ -133,8 +138,23 @@ export default async function VisitDetailPage({
   const asOf = now.toISOString();
   const justCheckedIn = (await searchParams).checked === "in";
   // A client's live record, from the portal. A failure here never hides the visit.
-  const portal = visit.clientId !== null ? await loadVisitDetail(visit.clientId) : null;
+  const [portal, handovers] = await Promise.all([visit.clientId !== null ? loadVisitDetail(visit.clientId) : null, loadHandovers(visit.id)]);
   const live = portal?.kind === "loaded" ? portal.summary : null;
+  const handoverRows: HandoverCardRow[] = handovers.map((handover) => ({
+    id: handover.id,
+    releasedAt: handover.releasedAt.toISOString(),
+    releasedByName: handover.releasedByName,
+    purchaseId: handover.purchaseId,
+    gateAnswer: handover.gateAnswer,
+    gateRequestId: handover.gateRequestId,
+    note: handover.note,
+    items: handover.items,
+    correction: handover.correction
+      ? { reason: handover.correction.reason, correctedAt: handover.correction.correctedAt.toISOString(), correctedByName: handover.correction.correctedByName }
+      : null,
+    replacedBy: handover.replacedBy ? { id: handover.replacedBy.id, releasedAt: handover.replacedBy.releasedAt.toISOString() } : null,
+    replaces: handover.replaces ? { id: handover.replaces.id, releasedAt: handover.replaces.releasedAt.toISOString(), reason: handover.replaces.reason } : null,
+  }));
 
   const day = lagosDateOf(visit.checkedInAt);
   const olderDay = day !== lagosDateOf(now);
@@ -276,6 +296,27 @@ export default async function VisitDetailPage({
           </p>
         </Notice>
       ) : null}
+
+      <HandoverCard
+        visitId={visit.id}
+        canRecord={visit.clientId !== null && state !== "removed"}
+        notClientText={
+          visit.clientId !== null
+            ? null
+            : visit.visitorTypeCode === "CLIENT"
+              ? "Documents can only be handed over to a client picked from the portal at check-in. This visit was not verified against the client records, so nothing can be recorded against it. When the portal can find them, check them in as the client and record it there."
+              : "Documents can only be handed over to a client. This visitor is not one, so nothing can be recorded against this visit."
+        }
+        purchases={
+          live === null
+            ? null
+            : live.purchases.map((purchase) => ({
+                id: purchase.purchaseId,
+                label: `${purchase.label} · ${purchase.estateName}${purchase.status === "ACTIVE" ? "" : ` (${purchase.status.toLowerCase()})`}`,
+              }))
+        }
+        handovers={handoverRows}
+      />
 
       <div className={styles.columns}>
         <Timeline entries={timeline(visit)} />

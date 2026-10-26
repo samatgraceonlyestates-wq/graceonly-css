@@ -1,7 +1,7 @@
 # Deploying CSS
 
 What putting CSS (the Customer Support System) on the cPanel server needs. Written from the
-code as it stands at migration 017. The deploy itself is done outside the development
+code as it stands at migration 018. The deploy itself is done outside the development
 sessions; nothing here has been run on the server. **Section 7 lists what is NOT known: read
 it before starting.**
 
@@ -76,21 +76,28 @@ need **Node 22.9 or later** (`--env-file-if-exists` and `--experimental-strip-ty
 
 ### What the server has, and what it still needs
 
-The cPanel server is reported to be at **016**: it took `db/pg10-proof.sql` for 001 to 009, then
-`db/pending-010-016.sql` (the table below is what that file held, kept for reference). It now
-needs **017**, as the generated file **`db/pending-017-017.sql`**, applied ONCE:
+The cPanel server is reported to be at **017**: it took `db/pg10-proof.sql` for 001 to 009, then
+`db/pending-010-016.sql`, then `db/pending-017-017.sql` (the tables below are what those held,
+kept for reference). It now needs **018**, as the generated file **`db/pending-018-018.sql`**,
+applied ONCE:
 
 ```
-psql -X -v ON_ERROR_STOP=1 -f pending-017-017.sql "<connection>"
+psql -X -v ON_ERROR_STOP=1 -f pending-018-018.sql "<connection>"
 ```
 
 | File | What it does | Precondition |
 |---|---|---|
-| `017_visit_corrections.sql` | `visit` gets `correction_reason` / `corrected_at` / `corrected_by` / `voided_at`, `visit_to_see_not_blank_check`, and two unique indexes: one open visit per client, one per visitor | 016. The unique indexes cannot fail on a server where nothing has written a visit (check-in was not wired before this release). If visits were written by hand, two open visits for one person would make it fail loudly, by design. |
+| `018_handover_corrections.sql` | handovers client-only in the database (`handover.portal_client_id`, a composite key to the visit); `replaces_handover_id`; the append-only `handover_correction` table with its triggers. 007's triggers are untouched. | 017. **No `handover` row may exist** (the NOT NULL column would fail loudly, by design); nothing has written one, there was no screen. |
 
-**Apply 017 BEFORE starting the release that contains it**: check-in, check-out and corrections
-write the new columns, and every visit query reads `voided_at`. The old code runs fine on a 017
-database (the columns are only added), so the order is: migrate, then deploy.
+**Apply 018 BEFORE starting the release that contains it**: the handover card reads and writes
+the new table and columns. Then grant the application role INSERT and SELECT only on
+`handover_correction`, as for the other append-only tables (section "Before a first run").
+
+Already applied (017, via `db/pending-017-017.sql`):
+
+| File | What it does | Precondition |
+|---|---|---|
+| `017_visit_corrections.sql` | `visit` gets `correction_reason` / `corrected_at` / `corrected_by` / `voided_at`, `visit_to_see_not_blank_check`, and two unique indexes: one open visit per client, one per visitor | 016. The unique indexes cannot fail on a server where nothing has written a visit (check-in was not wired before this release). If visits were written by hand, two open visits for one person would make it fail loudly, by design. |
 
 Already applied (010 to 016, via `db/pending-010-016.sql`):
 
@@ -119,9 +126,9 @@ PG10 database first; that has not been done. PostgreSQL 10 is end of life.
 
 ### Before a first run
 
-1. **Migration 017 applied** (above), from `db/pending-017-017.sql`.
+1. **Migration 018 applied** (above), from `db/pending-018-018.sql`.
 2. **The application's database role.** The append-only tables (`audit_log`, `visit_event`,
-   `handover`, `handover_item`) are protected by triggers, AND the role the app connects as
+   `handover`, `handover_item`, `handover_correction`) are protected by triggers, AND the role the app connects as
    must have NO `UPDATE`, `DELETE` or `TRUNCATE` on them. Whether cPanel lets you create a
    second role (owner for migrations, a narrower one for the app) is not known; if the app
    connects as the owner, the triggers are the only guard.
@@ -329,7 +336,10 @@ Known from the code:
    consent tick), see them on `/visits`, check them out, then correct the visit on its page and
    see it marked "Corrected". A client search needs the portal variables; with the portal
    unreachable, a Client's failed search must still check them in, marked "Not verified".
-5. Sign out, and confirm the session is gone (the back button does not get you in).
+5. A document handover (after 018), on a CLIENT's visit page: with the gate off (today), saving
+   must ask "Nobody can verify this release" first, and the record must say NOBODY VERIFIED.
+   Withdraw it with a reason: it must stay listed, struck through, with the reason.
+6. Sign out, and confirm the session is gone (the back button does not get you in).
 
 ---
 

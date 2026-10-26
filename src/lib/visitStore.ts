@@ -99,6 +99,9 @@ export interface VisitCounts {
   inBuildingFromEarlier: number;
   /** Checked in yesterday, not removed: a whole day, so not a like-for-like comparison with today. */
   yesterday: number;
+  /** Document handovers recorded today and not withdrawn (018), and how many of them nobody verified. */
+  handoversToday: number;
+  handoversUnverified: number;
 }
 
 /** The dashboard's numbers: counted by the database from real visits, nothing else. */
@@ -114,7 +117,20 @@ export async function loadVisitCounts(now: Date): Promise<VisitCounts> {
      WHERE voided_at IS NULL
        AND (checked_in_at >= ${yesterday.start} OR checked_out_at IS NULL)`);
   const row = rows[0]!;
-  return { today: row.today, inBuilding: row.in_building, inBuildingFromEarlier: row.from_earlier, yesterday: row.yesterday };
+  const handovers = await query<{ total: number; unverified: number }>(sql`
+    SELECT count(*)::int AS total,
+           count(*) FILTER (WHERE h.gate_answer IN ('GATE_OFF', 'UNAVAILABLE'))::int AS unverified
+      FROM handover h
+     WHERE h.released_at >= ${today.start} AND h.released_at < ${today.end}
+       AND NOT EXISTS (SELECT 1 FROM handover_correction c WHERE c.handover_id = h.id)`);
+  return {
+    today: row.today,
+    inBuilding: row.in_building,
+    inBuildingFromEarlier: row.from_earlier,
+    yesterday: row.yesterday,
+    handoversToday: handovers.rows[0]!.total,
+    handoversUnverified: handovers.rows[0]!.unverified,
+  };
 }
 
 /** The open visits, longest-waiting first, for the dashboard's panel. */
@@ -228,6 +244,7 @@ export const pgVisitStore: VisitStore = {
             voided_at: Date | null;
             phone: string | null;
             other_open_since: Date | null;
+            live_handovers: number;
           }>(sql`
             SELECT v.id, v.updated_at::text AS version, coalesce(v.client_name_logged, vr.display_name) AS name,
                    v.portal_client_id, v.visitor_id, v.visitor_type_code, v.reason_code, v.to_see, v.lookup_outcome,
@@ -235,7 +252,10 @@ export const pgVisitStore: VisitStore = {
                    (SELECT o.checked_in_at FROM visit o
                      WHERE o.id <> v.id AND o.checked_out_at IS NULL AND o.voided_at IS NULL
                        AND (o.portal_client_id = v.portal_client_id OR o.visitor_id = v.visitor_id)
-                     ORDER BY o.checked_in_at LIMIT 1) AS other_open_since
+                     ORDER BY o.checked_in_at LIMIT 1) AS other_open_since,
+                   (SELECT count(*) FROM handover h
+                     WHERE h.visit_id = v.id
+                       AND NOT EXISTS (SELECT 1 FROM handover_correction c WHERE c.handover_id = h.id))::int AS live_handovers
               FROM visit v
               LEFT JOIN visitor vr ON vr.id = v.visitor_id
               LEFT JOIN staff co ON co.id = v.checked_out_by
@@ -259,6 +279,7 @@ export const pgVisitStore: VisitStore = {
             voidedAt: row.voided_at,
             phone: row.phone,
             otherOpenSince: row.other_open_since,
+            liveHandovers: row.live_handovers,
           } satisfies VisitRecord;
         },
 

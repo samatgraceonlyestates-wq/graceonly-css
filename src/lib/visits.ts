@@ -125,6 +125,8 @@ export interface VisitRecord {
   phone: string | null;
   /** When ANOTHER live open visit of the same person started, if there is one. */
   otherOpenSince: Date | null;
+  /** Document handovers recorded on this visit and not withdrawn (018). */
+  liveHandovers: number;
 }
 
 export interface OpenVisit {
@@ -699,6 +701,12 @@ export async function correctVisit(input: VisitCorrectionInput, deps: VisitDeps)
         break;
       }
       case "void": {
+        // A visit that documents were handed over on is a fact the handover points at.
+        if (visit.liveHandovers > 0) {
+          return refuse(
+            `${visit.name}'s visit has documents handed over recorded against it, so it cannot be removed. If those records are wrong, withdraw them first (each with a reason).`,
+          );
+        }
         correction = { kind };
         before = { voided: false };
         after = { voided: true };

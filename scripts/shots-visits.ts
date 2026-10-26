@@ -5,106 +5,22 @@
 //   SHOTS_DATABASE_URL="<local url>?options=-c%20search_path%3Dshot_e2e" \
 //     npm run shots -- --scenario=scripts/shots-visits.ts
 //
-// THE PORTAL IS A STAND-IN, never the real one: prepare() starts a tiny HTTP server on
-// 127.0.0.1 that answers the CSS API's search, summary, documents and release-check with
-// made-up clients, and points the app at it (with a made-up key). The scenario switches it
+// THE PORTAL IS A STAND-IN, never the real one: prepare() starts scripts/portalStub.ts on
+// 127.0.0.1 (made-up clients, a made-up key) and points the app at it. The scenario switches it
 // DOWN (503 on everything) to prove check-in still works and records PORTAL_UNAVAILABLE. It
 // lives in the screenshot process and ends with it. It cannot be re-run on the same data:
 // reseed first.
-import { createServer, type Server } from "node:http";
 import type { Page } from "@playwright/test";
+import { startPortalStub, type PortalStub } from "./portalStub.ts";
 import type { ScenarioHelpers } from "./screenshots.ts";
 
-const PORTAL_PORT = 3458;
-const CHIDINMA = "5e6f7a8b-0000-4000-8000-00000000c1d1";
-const KINGSLEY = "a1b2c3d4-0000-4000-8000-00000000e2e0";
+let portal: PortalStub;
 
-const portal = { down: false, searches: 0, keyHeaderSeen: true, server: null as Server | null };
-
-const NA = { policy: "NO_FEE_APPLIES", status: "NOT_APPLICABLE", owedKobo: null, receivedKobo: 0, outstandingKobo: null, overpaidKobo: 0 };
-const rollup = {
-  status: "NO_FEE_ON_ANY_PURCHASE",
-  needsAttention: false,
-  feePurchaseCount: 0,
-  noFeePurchaseCount: 1,
-  unknownPurchaseCount: 0,
-  outstandingPurchaseCount: 0,
-  outstandingTotalKobo: null,
-  outstandingTotalIsPartial: false,
-};
-const CLIENTS: Record<string, { name: string; estate: string; plot: string }> = {
-  [CHIDINMA]: { name: "Chidinma Okafor", estate: "GraceWaters", plot: "Plot E-108" },
-  [KINGSLEY]: { name: "Kingsley Eze", estate: "GracePool", plot: "Plot B-12" },
-};
-const purchase = (id: string) => ({ estate: "GW", estateName: CLIENTS[id]!.estate, label: CLIENTS[id]!.plot, status: "ACTIVE" });
-const full = (id: string) => ({ purchaseId: `p-${id.slice(0, 4)}`, kind: "PLOT", ...purchase(id) });
-const SLOTS = ["DEED_OF_ASSIGNMENT", "SURVEY_PLAN", "RECEIPT", "CONTRACT_OF_SALE", "ACKNOWLEDGMENT_LETTER", "CERTIFICATE_OF_OCCUPANCY"];
-
-function answer(url: URL): { status: number; body: unknown } {
-  const ok = (data: unknown) => ({ status: 200, body: { data, requestId: "stub-1" } });
-  if (url.pathname.endsWith("/clients/search")) {
-    portal.searches += 1;
-    const q = (url.searchParams.get("q") ?? "").toLowerCase();
-    const found = Object.entries(CLIENTS).filter(([, client]) => q.split(/\s+/).every((word) => client.name.toLowerCase().includes(word)));
-    return ok({
-      query: { words: q.toUpperCase().split(/\s+/), truncated: false },
-      candidates: found.map(([id, client]) => ({
-        clientId: id,
-        displayName: client.name,
-        parties: [client.name],
-        matchedParty: null,
-        match: "MATCH_ONE_PARTY",
-        hasLogin: true,
-        onFile: { since: "2025-03-01", origin: "PORTAL_SIGNUP" },
-        emailHint: "c***@e****.com",
-        purchases: [purchase(id)],
-        purchaseCount: 1,
-        documentationFee: { status: "NO_FEE_ON_ANY_PURCHASE", needsAttention: false },
-      })),
-    });
-  }
-  const match = /\/clients\/([^/]+)(\/documents|\/release-check)?$/.exec(url.pathname);
-  const id = match ? decodeURIComponent(match[1]!) : "";
-  if (!CLIENTS[id]) return { status: 404, body: { error: "Not found", code: "NOT_FOUND", requestId: "stub-2" } };
-  if (match![2] === "/release-check") return { status: 409, body: { error: "The document gate is not active.", code: "GATE_NOT_ACTIVE", requestId: "stub-3" } };
-  if (match![2] === "/documents") {
-    return ok({
-      clientId: id,
-      receiptsActive: false,
-      purchases: [{ ...full(id), documents: SLOTS.map((type) => ({ type, label: type, issued: false, count: 0, latestIssuedOn: null })) }],
-      unattached: [],
-    });
-  }
-  return ok({
-    clientId: id,
-    displayName: CLIENTS[id]!.name,
-    parties: [CLIENTS[id]!.name],
-    hasLogin: true,
-    onFile: { since: "2025-03-01", origin: "PORTAL_SIGNUP" },
-    emailHint: "c***@e****.com",
-    purchases: [{ ...full(id), documentationFee: NA, latestReceiptRef: null }],
-    documentationFee: rollup,
-    openCaseCount: 0,
-    receiptsActive: false,
-  });
-}
-
-/** Starts the stand-in portal and points the app at it. Runs before the server starts. */
+/** Starts the stand-in portal (scripts/portalStub.ts) and points the app at it. Runs before the server starts. */
 export async function prepare(): Promise<Record<string, string>> {
-  const server = createServer((request, response) => {
-    if (request.headers["x-service-key"] !== "stub-id.stub-secret") portal.keyHeaderSeen = false;
-    const url = new URL(request.url ?? "/", `http://127.0.0.1:${PORTAL_PORT}`);
-    const { status, body } = portal.down ? { status: 503, body: { error: "Unavailable", code: "UNAVAILABLE", requestId: "stub-down" } } : answer(url);
-    response.writeHead(status, { "content-type": "application/json" });
-    response.end(JSON.stringify(body));
-  });
-  await new Promise<void>((resolve, reject) => {
-    server.once("error", reject);
-    server.listen(PORTAL_PORT, "127.0.0.1", () => resolve());
-  });
-  server.unref(); // it must never keep the run alive
-  portal.server = server;
-  return { CSS_PORTAL_BASE_URL: `http://127.0.0.1:${PORTAL_PORT}/api/css/v1`, CSS_PORTAL_SERVICE_KEY: "stub-id.stub-secret" };
+  const started = await startPortalStub(3458);
+  portal = started.stub;
+  return started.env;
 }
 
 const lagosDay = (daysAgo: number) =>
@@ -345,6 +261,6 @@ export default async function scenario({ base, open, shot, problem }: ScenarioHe
 
     expect(portal.keyHeaderSeen, "the app must send the service key header on every portal call");
   } finally {
-    portal.server?.close();
+    portal.close();
   }
 }

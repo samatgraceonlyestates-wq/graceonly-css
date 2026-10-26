@@ -62,6 +62,8 @@ class MemoryStore implements VisitStore {
   visitors: StoredVisitor[] = [];
   audits: AuditEntry[] = [];
   locks: string[] = [];
+  /** Live (not withdrawn) handovers per visit id. */
+  handovers = new Map<string, number>();
   clock = NOW.getTime();
   /** Run between the read and the write of the next transaction: "someone else got there first". */
   interleave: (() => void) | null = null;
@@ -130,6 +132,7 @@ function memoryTx(store: MemoryStore): VisitTx {
         voidedAt: visit.voidedAt,
         phone: visitor?.phone ?? null,
         otherOpenSince: other?.checkedInAt ?? null,
+        liveHandovers: store.handovers.get(visit.id) ?? 0,
       };
       if (store.interleave) {
         const run = store.interleave;
@@ -566,6 +569,17 @@ describe("correctVisit", () => {
     assert.ok(!blocked.ok && /cannot be restored/.test(blocked.message));
     await checkOut({ visitId: replacement }, deps(store));
     assert.deepEqual(await fix(store, id, version(), "restore", { reason: "removed by mistake" }), { ok: true, message: "Chidinma Okafor's visit was restored." });
+  });
+
+  it("a visit with live document handovers cannot be removed", async () => {
+    const store = new MemoryStore();
+    const { id, version } = await one(store, client);
+    store.handovers.set(id, 1);
+    const refused = await fix(store, id, version(), "void", { reason: "wrong client" });
+    assert.ok(!refused.ok && /documents handed over recorded against it/.test(refused.message));
+    assert.equal(store.visits[0]!.voidedAt, null);
+    store.handovers.set(id, 0); // withdrawn: they count for nothing
+    assert.equal((await fix(store, id, version(), "void", { reason: "wrong client" })).ok, true);
   });
 
   it("a write that loses the race is refused as stale, never written twice", async () => {

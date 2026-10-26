@@ -1,0 +1,203 @@
+/* UNDESIGNED (not in Figma): the visit's document handovers. Tokens only. Mobile first;
+   desktop from 768px. */
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--fold-space-12);
+}
+
+.head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--fold-space-10);
+}
+
+.title {
+  color: var(--fold-burgundy);
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: -0.54px;
+}
+
+.count {
+  margin-left: var(--fold-space-6);
+  color: var(--fold-dusk);
+  font-size: 14px;
+  letter-spacing: 0;
+}
+
+.note,
+.facts {
+  margin: 0;
+  color: var(--fold-dusk);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+/* Said in words, and in the record's own row: nobody verified it. */
+.unverified {
+  margin: 0;
+  color: var(--fold-status-amber-ink);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.5;
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--fold-space-6);
+  padding: var(--fold-space-14) 0;
+  border-bottom: 1px solid var(--fold-silver);
+}
+
+.item:last-child {
+  border-bottom: 0;
+}
+
+.line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--fold-space-8);
+}
+
+.items {
+  color: var(--fold-burgundy);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+/* A withdrawn record stays in the list with its correction; what it said is struck through. */
+.withdrawn .items {
+  text-decoration: line-through;
+}
+
+.correction {
+  margin: 0;
+  color: var(--fold-dusk);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.correction q {
+  color: var(--fold-burgundy);
+  font-weight: 500;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--fold-space-8);
+}
+
+.withdraw,
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--fold-space-10);
+  padding: var(--fold-space-12) var(--fold-space-14);
+  border-radius: var(--fold-radius-card);
+  background: var(--fold-canvas);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--fold-space-6);
+}
+
+.label {
+  padding: 0;
+  color: var(--fold-dusk);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+}
+
+.text,
+.select,
+.quantity {
+  height: 40px;
+  padding: 0 var(--fold-space-14);
+  border: 1px solid var(--fold-silver);
+  border-radius: var(--fold-radius-pill);
+  background: var(--fold-white);
+  color: var(--fold-burgundy);
+  font: inherit;
+  /* Keep at 16px: iOS zooms the page on focus for anything smaller. */
+  font-size: 16px;
+}
+
+.text,
+.select {
+  width: 100%;
+}
+
+.quantity {
+  width: 84px;
+}
+
+.text:focus-visible,
+.select:focus-visible,
+.quantity:focus-visible {
+  outline: 2px solid var(--fold-gold);
+  outline-offset: 2px;
+}
+
+.documents {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--fold-space-8);
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.documents legend {
+  margin-bottom: var(--fold-space-6);
+}
+
+.document {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--fold-space-12);
+  color: var(--fold-burgundy);
+  font-size: 14px;
+}
+
+.refusals {
+  margin: var(--fold-space-6) 0 0;
+  padding-left: var(--fold-space-18);
+}
+
+.error {
+  margin: 0;
+  color: var(--fold-status-red);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+@media (min-width: 768px) {
+  .documents {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    column-gap: var(--fold-space-24);
+  }
+
+  .select {
+    max-width: 420px;
+  }
+}

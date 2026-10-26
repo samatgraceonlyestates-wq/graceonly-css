@@ -7,12 +7,8 @@ import { Notice } from "@/components/Notice/Notice";
 import { StatusPill } from "@/components/StatusPill/StatusPill";
 import { FEE_POSITION_PILL, ROLLUP_PILL } from "@/lib/feeRollup";
 import { formatIsoDate, formatNaira, timeOfDay } from "@/lib/format";
-import type {
-  ClientDocuments,
-  ClientSummary,
-  ReleaseCheckAnswer,
-  ReleaseReasonInAnswer,
-} from "@/lib/portal";
+import { RELEASE_REASON_TEXT as REASON_TEXT } from "@/lib/handovers";
+import type { ClientDocuments, ClientSummary, ReleaseCheckAnswer } from "@/lib/portal";
 import { FAILURE_MESSAGE } from "@/lib/portalProblem";
 import type { DetailPart, ReleasePosition } from "@/lib/visitDetailState";
 import styles from "./Panels.module.css";
@@ -29,16 +25,6 @@ import styles from "./Panels.module.css";
 // used to say "all clear": the first is vacuously true under a filter, and the
 // second is false when nothing is live.
 // ---------------------------------------------------------------------------
-
-const REASON_TEXT: Record<ReleaseReasonInAnswer, string> = {
-  NO_FEE: "No documentation fee on this purchase",
-  PAID: "Documentation fee paid",
-  OUTSTANDING: "Documentation fee outstanding",
-  UNKNOWN: "Documentation fee position unknown",
-  INVALID_TERMS: "Fee terms on record are invalid",
-  ENDED: "Purchase has ended",
-  NOT_GATED_TYPE: "Not a gated document",
-};
 
 function CheckedRelease({ answer }: { answer: ReleaseCheckAnswer }) {
   const { summary } = answer;
@@ -184,10 +170,11 @@ export function DocumentsPanel({ part }: { part: DetailPart<ClientDocuments> }) 
   return (
     <Card as="section" aria-labelledby="documents-heading" padding="lg" className={styles.panel}>
       <h2 id="documents-heading" className={styles.panelTitle}>
-        Documents today
+        Issued by the portal
       </h2>
       <p className={styles.quiet}>
-        What the portal has issued, by type, with the latest date. This is not a release decision.
+        What the portal has issued for this client, by type, with the latest date: what EXISTS, not what may be handed over.
+        This is not a release decision.
       </p>
 
       {part.status === "rate_limited" ? (

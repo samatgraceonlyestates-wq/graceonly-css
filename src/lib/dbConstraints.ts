@@ -116,6 +116,11 @@ export const CONSTRAINT_RULES: Readonly<Record<string, ConstraintRule>> = Object
 
   // ---- document handover ----
   handover_visit_id_fkey: rule("foreign_key", VISIT_GONE),
+  handover_visit_is_client_fkey: rule("foreign_key", "Documents can only be handed over to a client, and this visit is not a client's."),
+  handover_replaced_once_key: rule("unique", "That handover has already been replaced by another record. Reload the page."),
+  handover_correction_once_key: rule("unique", "That handover has already been corrected. Reload the page."),
+  handover_correction_reason_not_blank_check: rule("check", "A correction needs a reason.", "reason"),
+  handover_correction_handover_id_fkey: rule("foreign_key", "That handover could not be found. Reload the page."),
   handover_item_quantity_positive_check: rule("check", "The quantity must be at least 1.", "quantity"),
   handover_item_pkey: rule(
     "unique",
@@ -217,6 +222,10 @@ export const UNTRIPPABLE_CONSTRAINTS: Readonly<Record<string, string>> = Object.
     "Removing a visit is a correction and is written with its reason, person and time. " + FIXED_TOGETHER,
   visit_to_see_not_blank_check:
     "The application trims who they came to see and stores none when it is blank, so a blank never reaches the database.",
+  handover_not_replacing_itself_check:
+    "A replacement is a new row with a new application-generated id, so it can never name itself. " + SET_BY_APP,
+  handover_note_not_blank_check:
+    "The application trims the note and stores none when it is blank, so a blank never reaches the database.",
   visit_client_name_matches_client_check:
     "The logged name is copied from the portal with the client id. " + FIXED_TOGETHER,
   visit_client_name_not_blank_check:
@@ -251,6 +260,9 @@ export const UNTRIPPABLE_CONSTRAINTS: Readonly<Record<string, string>> = Object.
   enquiry_closed_by_fkey: SESSION_STAFF,
   enquiry_opened_by_fkey: SESSION_STAFF,
   handover_released_by_fkey: SESSION_STAFF,
+  handover_correction_corrected_by_fkey: SESSION_STAFF,
+  handover_replaces_handover_id_fkey:
+    "The replaced handover is read under a lock in the same transaction, and handovers are never deleted (append-only).",
   leave_approved_by_fkey: PICKED_STAFF,
   leave_created_by_fkey: SESSION_STAFF,
   leave_staff_id_fkey: PICKED_STAFF,
@@ -286,6 +298,7 @@ export const UNTRIPPABLE_CONSTRAINTS: Readonly<Record<string, string>> = Object.
   device_pkey: APP_ID,
   enquiry_pkey: APP_ID,
   handover_pkey: APP_ID,
+  handover_correction_pkey: APP_ID,
   leave_pkey: APP_ID,
   movement_pkey: APP_ID,
   role_pkey: "The four roles are fixed by migration 001 and cannot be created.",

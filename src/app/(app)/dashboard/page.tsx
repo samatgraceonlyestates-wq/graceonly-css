@@ -4,9 +4,10 @@
 //    ones never count). "vs yesterday" deltas are NOT shown: today is a part-day, yesterday
 //    a whole one, and a percentage between them would mislead. Yesterday's total is given
 //    as a plain caption instead.
-//  - Open complaints and Docs released have NO source yet (the portal has no case endpoints;
-//    document handover is not built), so their tiles show a dash and say so. The complaints
-//    panel says the same instead of listing sample cases.
+//  - Docs released counts today's document HANDOVERS (not withdrawn) and says how many nobody
+//    verified (recorded while the portal's gate was off or it could not answer).
+//  - Open complaints has NO source yet (the portal's case endpoints are being built), so its
+//    tile shows a dash and says so. The complaints panel says the same instead of sample cases.
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Card } from "@/components/Card/Card";
@@ -67,7 +68,12 @@ export default async function DashboardPage() {
           caption={counts.inBuildingFromEarlier > 0 ? `${counts.inBuildingFromEarlier} open from an earlier day` : "In the building"}
         />
         <StatTile label="Open complaints" shortLabel="Open" value="—" caption="Not connected yet" />
-        <StatTile label="Docs released" value="—" caption="Not recorded in CSS yet" desktopOnly />
+        <StatTile
+          label="Docs released"
+          value={counts.handoversToday}
+          caption={counts.handoversUnverified > 0 ? `${counts.handoversUnverified} not verified by the portal` : "Handovers recorded today"}
+          desktopOnly
+        />
       </section>
 
       <div className={styles.panels}>
