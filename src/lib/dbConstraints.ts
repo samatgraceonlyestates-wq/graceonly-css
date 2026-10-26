@@ -190,6 +190,8 @@ export const UNTRIPPABLE_CONSTRAINTS: Readonly<Record<string, string>> = Object.
     "Removing a record is a correction and is written with its reason, person and time. " + FIXED_TOGETHER,
   attendance_signout_missing_pair_check:
     "Marking a shift as never signed out writes the time and the person who marked it together. " + FIXED_TOGETHER,
+  attendance_late_after_local_format_check:
+    "The late threshold is copied from the setting when a record is entered, and only after the application has read it as a time of day (parseLateAfter); anything else is stored as NULL, never as typed text.",
   attendance_signout_missing_no_clock_out_check:
     "A shift is marked never signed out only while it has no clock-out, and a clock-out is refused for a marked one; the application checks both before writing.",
   attendance_clock_out_entered_by_matches_check:

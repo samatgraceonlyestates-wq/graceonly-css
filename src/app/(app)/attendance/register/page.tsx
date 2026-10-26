@@ -13,7 +13,8 @@
 //  * any record CORRECTED (who, when, why), RESTORED (who, when, why), BACK-DATED (why), or with
 //    a SELF-APPROVED movement, marked in its row. In a period, a person's plain completed
 //    shifts fold away; marked ones never do: a reader sees a change without going looking.
-//  * late by the setting attendance.late_after_local, not a constant
+//  * late by the threshold copied onto each record when it was entered (016), never by the
+//    setting as it is now: changing the setting does not re-judge a past period
 //  * HOURS by the rules in register.ts: the total is completed shifts only and the shifts with
 //    UNKNOWN hours (no sign-out, never closed) are always counted beside it, with a sentence
 //    saying how much of the period the total does not cover.
@@ -89,7 +90,7 @@ export default async function AttendanceRegisterPage({ searchParams }: { searchP
   const singleDay = from === to;
 
   const data = await loadRegister(from, to);
-  const register = buildRegister({ records: data.records, staff: data.staff, leave: data.leave, from, to, today, lateAfter: data.lateAfter });
+  const register = buildRegister({ records: data.records, staff: data.staff, leave: data.leave, from, to, today });
   const { totals } = register;
   const honest = honestyNote(totals);
 
@@ -108,13 +109,23 @@ export default async function AttendanceRegisterPage({ searchParams }: { searchP
   // Only the first that matches is lit (on a Monday, "This week" is the same period as "Today").
   const shownPreset = presets.find((preset) => preset.from === from && preset.to === to);
 
+  // Each record is judged by its own snapshot; when the period spans a change of rule, say so.
+  const mixedRules = register.lateRules.length > 1;
+  const lateCaption =
+    (register.lateRules.length === 0
+      ? "no late rule was recorded"
+      : mixedRules
+        ? `by each day's rule (${register.lateRules.join(", ")})`
+        : `in after ${register.lateRules[0]}`) + (totals.lateUnknown > 0 ? ` · ${totals.lateUnknown} unknown` : "");
+
   const periodWords = singleDay ? formatLongDate(from) : `${formatLongDate(from)} to ${formatLongDate(to)}`;
   const correctedWhen = (at: Date) => `${timeLabel(at)}, ${formatIsoDate(lagosDateOf(at))}`;
 
   // ---- one record: its cells, then its marks (full width) --------------------------------
   const recordCells = (record: RegisterRecord) => {
     const kind = shiftKind(record, today);
-    const late = isLate(record.clockInAt, register.lateAfter);
+    // Judged by the threshold copied onto the record when it was entered (016), never today's setting.
+    const late = isLate(record.clockInAt, record.lateAfterLocal);
     const hours = knownHoursMs(record);
     return (
       <>
@@ -123,7 +134,8 @@ export default async function AttendanceRegisterPage({ searchParams }: { searchP
           "In",
           <>
             <span className={cx(styles.time, late === true && styles.late)}>{timeLabel(record.clockInAt)}</span>
-            {late === true ? <StatusPill tone="amber">Late</StatusPill> : null}
+            {late === true ? <StatusPill tone="amber">{mixedRules ? `Late · after ${record.lateAfterLocal}` : "Late"}</StatusPill> : null}
+            {late === null ? <StatusPill tone="neutral">Late: unknown</StatusPill> : null}
             <span className={styles.by}>entered by {record.clockInByName ?? "unknown"}</span>
           </>,
         )}
@@ -261,7 +273,7 @@ export default async function AttendanceRegisterPage({ searchParams }: { searchP
             "Shifts",
             <>
               <span className={styles.time}>{t.shifts}</span>
-              {t.late !== null && t.late > 0 ? <StatusPill tone="amber">{t.late} late</StatusPill> : null}
+              {t.late > 0 ? <StatusPill tone="amber">{t.late} late</StatusPill> : null}
             </>,
           )}
           {fact("Hours", hoursLine(t), styles.cellWide)}
@@ -371,11 +383,11 @@ export default async function AttendanceRegisterPage({ searchParams }: { searchP
         <StatTile label="Shifts" value={totals.shifts} dot dense caption={plural(totals.people, "person", "people")} />
         <StatTile
           label="Late"
-          value={totals.late ?? "—"}
+          value={totals.late}
           tone="amber"
           dot
           dense
-          caption={register.lateAfter !== null ? `in after ${register.lateAfter}` : "late rule not set"}
+          caption={lateCaption}
         />
         <StatTile
           label="Hours known"

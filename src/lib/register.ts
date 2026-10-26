@@ -26,9 +26,12 @@
 // A REMOVED record (voided, 014) is not a shift: it is in no list and no count here (the store
 // leaves it out, and so does every function below, in case one is ever handed one).
 //
-// LATE is by the setting attendance.late_after_local (a Lagos wall-clock time, "09:15"): a
-// clock-in strictly after that time on its own Lagos day. A missing or unreadable setting is
-// NOT replaced by a guess: lateness is then shown as unknown.
+// LATE is judged by the THRESHOLD SNAPSHOT ON THE RECORD (late_after_local, migration 016):
+// the setting attendance.late_after_local as it was when the record was ENTERED, never as it
+// is now, so changing the setting never re-judges a past period. A clock-in strictly after
+// that time on its own Lagos day is late. A record with no snapshot (no readable rule when it
+// was entered) has UNKNOWN lateness: counted as unknown, never guessed. Corrections never move
+// the snapshot (see the migration).
 import { lagosAddDays, lagosDateOf, lagosInstantAt } from "./lagosTime.ts";
 
 export interface RegisterRecord {
@@ -56,6 +59,8 @@ export interface RegisterRecord {
   restoredAt: Date | null;
   restoredByName: string | null;
   restoredReason: string | null;
+  /** The late threshold in force when it was entered ("09:15", 016), or null: lateness unknown. */
+  lateAfterLocal: string | null;
   /** Live (not removed) movements of this record, and how many of them the person approved themselves. */
   movements: number;
   selfApprovedMovements: number;
@@ -103,14 +108,15 @@ export function isLate(clockInAt: Date, lateAfter: string | null): boolean | nul
   return clockInAt.getTime() > lagosInstantAt(lagosDateOf(clockInAt), lateAfter).getTime();
 }
 
-/** A record that needs a reader's eye: not a plain completed shift, or changed after the fact. */
+/** A record that needs a reader's eye: not a plain completed shift, changed after the fact, or of unknown lateness. */
 export function isMarked(record: RegisterRecord, today: string): boolean {
   return (
     shiftKind(record, today) !== "complete" ||
     record.correctedAt !== null ||
     record.restoredAt !== null ||
     record.backdateReason !== null ||
-    record.selfApprovedMovements > 0
+    record.selfApprovedMovements > 0 ||
+    record.lateAfterLocal === null
   );
 }
 
@@ -127,8 +133,10 @@ export interface Totals {
   inProgress: number;
   /** Shifts whose hours are unknown: noSignout + openEarlier. Always shown beside knownMs. */
   unknown: number;
-  /** Null when the late rule is not set. */
-  late: number | null;
+  /** Late by each record's OWN threshold snapshot. */
+  late: number;
+  /** Records with no threshold snapshot: whether they were late is unknown. */
+  lateUnknown: number;
   corrected: number;
   restored: number;
   backdated: number;
@@ -138,7 +146,7 @@ export interface Totals {
 
 const live = (records: readonly RegisterRecord[]) => records.filter((record) => record.voidedAt === null);
 
-export function totalsOf(records: readonly RegisterRecord[], today: string, lateAfter: string | null): Totals {
+export function totalsOf(records: readonly RegisterRecord[], today: string): Totals {
   const shown = live(records);
   const totals: Totals = {
     shifts: shown.length,
@@ -149,7 +157,8 @@ export function totalsOf(records: readonly RegisterRecord[], today: string, late
     openEarlier: 0,
     inProgress: 0,
     unknown: 0,
-    late: lateAfter === null ? null : 0,
+    late: 0,
+    lateUnknown: 0,
     corrected: 0,
     restored: 0,
     backdated: 0,
@@ -160,7 +169,9 @@ export function totalsOf(records: readonly RegisterRecord[], today: string, late
     totals[shiftKind(record, today)] += 1;
     const hours = knownHoursMs(record);
     if (hours !== null) totals.knownMs += hours;
-    if (totals.late !== null && isLate(record.clockInAt, lateAfter)) totals.late += 1;
+    const late = isLate(record.clockInAt, record.lateAfterLocal);
+    if (late === null) totals.lateUnknown += 1;
+    else if (late) totals.late += 1;
     if (record.correctedAt !== null) totals.corrected += 1;
     if (record.restoredAt !== null) totals.restored += 1;
     if (record.backdateReason !== null) totals.backdated += 1;
@@ -233,7 +244,8 @@ export interface Register {
   to: string;
   days: number;
   today: string;
-  lateAfter: string | null;
+  /** The distinct thresholds the shown records were judged by (usually one). */
+  lateRules: string[];
   totals: Totals;
   groups: RegisterGroup[];
   /** Active people with NO record in the period and no leave in it: not in the book copy. */
@@ -277,9 +289,8 @@ export function buildRegister(input: {
   from: string;
   to: string;
   today: string;
-  lateAfter: string | null;
 }): Register {
-  const { from, to, today, lateAfter } = input;
+  const { from, to, today } = input;
   const records = live(input.records).sort((a, b) => a.clockInAt.getTime() - b.clockInAt.getTime());
   const leaveOf = new Map<string, RegisterLeave[]>();
   for (const entry of input.leave) {
@@ -294,7 +305,7 @@ export function buildRegister(input: {
       name,
       department,
       records: mine,
-      totals: totalsOf(mine, today, lateAfter),
+      totals: totalsOf(mine, today),
       leaveDays: leaveDaysIn(leave, from, to),
       leaveKinds: [...new Set(leave.map((entry) => entry.kind))],
       enteredBy: tally(mine.map((record) => record.clockInByName)),
@@ -317,7 +328,6 @@ export function buildRegister(input: {
       totals: totalsOf(
         people.flatMap((entry) => entry.records),
         today,
-        lateAfter,
       ),
     }))
     // Departments A to Z; people with none in their own group, last.
@@ -344,8 +354,8 @@ export function buildRegister(input: {
     to,
     days: daysIn(from, to),
     today,
-    lateAfter,
-    totals: totalsOf(records, today, lateAfter),
+    lateRules: [...new Set(records.map((record) => record.lateAfterLocal).filter((rule): rule is string => rule !== null))].sort(),
+    totals: totalsOf(records, today),
     groups,
     noRecord,
     onLeaveOnly,

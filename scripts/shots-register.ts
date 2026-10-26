@@ -45,8 +45,12 @@ export default async function scenario({ base, open, shot, problem }: ScenarioHe
   expect(/shifts have unknown hours/.test(text) && /it is a minimum, not the hours worked/.test(text), "register: the hours note must say the total is a minimum");
   expect(/still in progress today and not in the total yet/.test(text), "register: today's open shifts are not in the total, and it says so");
 
-  // Late is by the SETTING (09:00 in this schema), not a constant.
-  expect(text.includes("in after 09:00"), "register: the late rule should be read from the setting (09:00 here)");
+  // Late is by each record's THRESHOLD SNAPSHOT (016): the rule changed mid-month, and one record has none.
+  expect(text.includes("by each day's rule (09:00, 09:15) · 1 unknown"), "register: late should be judged by each record's own rule, and say so");
+  expect(await a.getByText("Late: unknown").first().isVisible(), "register: a record entered with no rule has unknown lateness");
+  // Folded shifts are in the page but not in innerText: read the DOM text.
+  const all = (await a.locator("main, body").first().textContent()) ?? "";
+  expect(all.includes("Late · after 09:15") && all.includes("Late · after 09:00"), "register: with mixed rules, a late pill says which rule it broke");
 
   // Who entered: two front-desk people, arrivals and departures separately.
   expect(text.includes("Who entered") && text.includes("Joy Akpan") && text.includes("Screenshot Account"), "register: both front-desk people should be listed under Who entered");

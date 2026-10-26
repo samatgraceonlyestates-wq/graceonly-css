@@ -10,6 +10,7 @@
 import { query, sql, transaction as dbTransaction } from "./db.ts";
 import { lagosDateOf } from "./lagosTime.ts";
 import type { ArrivalStore, ArrivalTx, ExistingShift } from "./arrivalBatch.ts";
+import { parseLateAfter } from "./register.ts";
 import type { RosterName } from "./rosterMatch.ts";
 
 /** Everyone who is active: the roster the arrivals screen suggests from. */
@@ -60,14 +61,20 @@ export const pgArrivalStore: ArrivalStore = {
           await db.query(sql`INSERT INTO staff (id, full_name) VALUES (${id}, ${name})`);
         },
 
+        async lateAfterLocal() {
+          // A snapshot for the record (016): read as a time of day here, or not at all.
+          const { rows } = await db.query<{ value: unknown }>(sql`SELECT value FROM setting WHERE key = 'attendance.late_after_local'`);
+          return parseLateAfter(rows[0]?.value);
+        },
+
         async createRecord(record) {
           await db.query(sql`
             INSERT INTO attendance_record
               (id, staff_id, clock_in_at, clock_out_at, clock_in_entered_by, clock_out_entered_by, backdate_reason,
-               signout_missing_at, signout_missing_by)
+               late_after_local, signout_missing_at, signout_missing_by)
             VALUES
               (${record.id}, ${record.staffId}, ${record.clockInAt}, ${record.clockOutAt},
-               ${record.clockInEnteredBy}, ${record.clockOutEnteredBy}, ${record.backdateReason},
+               ${record.clockInEnteredBy}, ${record.clockOutEnteredBy}, ${record.backdateReason}, ${record.lateAfterLocal},
                CASE WHEN ${record.signoutMissing}::boolean THEN now() END,
                CASE WHEN ${record.signoutMissing}::boolean THEN ${record.clockInEnteredBy}::uuid END)`);
         },

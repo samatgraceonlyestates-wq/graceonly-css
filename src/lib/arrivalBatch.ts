@@ -105,6 +105,12 @@ export interface NewAttendanceRecord {
   clockInEnteredBy: string;
   clockOutEnteredBy: string | null;
   backdateReason: string | null;
+  /**
+   * The late threshold in force when the record is ENTERED (attendance.late_after_local,
+   * migration 016), copied onto it so a later change to the setting never re-judges it. Null
+   * when no readable rule is set: lateness unknown. A correction never moves it.
+   */
+  lateAfterLocal: string | null;
 }
 
 export interface ArrivalTx {
@@ -116,6 +122,8 @@ export interface ArrivalTx {
   shiftsFor(ids: readonly string[], day: { start: Date; end: Date }): Promise<ExistingShift[]>;
   createPerson(input: { id: string; name: string; actorId: string }): Promise<void>;
   createRecord(record: NewAttendanceRecord): Promise<void>;
+  /** attendance.late_after_local now, if it is a time of day ("09:15"); null otherwise. */
+  lateAfterLocal(): Promise<string | null>;
   audit(entry: { actorId: string; entity: string; entityId: string; after: Record<string, unknown> }): Promise<void>;
 }
 
@@ -325,6 +333,8 @@ export async function saveArrivalBatch(input: ArrivalBatchInput, deps: ArrivalDe
       // Ids and facts only: never the name, which is data about a person.
       await tx.audit({ actorId, entity: "staff", entityId: person.id, after: { roster: true, via: "arrival entry" } });
     }
+    // The threshold is read ONCE, so every record of one batch carries the same rule.
+    const lateAfterLocal = await tx.lateAfterLocal();
     for (const { index } of filled) {
       const person = resolved.get(index)!;
       const at = times.get(index)!;
@@ -337,6 +347,7 @@ export async function saveArrivalBatch(input: ArrivalBatchInput, deps: ArrivalDe
         clockInEnteredBy: actorId,
         clockOutEnteredBy: at.outAt === null ? null : actorId,
         backdateReason: isEarlierDay ? reason : null,
+        lateAfterLocal,
       };
       await tx.createRecord(record);
       await tx.audit({
@@ -349,6 +360,7 @@ export async function saveArrivalBatch(input: ArrivalBatchInput, deps: ArrivalDe
           clock_out_at: record.clockOutAt === null ? null : record.clockOutAt.toISOString(),
           signout_missing: record.signoutMissing,
           backdate_reason: record.backdateReason,
+          late_after_local: record.lateAfterLocal,
           via: "arrival entry",
         },
       });

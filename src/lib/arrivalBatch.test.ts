@@ -36,6 +36,8 @@ class MemoryStore implements ArrivalStore {
   history: (Omit<ExistingShift, "signoutMissing"> & { signoutMissing?: boolean })[] = [];
   created: { id: string; name: string }[] = [];
   locks: string[][] = [];
+  /** attendance.late_after_local as the store reads it (null: no readable rule). */
+  lateAfter: string | null = "09:15";
   /** Throw on the Nth createRecord (1-based), to prove a failure part-way rolls back. */
   failOnRecord: number | null = null;
   private recordCalls = 0;
@@ -69,6 +71,7 @@ class MemoryStore implements ArrivalStore {
         this.staff.push({ id, name, department: null });
         this.created.push({ id, name });
       },
+      lateAfterLocal: async () => this.lateAfter,
       createRecord: async (record) => {
         this.recordCalls += 1;
         if (this.failOnRecord === this.recordCalls) throw new Error("the database fell over");
@@ -135,6 +138,17 @@ describe("good rows", () => {
     const personAudit = store.audits.find((a) => a.entity === "staff")!;
     assert.deepEqual(personAudit.after, { roster: true, via: "arrival entry" });
     assert.ok(!JSON.stringify(store.audits).includes("Grace"), "no name in the audit log");
+  });
+
+  it("copies the late threshold in force onto every record (016), and says unknown when there is none", async () => {
+    const { store, run } = setup();
+    store.lateAfter = "09:00";
+    await run(batch([row("Divine Mike", "08:00"), row("Peter Obi", "09:10")]));
+    assert.deepEqual(store.records.map((r) => r.lateAfterLocal), ["09:00", "09:00"]);
+    assert.equal(store.audits.find((a) => a.entity === "attendance_record")!.after.late_after_local, "09:00");
+    store.lateAfter = null;
+    await run(batch([row("Amaka Obi", "08:00")]));
+    assert.equal(store.records.at(-1)!.lateAfterLocal, null, "no readable rule: lateness unknown, never a default");
   });
 
   it("writes one audit row per record, with who and what", async () => {

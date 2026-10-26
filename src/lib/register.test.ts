@@ -8,6 +8,7 @@ import {
   daysIn,
   honestyNote,
   isLate,
+  isMarked,
   knownHoursMs,
   parseLateAfter,
   parsePeriod,
@@ -41,6 +42,7 @@ const record = (staffId: string, extra: Partial<RegisterRecord> = {}): RegisterR
   restoredAt: null,
   restoredByName: null,
   restoredReason: null,
+  lateAfterLocal: "09:15",
   movements: 0,
   selfApprovedMovements: 0,
   ...extra,
@@ -88,7 +90,7 @@ describe("the four kinds of shift", () => {
 });
 
 describe("the totals of a messy period", () => {
-  const totals = totalsOf(messyWeek(), TODAY, "09:15");
+  const totals = totalsOf(messyWeek(), TODAY);
 
   it("a removed record is in no count", () => {
     assert.equal(totals.shifts, 6, "seven rows, one removed");
@@ -105,10 +107,26 @@ describe("the totals of a messy period", () => {
     assert.equal(totals.complete + totals.unknown + totals.inProgress, totals.shifts, "every shift is accounted for exactly once");
   });
 
-  it("late is by the setting, strictly after it, on the record's own day", () => {
+  it("late is by EACH RECORD'S threshold snapshot, strictly after it, on the record's own day", () => {
     assert.equal(totals.late, 2, "09:30 and 09:16 are late; 09:15 exactly is not");
-    assert.equal(totalsOf(messyWeek(), TODAY, "09:00").late, 3, "a different setting gives a different answer: it is not a constant");
-    assert.equal(totalsOf(messyWeek(), TODAY, null).late, null, "no rule: lateness unknown, not zero");
+    assert.equal(totals.lateUnknown, 0);
+  });
+
+  it("a later change to the setting does NOT re-judge a past record: only its snapshot counts (016)", () => {
+    // The setting is now 09:00, say; these records were entered under 09:15 and say so.
+    // Nothing here even reads the setting, so the answer cannot move: still 2 late.
+    assert.equal(totalsOf(messyWeek(), TODAY).late, 2);
+    // A record ENTERED under 09:00 is judged by 09:00, beside ones judged by 09:15.
+    const mixed = [record("a", { clockInAt: at(19, 9, 5), lateAfterLocal: "09:00" }), record("b", { clockInAt: at(19, 9, 5), lateAfterLocal: "09:15" })];
+    assert.equal(totalsOf(mixed, TODAY).late, 1, "09:05 is late under 09:00 and on time under 09:15");
+  });
+
+  it("a record entered with no readable rule has UNKNOWN lateness, never on time by default", () => {
+    const unknown = totalsOf([record("a", { clockInAt: at(19, 11), lateAfterLocal: null })], TODAY);
+    assert.equal(unknown.late, 0);
+    assert.equal(unknown.lateUnknown, 1);
+    assert.equal(isMarked(record("a", { lateAfterLocal: null }), TODAY), true, "never folded away out of sight");
+    assert.equal(isMarked(record("a"), TODAY), false);
   });
 
   it("counts corrections, restores and movements; a removed record's correction is not among them", () => {
@@ -127,14 +145,14 @@ describe("the totals of a messy period", () => {
 
   it("a little unknown is stated but not called serious; nothing unknown says nothing", () => {
     const mostlyClean = [...Array.from({ length: 9 }, () => record("a")), record("a", { clockOutAt: null, signoutMissingAt: at(19, 20) })];
-    const note = honestyNote(totalsOf(mostlyClean, TODAY, "09:15"))!;
+    const note = honestyNote(totalsOf(mostlyClean, TODAY))!;
     assert.equal(note.serious, false);
     assert.match(note.text, /^1 of 10 shifts has unknown hours \(1 with no sign-out\)\./);
-    assert.equal(honestyNote(totalsOf([record("a")], TODAY, "09:15")), null);
+    assert.equal(honestyNote(totalsOf([record("a")], TODAY)), null);
   });
 
   it("a person whose only shift has no sign-out has unknown hours, not 0h", () => {
-    const only = totalsOf([record("a", { clockOutAt: null, signoutMissingAt: at(19, 20) })], TODAY, "09:15");
+    const only = totalsOf([record("a", { clockOutAt: null, signoutMissingAt: at(19, 20) })], TODAY);
     assert.equal(only.complete, 0);
     assert.equal(only.unknown, 1);
     assert.match(honestyNote(only)!.text, /^1 of 1 shift has unknown hours/);
@@ -156,7 +174,6 @@ describe("the register: grouping, who entered, people with no record", () => {
     from: "2026-10-19",
     to: TODAY,
     today: TODAY,
-    lateAfter: "09:15",
   });
 
   it("groups by department, A to Z, with people who have none in their own group last", () => {

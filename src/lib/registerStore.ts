@@ -6,19 +6,19 @@
 //
 // A REMOVED record (voided_at set, 014) is not read at all: it is in no list and no count here,
 // as on the board. Only how many there were is read, so the screen can say they are left out.
-// A removed MOVEMENT is not counted either (015).
+// A removed MOVEMENT is not counted either (015). Lateness is judged from each record's own
+// threshold snapshot (late_after_local, 016), never from the setting as it is now, so the
+// setting is not read here at all.
 //
 // A day is a range of instants from lagosTime.ts; no AT TIME ZONE or cast in these queries.
 import { query, sql } from "./db.ts";
 import { lagosDaysRange } from "./lagosTime.ts";
-import { parseLateAfter, type RegisterLeave, type RegisterRecord, type RegisterStaff } from "./register.ts";
+import { type RegisterLeave, type RegisterRecord, type RegisterStaff } from "./register.ts";
 
 export interface RegisterData {
   records: RegisterRecord[];
   staff: RegisterStaff[];
   leave: RegisterLeave[];
-  /** attendance.late_after_local, if it is a readable time of day; null otherwise (no guess). */
-  lateAfter: string | null;
   /** Records in the period that were removed: counted for nothing, and only reported as a number. */
   removedCount: number;
 }
@@ -43,6 +43,7 @@ export async function loadRegister(from: string, to: string): Promise<RegisterDa
     clock_out_by: string | null;
     signout_missing_by: string | null;
     backdate_reason: string | null;
+    late_after_local: string | null;
     corrected_at: Date | null;
     corrected_by: string | null;
     correction_reason: string | null;
@@ -54,7 +55,7 @@ export async function loadRegister(from: string, to: string): Promise<RegisterDa
   }>(sql`
     SELECT r.id, r.staff_id, s.full_name, s.department, r.clock_in_at, r.clock_out_at, r.signout_missing_at,
            ib.full_name AS clock_in_by, ob.full_name AS clock_out_by, sm.full_name AS signout_missing_by,
-           r.backdate_reason, r.corrected_at, c.full_name AS corrected_by, r.correction_reason,
+           r.backdate_reason, r.late_after_local, r.corrected_at, c.full_name AS corrected_by, r.correction_reason,
            rs.at AS restored_at, rsb.full_name AS restored_by, rs.reason AS restored_reason,
            (SELECT count(*) FROM movement m WHERE m.attendance_record_id = r.id AND m.voided_at IS NULL)::int AS movements,
            (SELECT count(*) FROM movement m
@@ -92,8 +93,6 @@ export async function loadRegister(from: string, to: string): Promise<RegisterDa
       JOIN leave_kind k ON k.code = l.kind_code
      WHERE l.starts_on <= ${to}::date AND l.ends_on >= ${from}::date`);
 
-  const setting = await query<{ value: unknown }>(sql`SELECT value FROM setting WHERE key = 'attendance.late_after_local'`);
-
   return {
     records: records.rows.map(
       (row): RegisterRecord => ({
@@ -109,6 +108,7 @@ export async function loadRegister(from: string, to: string): Promise<RegisterDa
         clockOutByName: row.clock_out_by,
         signoutMissingByName: row.signout_missing_by,
         backdateReason: row.backdate_reason,
+        lateAfterLocal: row.late_after_local,
         correctedAt: row.corrected_at,
         correctedByName: row.corrected_by,
         correctionReason: row.correction_reason,
@@ -121,7 +121,6 @@ export async function loadRegister(from: string, to: string): Promise<RegisterDa
     ),
     staff: staff.rows.map((row): RegisterStaff => ({ id: row.id, name: row.full_name, department: row.department })),
     leave: leave.rows.map((row): RegisterLeave => ({ staffId: row.staff_id, startsOn: row.starts_on, endsOn: row.ends_on, kind: row.kind })),
-    lateAfter: parseLateAfter(setting.rows[0]?.value),
     removedCount: removed.rows[0]?.removed ?? 0,
   };
 }

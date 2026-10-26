@@ -362,8 +362,22 @@ Last month; a backwards, future or unreadable period shows today and says why).
   correction whose kind is `restore`, so a later correction cannot hide it), Back-dated (the
   reason), Self-approved movements. In a period, a person's PLAIN completed shifts fold into
   "N shifts, all complete and unchanged"; a marked shift is never folded.
-- LATE is by `attendance.late_after_local`, strictly after it on the record's own Lagos day. A
-  missing or unreadable setting shows lateness as unknown ("late rule not set"), never 09:15.
+- LATE IS JUDGED FROM THE SNAPSHOT ON THE RECORD (`attendance_record.late_after_local`,
+  migration 016), strictly after it on the record's own Lagos day, NEVER from the setting as it
+  is now: the setting exists to be changed, and changing it must not re-judge a past period. The
+  arrivals batch copies the setting onto every record it creates (read once per batch; parsed as
+  a time of day or stored NULL). A CORRECTION NEVER MOVES THE SNAPSHOT: the rule in force on the
+  day still applied; a correction fixes what was typed, not which rule was in force. A record with
+  NULL has UNKNOWN lateness ("Late: unknown", counted apart, never folded away, never on time by
+  default). When a period spans a change of rule the tile says "by each day's rule (09:00,
+  09:15)" and a late pill names the rule it broke. A back-dated record takes the setting at ENTRY
+  (setting history is not kept). Same pattern as `visit.client_name_logged` and the device-kind
+  snapshot: a value that can change later is copied onto the row when it is written.
+- NOT DONE, and REQUIRED THE MOMENT DEPARTMENT EDITING EXISTS: a DEPARTMENT SNAPSHOT. The
+  register groups a record by the person's CURRENT department, so moving someone would move
+  all their history with them. Nothing can change a department today, so it is hypothetical;
+  whoever builds department editing must add the snapshot (a migration, like 016) in the same
+  change.
 - Grouped by department A to Z, "No department" last. People with leave and no record: "On
   leave". Active people with neither: "No record", worded as not proof of absence. The
   department chips stay static counts (people with a record), derived from the data.
@@ -784,7 +798,9 @@ extension. 001-010 have been applied to the LOCAL dev database (PostgreSQL 18); 
 are reported applied on the cPanel server (010 is pending, applied outside these
 sessions, never by Claude). The files have NOT been verified on PostgreSQL 10 by us: a local pass proves syntax and
 logic, not PG10 compatibility. How to create, apply and reset the local database
-is in `db/README.md`. Claude never touches the cPanel server.
+is in `db/README.md`. Claude never touches the cPanel server. What deploying CSS needs (the
+environment variables, the cPanel launcher STRIPPING DOUBLE QUOTES from them, the migrations the
+server still needs, what is not known) is in `docs/DEPLOY.md`: keep it current.
 `db/pg10-proof.sql` is all the migrations joined into one file to carry to the
 PG10 server. It is GENERATED (`npm run db:proof`) and is NOT a migration: never
 put it in `db/migrations/`, never edit it, and regenerate it (and commit both)
@@ -806,7 +822,7 @@ allowed before the first server apply). `npm run db:proof:check` fails if it is 
   closed rule. It reshapes attendance (see "ATTENDANCE: HOW IT REALLY WORKS") by
   DROPPING two constraints of 005/009 (new names are used, nothing is re-added
   under an old name) and adding columns and a table. The cPanel server already
-  has 001-009, so it receives 010 to 015 (one file at a time), never
+  has 001-009, so it receives 010 to 016 (one file at a time), never
   `pg10-proof.sql` (that file is for a FRESH database and re-creates everything).
   Applying them there is done outside this repo's sessions.
   010 leaves two rules to the APPLICATION, each commented in the migration: a
@@ -830,6 +846,11 @@ allowed before the first server apply). `npm run db:proof:check` fails if it is 
   (`correction_reason`, `corrected_at`, `corrected_by`: all three or none) and `voided_at`
   (a removed movement), and rebuilds `movement_one_open_key` to exclude removed movements.
   The server receives 010 to 015, one file at a time.
+  `016_late_threshold_snapshot.sql` adds `attendance_record.late_after_local`, the late threshold
+  in force when the record was entered (`attendance_late_after_local_format_check`: NULL or
+  HH:MM), backfilled from the setting as it is now (NULL if unreadable). The server receives 010
+  to 016, one file at a time. 016 was verified from the top and old-then-new (also with an
+  unreadable setting) in throwaway schemas, and applied to the local `public` schema.
 - NEVER DROP OR RECREATE THE LOCAL `public` SCHEMA (STANDING RULE). It holds the
   owner's real local login, whose password was typed at a prompt and cannot be
   recreated, and his sessions. Verify migrations in THROWAWAY schemas inside the

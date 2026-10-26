@@ -28,7 +28,7 @@ UPDATE shot_e2e.setting SET value = '"09:00"' WHERE key = 'attendance.late_after
 CREATE TEMP TABLE seed_shift AS
 SELECT gen_random_uuid() AS id, s.id AS staff_id, s.full_name, g.ago,
        ((t.d - g.ago)::timestamp AT TIME ZONE 'Africa/Lagos')
-         + interval '07:40' + ((abs(hashtext(s.full_name || g.ago)) % 95) * interval '1 minute') AS clock_in_at,
+         + interval '07:40' + ((abs(hashtext(s.full_name || g.ago)) % 110) * interval '1 minute') AS clock_in_at,
        ((t.d - g.ago)::timestamp AT TIME ZONE 'Africa/Lagos')
          + interval '16:30' + ((abs(hashtext(g.ago || s.full_name)) % 90) * interval '1 minute') AS clock_out_at,
        CASE WHEN g.ago % 2 = 0 THEN (SELECT id FROM seed_actor) ELSE (SELECT id FROM seed_joy) END AS in_by,
@@ -121,3 +121,12 @@ SELECT gen_random_uuid(), r.id, r.clock_in_at + interval '2 hours', r.clock_in_a
     ('Mariam Yusuf', 12, 'Federal Land Registry', 'Document search', false)
   ) AS m(name, rk, destination, purpose, self) ON m.name = s.full_name AND m.rk = s.rk
  WHERE r.clock_out_at IS NOT NULL;
+
+-- THE LATE THRESHOLD SNAPSHOT (016). The rule changed mid-month: records entered before the
+-- change carry 09:15, each person's five latest carry 09:00 (the setting now). One record was
+-- entered with no readable rule: its lateness is unknown. Today's board records carry 09:00.
+UPDATE shot_e2e.attendance_record SET late_after_local = '09:15';
+UPDATE shot_e2e.attendance_record r SET late_after_local = '09:00' FROM seed_r s WHERE r.id = s.id AND s.rk <= 5;
+UPDATE shot_e2e.attendance_record SET late_after_local = '09:00'
+ WHERE clock_in_at >= ((SELECT d FROM seed_today)::timestamp AT TIME ZONE 'Africa/Lagos') - interval '2 days';
+UPDATE shot_e2e.attendance_record r SET late_after_local = NULL FROM seed_r s WHERE r.id = s.id AND s.full_name = 'Uche Nwosu' AND s.rk = 2;
