@@ -5,9 +5,11 @@ code as it stands at migration 016. The deploy itself is done outside the develo
 sessions; nothing here has been run on the server. **Section 7 lists what is NOT known: read
 it before starting.**
 
-CSS is a Next.js 16 app (`next build`, then `next start`), Node 22, PostgreSQL through the
-plain `pg` driver. It is a separate app, repo and database from the client portal and talks to
-the portal only over its HTTPS API.
+CSS is a Next.js 16 app built as **standalone output** and started by a startup file,
+`app.js` (cPanel cannot run `next start`), on Node 22, with PostgreSQL through the plain `pg`
+driver. It goes live at **https://frontdesk.graceonlyestates.com**. On day one only the owner
+has a login. It is a separate app, repo and database from the client portal and talks to the
+portal only over its HTTPS API.
 
 ---
 
@@ -33,7 +35,9 @@ Notes:
 - **Not for the server:** `CSS_SHOT_EMAIL`, `CSS_SHOT_PASSWORD` and `SHOTS_DATABASE_URL` belong
   to the local screenshot tooling only. The screenshot account script refuses any database
   that is not on localhost; never create that account on the server.
-- `PORT` is whatever the host's launcher gives `next start`; CSS does not read it itself.
+- `PORT` and `HOST` are read by the startup file `app.js` (section 3): the port the launcher
+  gives, and optionally the address to listen on (default `0.0.0.0`). Leave them to the
+  launcher unless it says otherwise. `HOSTNAME` is ignored on purpose.
 
 ### The cPanel launcher STRIPS DOUBLE QUOTES from environment variables
 
@@ -46,12 +50,15 @@ values set in its environment-variable screen. The portal worked around it with 
   must be **percent-encoded** in the URL anyway (`"` is `%22`, `@` is `%40`, `%` is `%25`).
   Percent-encoded, it contains no quote and survives the launcher. Simplest of all: give the
   CSS database user a password made of letters and digits only.
-- If a quote cannot be avoided, use a `.env.production.local` file in the app's root (Next loads
-  it in production). `.env*` files are git-ignored, so it is created on the server by hand;
-  make it readable by the app's user only.
-- **Do not set a variable in BOTH places.** Next does not overwrite a variable that already
-  exists in the process environment: a mangled value from the launcher WINS over the correct
-  one in the file. One source per variable.
+- If a quote cannot be avoided, use a `.env.production.local` file in the app's root, BESIDE
+  `app.js` (the standalone server loads it from its own folder: VERIFIED locally, the app
+  reached the database with `DATABASE_URL` only in that file). `.env*` files are git-ignored
+  and never in the build, so it is created on the server by hand; make it readable by the
+  app's user only (`chmod 600`).
+- **Do not set a variable in BOTH places.** A variable already in the process environment WINS
+  over the file: VERIFIED locally, a wrong `DATABASE_URL` from the environment beat the right
+  one in the file and sign-in failed. A value mangled by the launcher would silently win the
+  same way. One source per variable.
 - Other quotes in CSS are not environment variables and are unaffected: the `setting` table
   stores JSON (`'"09:15"'`) inside the database.
 
@@ -118,18 +125,98 @@ PG10 database first; that has not been done. PostgreSQL 10 is end of life.
 
 ---
 
-## 3. Building and starting
+## 3. Building, the files, and starting
 
-- `npm ci` (with dev dependencies: the build needs TypeScript), then `npm run build`, then the
-  app is started with `next start` (`npm start`). There is no custom server file and no
-  `output: "standalone"`.
-- **Node 22** (`engines: >=22 <23`). Node 24 has been used locally without trouble, but 22 is
-  what is declared.
-- The build writes `.next/`. Every code change needs a rebuild and a restart.
-- `@playwright/test` is a dev dependency for the local screenshot tooling; it does not download
-  browsers on install and is never run on the server.
+### The startup file: `app.js`
 
----
+`deploy/app.js` in the repo; the build copies it to the root of the deployable folder. In
+cPanel's **Setup Node.js App**: *Application startup file* = `app.js`, *Application mode* =
+Production. It:
+
+- takes the **port from `PORT`**, as the launcher gives it (Next's own `server.js` reads it;
+  nothing is hard-coded);
+- takes the **address from `HOST`**, else `0.0.0.0`. It does NOT use `HOSTNAME` (which Next's
+  server would otherwise read): on Linux `HOSTNAME` is often the machine's own name, and Next
+  would then listen on whatever that resolves to;
+- sets `NODE_ENV=production` and loads `server.js` beside it. It reads no secret.
+
+### Build
+
+```
+npm ci
+npm run build:standalone
+```
+
+`build:standalone` runs `next build` (with `output: "standalone"` in `next.config.ts`), then
+ASSEMBLES `.next/standalone/` and checks it. The build needs dev dependencies (TypeScript)
+and **outbound HTTPS to Google Fonts** (`next/font/google` downloads Inter at build time and
+then serves it from the app itself; nothing is fetched from Google at run time).
+
+### What the standalone output does NOT copy, and has to be placed beside it
+
+`next build` writes `.next/standalone/` with `server.js`, a traced `node_modules` (about 25 MB:
+`next`, `react`, `pg` ...) and `.next/server`, but deliberately leaves out:
+
+| Copy from (repo) | To (inside the deployable folder) | Without it |
+|---|---|---|
+| `.next/static/` | `.next/static/` | **every page is unstyled and nothing on it works**: all CSS, all JavaScript and the Inter font files (`.next/static/media/*.woff2`) are here |
+| `public/` | `public/` | empty today; copied so a file added later is not silently missing |
+| `deploy/app.js` | `app.js` | cPanel has nothing to start |
+
+`npm run build:standalone` does all three and then FAILS if `app.js`, `server.js`,
+`node_modules/next`, `node_modules/pg`, a CSS file or a font file is missing, or if any `.env`
+file has got into the folder.
+
+### What goes to the server
+
+The CONTENTS of `.next/standalone/`, as the application root:
+
+```
+app.js                 <- startup file
+server.js              <- Next's server (loaded by app.js)
+package.json
+node_modules/          <- traced; do NOT run npm install over it
+.next/                 <- HIDDEN folder: server/, static/, manifests. Easy to lose in a zip
+public/                   or an FTP upload that skips dot-folders. Without .next/static the
+.env.production.local     pages are unstyled; without .next/server nothing runs.
+  (only if used; created on the server by hand, never uploaded from here)
+```
+
+Because the folder carries its own `node_modules`, cPanel's "Run NPM Install" must NOT be used
+on it (it would replace the traced modules with a full install from `package.json`, and the
+build tooling it lists is not needed to run).
+
+### Start
+
+cPanel starts `app.js` itself. By hand (and this is exactly what the local check does):
+
+```
+cd <application root>
+PORT=3000 HOST=127.0.0.1 node app.js
+```
+
+`npm start` in the repo does the same from `.next/standalone/` after a local build. `next start`
+is no longer used.
+
+### Proven locally (Windows, Node 24, production build)
+
+- `npm run shots` now builds, assembles, and starts `node .next/standalone/app.js` on a spare
+  port with `PORT` and `HOST` from the environment, then signs in and loads the pages. Every
+  later visual check therefore runs the deployed artifact. The board and the register loaded
+  with their CSS and the Inter font (the TLS check below tests both by computed style and by
+  loaded font faces).
+- `scripts/shots-tls.ts`: behind a local proxy that TERMINATES TLS and forwards plain http (as
+  LiteSpeed does), reached as `https://frontdesk.graceonlyestates.com` (mapped to this machine
+  inside the test browser only). See section 4.
+
+### NOT proven: a build made on Windows, run on Linux
+
+The bundle built on this machine carries **Windows** native packages (`sharp` and
+`@img/sharp-win32-*`, pulled in by Next for image optimisation, which CSS does not use) and
+**Windows paths** in its recorded configuration (`outputFileTracingRoot`). Whether such a bundle
+runs on the Linux host has NOT been tested. The safe course is to **build on Linux**: on the
+server itself if its memory limits allow (section 7), or on another Linux machine with the same
+Node major version, and upload that folder.
 
 ## 4. What would break, or behave differently, on a shared host
 
@@ -138,6 +225,21 @@ Known from the code:
 - **The session cookie is `Secure` in production.** A browser drops a `Secure` cookie that
   arrives over plain `http`: sign-in would "succeed" and land back on the sign-in page, with no
   error. The site MUST be served over HTTPS (and the address used must be the https one).
+- **Behind LiteSpeed (TLS terminated, plain http to the app): VERIFIED to work, with one
+  setting.** The `Secure` flag depends only on `NODE_ENV`, not on how the request reached the
+  app, so the browser (which speaks https) keeps the cookie; the app does NOT need to be told it
+  is behind a proxy for that. The redirect to the sign-in page stays on https (Next sends it
+  relative to the page). What DOES depend on the proxy is Next's protection of server actions
+  (every form): the browser's `Origin` must match the `Host` (or `X-Forwarded-Host`) the app
+  receives. `scripts/shots-tls.ts` tried three proxy shapes:
+  - Host passed through, no `X-Forwarded-Proto`: works.
+  - Host rewritten, `X-Forwarded-Host` and `X-Forwarded-Proto` sent: works.
+  - Host rewritten, nothing forwarded: **every form failed with a 500** ("Invalid Server
+    Actions request") until `next.config.ts` named the public address in
+    `experimental.serverActions.allowedOrigins` (`frontdesk.graceonlyestates.com`). With it,
+    this shape works too.
+  So the app IS told its public name, at BUILD time. **If the domain ever changes, change that
+  line and rebuild**, or forms may fail behind the proxy.
 - **The database pool is deliberately small:** at most 5 connections per Node process, 5 s to
   connect, 10 s idle, and every session sets `statement_timeout` and
   `idle_in_transaction_session_timeout` to 15 s. On shared PostgreSQL, `max_connections` is
@@ -169,7 +271,10 @@ Known from the code:
 
 ## 5. Checks after the first deploy
 
-1. Open the site over https; sign in with the first account; change the password when asked.
+1. Open https://frontdesk.graceonlyestates.com; the sign-in page must be STYLED (burgundy
+   heading, Inter). An unstyled page means `.next/static` did not arrive. Sign in with the
+   owner's account; change the password when asked. Landing back on the sign-in page with no
+   error means the cookie was dropped (not https), or a form was refused (see section 4).
 2. `/attendance` loads (the board, empty). `/attendance/register` loads for the admin.
 3. Enter one arrival on `/attendance/arrivals`, clock it out, correct it, and see it marked
    "Corrected" on the board and in the register.
@@ -188,13 +293,17 @@ Known from the code:
 
 ## 7. What is NOT known (find out before deploying)
 
-- **How cPanel starts this app.** cPanel's "Setup Node.js App" runs apps through Phusion
-  Passenger with an "application startup file". CSS has none (it relies on `next start`). How
-  the portal (also Next.js, presumably) solved this, and whether that file can be copied, is
-  not known here. The quote-stripping "launcher" is that same mechanism.
+- **Exactly how the host's launcher runs `app.js`** (Passenger, or LiteSpeed's own Node
+  handler) and what it puts in `PORT` and `HOST`. `app.js` takes both from the environment and
+  has run locally under plain Node; it has not run under the host's launcher.
+- **Whether a Windows-built bundle runs on Linux** (section 3): build on Linux instead.
+- **Which headers LiteSpeed forwards** (`Host`, `X-Forwarded-Host`, `X-Forwarded-Proto`,
+  `X-Forwarded-For`). CSS now works with any of the three shapes tested; what LiteSpeed sends
+  still decides what the sign-in rate limit sees as the client address (section 4).
 - **Which Node versions the host offers**, and whether 22.9+ is among them (the scripts need it).
-- **Whether `npm run build` fits in the host's memory and process limits.** If not, the build
-  has to happen elsewhere and `.next/` be uploaded, which is not set up.
+- **Whether `npm run build:standalone` fits in the host's memory and process limits**, and
+  whether the host allows the outbound HTTPS to Google Fonts the build needs. If not, build on
+  another Linux machine and upload the assembled folder.
 - **Whether the launcher runs one process or several**, and whether it sleeps an idle app
   (affects the connection count and the in-memory limits above).
 - **Whether there is a connection pooler** in front of PostgreSQL, and the server's

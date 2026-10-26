@@ -1,6 +1,8 @@
-// Visual check: ONE bounded run that builds the app, starts the PRODUCTION build on
-// a spare port, signs in, captures pages at desktop and phone width, and shuts the
-// server down before it returns. Nothing is left running, on any exit path.
+// Visual check: ONE bounded run that builds the app, ASSEMBLES THE STANDALONE OUTPUT
+// (scripts/build-standalone.mjs) and starts it exactly as cPanel will, `node app.js` from
+// .next/standalone/, on a spare port; signs in, captures pages at desktop and phone width,
+// and shuts the server down before it returns. Nothing is left running, on any exit path.
+// So every run proves the artifact that is deployed, not `next start` or the dev server.
 //
 //   npm run shots:account                      (once: the local-only account)
 //   npm run shots                              (every signed-in page)
@@ -34,6 +36,7 @@ import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { chromium, type Browser, type BrowserContext, type Page } from "@playwright/test";
 import { assertLocalDatabaseUrl } from "../src/lib/localDatabase.ts";
+import { assembleStandalone } from "./build-standalone.mjs";
 
 const PORT = 3457;
 const BASE = `http://localhost:${PORT}`;
@@ -115,13 +118,19 @@ function build(): void {
     console.error(result.stderr?.split("\n").slice(-40).join("\n"));
     throw new Error("The production build failed.");
   }
-  console.log("Build passed.");
+  assembleStandalone();
+  console.log("Build passed; standalone output assembled.");
 }
 
 async function start(): Promise<void> {
   if (!(await portIsFree(PORT))) throw new Error(`Port ${PORT} is already in use. Not starting a second server.`);
   const log: string[] = [];
-  const child = spawn(process.execPath, [NEXT_BIN, "start", "-p", String(PORT)], { env: serverEnv(), stdio: ["ignore", "pipe", "pipe"] });
+  // The cPanel startup file, from the assembled standalone folder, with the port and host from
+  // the environment as the launcher gives them.
+  const child = spawn(process.execPath, [join(".next", "standalone", "app.js")], {
+    env: { ...serverEnv(), PORT: String(PORT), HOST: "127.0.0.1" },
+    stdio: ["ignore", "pipe", "pipe"],
+  });
   server = child;
   const keep = (chunk: Buffer) => {
     log.push(chunk.toString());

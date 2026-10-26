@@ -800,7 +800,13 @@ sessions, never by Claude). The files have NOT been verified on PostgreSQL 10 by
 logic, not PG10 compatibility. How to create, apply and reset the local database
 is in `db/README.md`. Claude never touches the cPanel server. What deploying CSS needs (the
 environment variables, the cPanel launcher STRIPPING DOUBLE QUOTES from them, the migrations the
-server still needs, what is not known) is in `docs/DEPLOY.md`: keep it current.
+server still needs, what is not known) is in `docs/DEPLOY.md`: keep it current. CSS is built as Next STANDALONE
+output (`npm run build:standalone`) and started by `deploy/app.js` (cPanel's startup file; port
+and host from the environment, never `HOSTNAME`). The build leaves out `.next/static` and
+`public`, which the assembly copies in; a page without them is unstyled. The public name
+`frontdesk.graceonlyestates.com` is in `next.config.ts` (`serverActions.allowedOrigins`) so
+forms work behind a proxy that rewrites Host: a change of domain changes that line.
+`scripts/shots-tls.ts` proves it behind a TLS-terminating proxy.
 `db/pg10-proof.sql` is all the migrations joined into one file to carry to the
 PG10 server. It is GENERATED (`npm run db:proof`) and is NOT a migration: never
 put it in `db/migrations/`, never edit it, and regenerate it (and commit both)
@@ -1039,7 +1045,8 @@ Playfair and Poppins), and "Existing" versus "New" as visitor types (that is
     the repo or a picture. It REFUSES to run unless DATABASE_URL is localhost
     (`src/lib/localDatabase.ts`, checked before the database layer loads and again
     against the server's own address). Never loosen that guard.
-  - `npm run shots [-- /path ...]` builds, starts the PRODUCTION build on port
+  - `npm run shots [-- /path ...]` builds, ASSEMBLES THE STANDALONE OUTPUT and starts it
+    as cPanel will (`node .next/standalone/app.js`, PORT and HOST from the environment) on port
     3457, signs in, captures each page at desktop (1280) and phone (390) into
     `screenshots/` (git-ignored, never committed), and stops the server on every
     exit path. It fails on any console error, page error, failed or 4xx/5xx
