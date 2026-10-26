@@ -140,6 +140,24 @@ Production. It:
   would then listen on whatever that resolves to;
 - sets `NODE_ENV=production` and loads `server.js` beside it. It reads no secret.
 
+### HOST CONSTRAINT: webpack, never Turbopack
+
+**The cPanel host's glibc is older than 2.29.** Next's native compiler
+(`@next/swc-linux-x64-gnu`) needs GLIBC_2.29, so it cannot load there; Next falls back to the
+WebAssembly SWC bindings, which work. **Turbopack refuses to run without native bindings**
+("Turbopack is not supported on this platform ... use Webpack instead"), and Next 16 builds
+with Turbopack by default. So CSS is built with **webpack** (`next build --webpack`), on the
+server and locally alike: ONE build path, so every local check tests the artifact that ships.
+
+This is a constraint of the host, not a preference. **Anyone who "modernises" the build back to
+Turbopack breaks the deploy.** And any dependency that needs a newer glibc (a native module
+built against it) will fail on this host the same way: one more reason the dependency list
+stays small (`pg` and Next's own).
+
+On the server Next downloads the WASM SWC package (`@next/swc-wasm-nodejs`) from the npm
+registry at build time, so the build needs outbound HTTPS to the registry as well as to Google
+Fonts.
+
 ### Build
 
 ```
@@ -147,19 +165,23 @@ npm ci
 npm run build:standalone
 ```
 
-`build:standalone` runs `next build` (with `output: "standalone"` in `next.config.ts`), then
-ASSEMBLES `.next/standalone/` and checks it. The build needs dev dependencies (TypeScript)
-and **outbound HTTPS to Google Fonts** (`next/font/google` downloads Inter at build time and
-then serves it from the app itself; nothing is fetched from Google at run time).
+`build:standalone` runs `next build --webpack` (with `output: "standalone"` in
+`next.config.ts`), then ASSEMBLES `.next/standalone/` and checks it. `npm run build` and the
+screenshot runner use the same arguments (`NEXT_BUILD_ARGS` in
+`scripts/build-standalone.mjs`). The build needs dev dependencies (TypeScript) and **outbound
+HTTPS to Google Fonts** (`next/font/google` downloads Inter at build time and then serves it
+from the app itself; nothing is fetched from Google at run time). A webpack build takes about
+two minutes locally.
 
 ### What the standalone output does NOT copy, and has to be placed beside it
 
-`next build` writes `.next/standalone/` with `server.js`, a traced `node_modules` (about 25 MB:
-`next`, `react`, `pg` ...) and `.next/server`, but deliberately leaves out:
+`next build` writes `.next/standalone/` with `server.js`, a traced `node_modules` (about 54 MB
+with webpack: `next`, `react`, `pg`, and sharp's image library, which webpack traces in and CSS
+never loads) and `.next/server`, but deliberately leaves out:
 
 | Copy from (repo) | To (inside the deployable folder) | Without it |
 |---|---|---|
-| `.next/static/` | `.next/static/` | **every page is unstyled and nothing on it works**: all CSS, all JavaScript and the Inter font files (`.next/static/media/*.woff2`) are here |
+| `.next/static/` | `.next/static/` | **every page is unstyled and nothing on it works**: all CSS (`static/css/` with webpack), all JavaScript (`static/chunks/`) and the Inter font files (`static/media/*.woff2`) are here |
 | `public/` | `public/` | empty today; copied so a file added later is not silently missing |
 | `deploy/app.js` | `app.js` | cPanel has nothing to start |
 
@@ -198,7 +220,18 @@ PORT=3000 HOST=127.0.0.1 node app.js
 `npm start` in the repo does the same from `.next/standalone/` after a local build. `next start`
 is no longer used.
 
-### Proven locally (Windows, Node 24, production build)
+### Proven locally (Windows, Node 24, production WEBPACK build)
+
+- The webpack build was proven again in full after the switch from Turbopack: the assembly
+  checks, the page sweep, the TLS scenario (all three proxy shapes: sign-in, Secure cookie,
+  https redirects, styles and the Inter font by computed style, sign-out) and the full
+  board-and-register scenario on a messy month. No difference from the Turbopack pictures.
+- NATIVE versus WASM compiler (the server uses WASM): three local webpack builds (native,
+  native again, WASM forced with Next's internal `NEXT_TEST_WASM` switch, for this test only)
+  gave byte-identical CSS and fonts. The JavaScript of the five pages with forms differs
+  between ANY two builds, native ones included (Next makes the server-action ids per build);
+  the only WASM-only difference was the ORDER of five keys in webpack's runtime chunk (same ids,
+  same behaviour). The server's own build has still not been run end to end.
 
 - `npm run shots` now builds, assembles, and starts `node .next/standalone/app.js` on a spare
   port with `PORT` and `HOST` from the environment, then signs in and loads the pages. Every

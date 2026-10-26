@@ -807,6 +807,15 @@ and host from the environment, never `HOSTNAME`). The build leaves out `.next/st
 `frontdesk.graceonlyestates.com` is in `next.config.ts` (`serverActions.allowedOrigins`) so
 forms work behind a proxy that rewrites Host: a change of domain changes that line.
 `scripts/shots-tls.ts` proves it behind a TLS-terminating proxy.
+BUILDS USE WEBPACK, NEVER TURBOPACK: A HOST CONSTRAINT, NOT A PREFERENCE. The cPanel host's
+glibc is older than 2.29, so Next's native SWC (`@next/swc-linux-x64-gnu`) cannot load there;
+Next falls back to the WASM SWC bindings, and Turbopack refuses to run without native bindings.
+Every build is `next build --webpack` (`NEXT_BUILD_ARGS` in `scripts/build-standalone.mjs`, used
+by `npm run build`, `build:standalone` and the screenshot runner): ONE build path, so what is
+checked locally is what ships. Anyone who "modernises" the build back to Turbopack breaks the
+deploy. Any dependency needing a newer glibc fails on this host the same way: one more reason
+the dependency list stays small. (`npm run dev` is the owner's dev server, not a build; no check
+runs against it.)
 `db/pg10-proof.sql` is all the migrations joined into one file to carry to the
 PG10 server. It is GENERATED (`npm run db:proof`) and is NOT a migration: never
 put it in `db/migrations/`, never edit it, and regenerate it (and commit both)

@@ -2,7 +2,7 @@
 //
 //   npm run build:standalone
 //
-// `next build` with output: "standalone" writes .next/standalone/ (server.js, a traced
+// `next build --webpack` with output: "standalone" writes .next/standalone/ (server.js, a traced
 // node_modules, .next/server ...) but deliberately does NOT copy:
 //   .next/static  -> .next/standalone/.next/static   the CSS, the JavaScript chunks and the
 //                                                    self-hosted Inter font files. Without it
@@ -25,6 +25,13 @@ import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
 const ROOT = resolve(import.meta.dirname, "..");
+
+// WEBPACK, NEVER TURBOPACK: a HOST CONSTRAINT, not a preference. The cPanel host's glibc is
+// older than 2.29, so Next's native SWC (@next/swc-linux-x64-gnu) cannot load there; Next
+// falls back to the WebAssembly SWC bindings, and Turbopack refuses to run without native
+// bindings. Every build (this one, `npm run build`, and the screenshot runner's) uses these
+// arguments, so what is checked locally is what ships. See docs/DEPLOY.md.
+export const NEXT_BUILD_ARGS = ["build", "--webpack"];
 const OUT = join(ROOT, ".next", "standalone");
 
 export function assembleStandalone() {
@@ -42,7 +49,9 @@ export function assembleStandalone() {
 
   // The checks: the startup file, the server, styles, fonts, and no environment file.
   const has = (...parts) => existsSync(join(OUT, ...parts));
-  const css = has(".next", "static", "chunks") && readdirSync(join(OUT, ".next", "static", "chunks"), { recursive: true }).some((f) => String(f).endsWith(".css"));
+  // Anywhere under .next/static: webpack writes CSS to static/css/, Turbopack wrote it to
+  // static/chunks/; the check must not depend on one bundler's layout.
+  const css = readdirSync(join(OUT, ".next", "static"), { recursive: true }).some((f) => String(f).endsWith(".css"));
   const fonts = has(".next", "static", "media") && readdirSync(join(OUT, ".next", "static", "media")).some((f) => f.endsWith(".woff2"));
   const envFiles = readdirSync(OUT).filter((f) => f.startsWith(".env"));
   const missing = [
@@ -58,7 +67,7 @@ export function assembleStandalone() {
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) {
-  const build = spawnSync(process.execPath, [join(ROOT, "node_modules", "next", "dist", "bin", "next"), "build"], { cwd: ROOT, stdio: "inherit" });
+  const build = spawnSync(process.execPath, [join(ROOT, "node_modules", "next", "dist", "bin", "next"), ...NEXT_BUILD_ARGS], { cwd: ROOT, stdio: "inherit" });
   if (build.status !== 0) process.exit(build.status ?? 1);
   assembleStandalone();
   console.log("Standalone output assembled in .next/standalone/ (start it with: node app.js).");

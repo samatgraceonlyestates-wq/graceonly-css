@@ -36,7 +36,7 @@ import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { chromium, type Browser, type BrowserContext, type Page } from "@playwright/test";
 import { assertLocalDatabaseUrl } from "../src/lib/localDatabase.ts";
-import { assembleStandalone } from "./build-standalone.mjs";
+import { assembleStandalone, NEXT_BUILD_ARGS } from "./build-standalone.mjs";
 
 const PORT = 3457;
 const BASE = `http://localhost:${PORT}`;
@@ -112,7 +112,8 @@ function serverEnv(): NodeJS.ProcessEnv {
 
 function build(): void {
   console.log("Building (production)...");
-  const result = spawnSync(process.execPath, [NEXT_BIN, "build"], { env: serverEnv(), encoding: "utf8" });
+  // The same build as the server: webpack (a host constraint, see build-standalone.mjs).
+  const result = spawnSync(process.execPath, [NEXT_BIN, ...NEXT_BUILD_ARGS], { env: serverEnv(), encoding: "utf8" });
   if (result.status !== 0) {
     console.error(result.stdout?.split("\n").slice(-40).join("\n"));
     console.error(result.stderr?.split("\n").slice(-40).join("\n"));
