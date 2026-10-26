@@ -1,7 +1,7 @@
 # Deploying CSS
 
 What putting CSS (the Customer Support System) on the cPanel server needs. Written from the
-code as it stands at migration 016. The deploy itself is done outside the development
+code as it stands at migration 017. The deploy itself is done outside the development
 sessions; nothing here has been run on the server. **Section 7 lists what is NOT known: read
 it before starting.**
 
@@ -76,9 +76,23 @@ need **Node 22.9 or later** (`--env-file-if-exists` and `--experimental-strip-ty
 
 ### What the server has, and what it still needs
 
-The cPanel server is reported to have **001 to 009** applied. It needs **010 to 016**, applied
-**one file at a time, in order**, each in its own transaction (each file has its own
-`BEGIN`/`COMMIT`):
+The cPanel server is reported to be at **016**: it took `db/pg10-proof.sql` for 001 to 009, then
+`db/pending-010-016.sql` (the table below is what that file held, kept for reference). It now
+needs **017**, as the generated file **`db/pending-017-017.sql`**, applied ONCE:
+
+```
+psql -X -v ON_ERROR_STOP=1 -f pending-017-017.sql "<connection>"
+```
+
+| File | What it does | Precondition |
+|---|---|---|
+| `017_visit_corrections.sql` | `visit` gets `correction_reason` / `corrected_at` / `corrected_by` / `voided_at`, `visit_to_see_not_blank_check`, and two unique indexes: one open visit per client, one per visitor | 016. The unique indexes cannot fail on a server where nothing has written a visit (check-in was not wired before this release). If visits were written by hand, two open visits for one person would make it fail loudly, by design. |
+
+**Apply 017 BEFORE starting the release that contains it**: check-in, check-out and corrections
+write the new columns, and every visit query reads `voided_at`. The old code runs fine on a 017
+database (the columns are only added), so the order is: migrate, then deploy.
+
+Already applied (010 to 016, via `db/pending-010-016.sql`):
 
 | File | What it does | Precondition |
 |---|---|---|
@@ -105,7 +119,7 @@ PG10 database first; that has not been done. PostgreSQL 10 is end of life.
 
 ### Before a first run
 
-1. **Migrations 010 to 016 applied** (above).
+1. **Migration 017 applied** (above), from `db/pending-017-017.sql`.
 2. **The application's database role.** The append-only tables (`audit_log`, `visit_event`,
    `handover`, `handover_item`) are protected by triggers, AND the role the app connects as
    must have NO `UPDATE`, `DELETE` or `TRUNCATE` on them. Whether cPanel lets you create a
@@ -311,7 +325,10 @@ Known from the code:
 2. `/attendance` loads (the board, empty). `/attendance/register` loads for the admin.
 3. Enter one arrival on `/attendance/arrivals`, clock it out, correct it, and see it marked
    "Corrected" on the board and in the register.
-4. A client search on `/visits/new` (needs the portal variables).
+4. The visitor log (after 017): on `/visits/new` check in a non-client (a Delivery, with the
+   consent tick), see them on `/visits`, check them out, then correct the visit on its page and
+   see it marked "Corrected". A client search needs the portal variables; with the portal
+   unreachable, a Client's failed search must still check them in, marked "Not verified".
 5. Sign out, and confirm the session is gone (the back button does not get you in).
 
 ---

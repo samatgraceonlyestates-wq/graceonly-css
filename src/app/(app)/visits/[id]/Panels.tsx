@@ -14,7 +14,6 @@ import type {
   ReleaseReasonInAnswer,
 } from "@/lib/portal";
 import { FAILURE_MESSAGE } from "@/lib/portalProblem";
-import type { SampleTimelineEntry } from "@/lib/sampleData";
 import type { DetailPart, ReleasePosition } from "@/lib/visitDetailState";
 import styles from "./Panels.module.css";
 
@@ -275,28 +274,42 @@ function DocumentsList({ documents }: { documents: ClientDocuments }) {
 }
 
 // ---------------------------------------------------------------------------
-// The visit timeline is CSS's OWN visit log, which does not exist yet. These
-// entries are placeholders from sampleData.ts and say so on their face.
-// TODO: read the real log when the visit store exists.
+// The visit timeline: CSS's OWN visit log (visitStore.ts), never the portal's. Check-in, every
+// correction (who, and the reason they gave), and the check-out or the end-of-day close, in
+// order. Built by the page from the visit row and its audit history.
 // ---------------------------------------------------------------------------
 
-export function Timeline({ entries }: { entries: SampleTimelineEntry[] }) {
+export type TimelineEntry = {
+  id: string;
+  title: string;
+  detail: string;
+  /** ISO timestamp. */
+  at: string;
+  /** Marked in the list: a correction, a removal, an end-of-day close. */
+  flagged?: boolean;
+};
+
+export function Timeline({ entries }: { entries: TimelineEntry[] }) {
   return (
     <Card as="section" aria-labelledby="timeline-heading" padding="lg" className={styles.panel}>
       <div className={styles.panelHeader}>
         <h2 id="timeline-heading" className={styles.panelTitle}>
           Visit timeline
         </h2>
-        <StatusPill tone="neutral">Sample</StatusPill>
       </div>
-      <p className={styles.quiet}>
-        Placeholder entries: CSS has no visit log yet, so these are not this visitor’s real timeline.
-      </p>
       <ol className={styles.timeline}>
         {entries.map((entry) => (
           <li key={entry.id} className={styles.entry}>
             <div className={styles.rowText}>
-              <span className={styles.rowTitle}>{entry.title}</span>
+              <span className={styles.rowTitle}>
+                {entry.title}
+                {entry.flagged ? (
+                  <>
+                    {" "}
+                    <StatusPill tone="steel">Changed</StatusPill>
+                  </>
+                ) : null}
+              </span>
               <span className={styles.rowDetail}>{entry.detail}</span>
             </div>
             <time className={styles.entryTime} dateTime={entry.at}>

@@ -51,7 +51,7 @@
   letter-spacing: -0.66px;
 }
 
-.sampleTag {
+.timerTag {
   color: var(--fold-dusk);
   font-size: 10px;
   font-weight: 600;
@@ -70,6 +70,80 @@
   flex-direction: column;
   gap: var(--fold-space-16);
   min-width: 0;
+}
+
+/* A visit's length once it is over; the timer only ticks while they are in. */
+.length {
+  color: var(--fold-burgundy);
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: -0.66px;
+}
+
+.older {
+  color: var(--fold-status-amber-ink);
+  font-size: 15px;
+  font-weight: 600;
+}
+
+/* "Left: not recorded": unknown is said in words, never shown as a duration. */
+.unknown {
+  color: var(--fold-dusk);
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.correctionNote {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--fold-space-8);
+  margin: 0;
+  color: var(--fold-dusk);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.correctionNote q {
+  color: var(--fold-burgundy);
+  font-weight: 500;
+}
+
+/* UNDESIGNED: the visit's own facts (CSS's record, not the portal's). */
+.about {
+  display: flex;
+  flex-direction: column;
+  gap: var(--fold-space-12);
+}
+
+.aboutTitle {
+  color: var(--fold-burgundy);
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: -0.54px;
+}
+
+.facts {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--fold-space-4);
+  margin: 0;
+}
+
+.facts dt {
+  margin-top: var(--fold-space-6);
+  color: var(--fold-dusk);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+}
+
+.facts dd {
+  margin: 0;
+  color: var(--fold-burgundy);
+  font-size: 14px;
+  line-height: 1.5;
 }
 
 @media (min-width: 768px) {

@@ -77,6 +77,9 @@ export const CONSTRAINT_RULES: Readonly<Record<string, ConstraintRule>> = Object
   visit_checkout_after_checkin_check: rule("check", "Check-out cannot be earlier than check-in.", "checked_out_at"),
   visit_event_note_needs_body_check: rule("check", "A note cannot be empty.", "body"),
   visit_event_visit_id_fkey: rule("foreign_key", VISIT_GONE),
+  visit_one_open_per_client_key: rule("unique", "That client is already checked in. Check them out first."),
+  visit_one_open_per_visitor_key: rule("unique", "That visitor is already checked in. Check them out first."),
+  visit_correction_reason_not_blank_check: rule("check", "A correction needs a reason.", "correction_reason"),
 
   // ---- enquiries (a non-client's, CLAUDE.md rule 3) ----
   enquiry_summary_not_blank_check: rule("check", "Describe the enquiry.", "summary"),
@@ -207,6 +210,13 @@ export const UNTRIPPABLE_CONSTRAINTS: Readonly<Record<string, string>> = Object.
   visit_close_reason_matches_checkout_check: "Check-out writes the reason and the time together. " + FIXED_TOGETHER,
   visit_close_reason_valid_check: "The close reason comes from the check-out action. " + SET_BY_APP,
   visit_manual_close_needs_staff_check: "Check-out writes who closed the visit. " + FIXED_TOGETHER,
+  visit_corrected_pair_check: "A correction writes the person and the time together. " + FIXED_TOGETHER,
+  visit_corrected_matches_reason_check:
+    "A correction writes its reason, person and time together, and the application refuses a correction with no reason before it writes. " + FIXED_TOGETHER,
+  visit_voided_needs_correction_check:
+    "Removing a visit is a correction and is written with its reason, person and time. " + FIXED_TOGETHER,
+  visit_to_see_not_blank_check:
+    "The application trims who they came to see and stores none when it is blank, so a blank never reaches the database.",
   visit_client_name_matches_client_check:
     "The logged name is copied from the portal with the client id. " + FIXED_TOGETHER,
   visit_client_name_not_blank_check:
@@ -229,6 +239,7 @@ export const UNTRIPPABLE_CONSTRAINTS: Readonly<Record<string, string>> = Object.
   attendance_signout_missing_by_fkey: SESSION_STAFF,
   attendance_corrected_by_fkey: SESSION_STAFF,
   movement_corrected_by_fkey: SESSION_STAFF,
+  visit_corrected_by_fkey: SESSION_STAFF,
   attendance_record_staff_id_fkey: PICKED_STAFF,
   movement_approved_by_fkey: PICKED_STAFF,
   movement_left_entered_by_fkey: SESSION_STAFF,

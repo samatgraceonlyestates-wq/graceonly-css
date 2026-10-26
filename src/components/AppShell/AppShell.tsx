@@ -24,8 +24,7 @@ export function AppShell({ user, children }: { user: { name: string }; children:
           <NavLinks />
 
           <div className={styles.actions}>
-            {/* Shown on mobile too: starting a visit is the front desk's main action.
-                TODO: point at the New Visit screen (04) when it exists. */}
+            {/* Shown on mobile too: starting a visit is the front desk's main action (04). */}
             <span className={styles.newVisit}>
               <Button href="/visits/new" size="compact">
                 + New visit

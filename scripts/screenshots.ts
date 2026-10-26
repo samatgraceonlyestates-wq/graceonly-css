@@ -11,6 +11,11 @@
 //                                              (drive a page: a module whose default
 //                                               export gets { open, shot, problem })
 //
+// A scenario may also export `prepare()`, run BEFORE the build and the server start: it can
+// start something the server must talk to (shots-visits.ts starts a stand-in portal on
+// 127.0.0.1) and returns environment variables for the server. Whatever it starts lives in
+// THIS process and ends with it, so nothing outlives the run.
+//
 // SHOTS_DATABASE_URL (optional) points the SERVER at another database, for a
 // scenario that WRITES (it must not write to the owner's local data). It must
 // point at this machine (assertLocalDatabaseUrl); a throwaway schema is chosen with
@@ -57,6 +62,8 @@ const STARTUP_MS = 60_000;
 const WHOLE_RUN_MS = 10 * 60_000;
 
 let server: ChildProcess | null = null;
+/** Set by a scenario's prepare(): extra environment for the server (never the screenshot account). */
+let scenarioEnv: Record<string, string> = {};
 
 /** Kills the server and everything it started. Safe to call twice, and from an exit handler. */
 function stopServer(): void {
@@ -107,7 +114,7 @@ function serverEnv(): NodeJS.ProcessEnv {
     assertLocalDatabaseUrl(process.env.SHOTS_DATABASE_URL);
     env.DATABASE_URL = process.env.SHOTS_DATABASE_URL;
   }
-  return env;
+  return { ...env, ...scenarioEnv };
 }
 
 function build(): void {
@@ -222,6 +229,11 @@ async function main(): Promise<void> {
   const pages = named.length > 0 ? named : scenarioPath ? [] : DEFAULT_PAGES;
   for (const path of pages) if (!path.startsWith("/")) throw new Error(`Pages are paths starting with "/": ${path}`);
 
+  // Loaded first, so its prepare() runs before the server starts.
+  type ScenarioModule = { default: (helpers: ScenarioHelpers) => Promise<void>; prepare?: () => Promise<Record<string, string>> };
+  const scenarioModule = scenarioPath ? ((await import(pathToFileURL(resolve(scenarioPath)).href)) as ScenarioModule) : null;
+  if (scenarioModule?.prepare) scenarioEnv = await scenarioModule.prepare();
+
   build();
   await start();
   console.log(`Production server up on ${BASE}.`);
@@ -259,9 +271,9 @@ async function main(): Promise<void> {
       await context.close();
     }
 
-    if (scenarioPath) {
+    if (scenarioModule) {
       const opened: BrowserContext[] = [];
-      const scenario = (await import(pathToFileURL(resolve(scenarioPath)).href)).default as (helpers: ScenarioHelpers) => Promise<void>;
+      const scenario = scenarioModule.default;
       await scenario({
         base: BASE,
         problem: (message) => problems.push(`[scenario] ${message}`),

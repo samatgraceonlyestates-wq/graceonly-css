@@ -1,7 +1,11 @@
-// Builds db/pending-010-016.sql: the migrations the cPanel server does NOT have yet, joined
-// in filename order into ONE file, for a database that ALREADY HAS 001 to 009. It is NOT a
-// migration and NOT the proof file: it lives in db/, never in db/migrations/, and is applied
-// ONCE, on top of 001-009, never on an empty database and never twice.
+// Builds db/pending-<FIRST>-<LAST>.sql: the migrations the cPanel server does NOT have yet,
+// joined in filename order into ONE file, for a database that ALREADY HAS 001 to FIRST-1. It is
+// NOT a migration and NOT the proof file: it lives in db/, never in db/migrations/, and is
+// applied ONCE, on top of what the server has, never on an empty database and never twice.
+//
+// What the server has taken so far (TAKEN below): db/pg10-proof.sql for 001-009, then
+// db/pending-010-016.sql. That file is now HISTORY: it stays in the repo as what was applied
+// (010-016 are append-only, so it never changes) and is not applied again.
 //
 //   node db/build-pending.mjs            write it  (npm run db:pending)
 //   node db/build-pending.mjs --check    exit 1 if it is stale  (npm run db:pending:check)
@@ -14,8 +18,10 @@ import { join } from "node:path";
 import { bundle, DB_DIR, fail, migrationNames, rangeLines, writeOrCheck } from "./bundle.mjs";
 
 const TOOL = "build-pending";
-const FIRST = 10;
-const LAST = 16;
+const FIRST = 17;
+const LAST = 17;
+// What the server already took, in order, so the header can say it.
+const TAKEN = ["db/pg10-proof.sql (001-009)", "db/pending-010-016.sql (010-016)"];
 
 const pad = (n) => String(n).padStart(3, "0");
 const OUT_NAME = `pending-${pad(FIRST)}-${pad(LAST)}.sql`;
@@ -36,8 +42,9 @@ const header = (ranges) => [
   `-- db/${OUT_NAME}  --  GENERATED FILE.  THIS IS NOT A MIGRATION.`,
   "--",
   `-- Migrations ${pad(FIRST)} to ${pad(LAST)} from db/migrations/, verbatim and in filename order, as ONE`,
-  "-- file for the cPanel server, which ALREADY HAS 001 to 009 (it took db/pg10-proof.sql",
-  "-- once, for those). Apply it ONCE, on top of 001-009. Never on an empty database",
+  `-- file for the cPanel server, which ALREADY HAS 001 to ${pad(FIRST - 1)} (it took, in order:`,
+  ...TAKEN.map((taken) => `--   ${taken}`),
+  `-- ). Apply it ONCE, on top of 001-${pad(FIRST - 1)}. Never on an empty database`,
   "-- (use pg10-proof.sql there), never twice, and never together with the separate",
   "-- migration files it contains. It is not the proof file and never goes in",
   "-- db/migrations/.",

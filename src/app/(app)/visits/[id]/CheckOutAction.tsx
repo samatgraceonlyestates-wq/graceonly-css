@@ -1,36 +1,30 @@
 "use client";
 
-import { useState } from "react";
+import { useActionState } from "react";
 import { Button } from "@/components/Button/Button";
 import { Notice } from "@/components/Notice/Notice";
+import { checkOutAction, type VisitActionState } from "../actions";
 import styles from "./CheckOutAction.module.css";
 
 // UNVERIFIED AGAINST FIGMA (see Panels.tsx).
-// TODO: checking out writes to CSS's own visit store, which does not exist yet.
-// Until it does, pressing the button only SAYS so: it records nothing, fakes no
-// success and goes nowhere. It stays enabled on purpose (a disabled button
-// reads as a bug, not as unbuilt). Same as Check in on screen 04.
+// Checks the visitor out NOW, as whoever is signed in (visits.ts). A visit someone else
+// already closed or removed is a clear message, never a second write. Undo is the visit's
+// Correct… panel (reopen), with a reason.
 //
 // The form is `display: contents`, so the button joins the header's row and the
 // notice takes a full row under it.
-export function CheckOutAction() {
-  const [pressed, setPressed] = useState(false);
+export function CheckOutAction({ visitId, name }: { visitId: string; name: string }) {
+  const [state, action, pending] = useActionState<VisitActionState, FormData>(checkOutAction, { status: "idle" });
 
   return (
-    <form
-      className={styles.form}
-      onSubmit={(event) => {
-        event.preventDefault();
-        setPressed(true);
-      }}
-    >
-      <Button type="submit">Check out</Button>
-      {pressed ? (
-        <Notice tone="info" title="Check-out is not wired up yet" role="status" className={styles.notice}>
-          <p>
-            CSS has no visit store yet, so nothing was recorded. The client details on this screen are live from the
-            portal.
-          </p>
+    <form action={action} className={styles.form}>
+      <input type="hidden" name="visitId" value={visitId} />
+      <Button type="submit" disabled={pending} aria-label={`Check out ${name}`}>
+        {pending ? "Checking out…" : "Check out"}
+      </Button>
+      {state.status === "error" ? (
+        <Notice tone="failure" title="Not checked out" role="alert" className={styles.notice}>
+          <p>{state.message}</p>
         </Notice>
       ) : null}
     </form>

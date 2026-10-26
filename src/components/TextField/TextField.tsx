@@ -22,6 +22,9 @@ type Props = {
   autoComplete?: string;
   autoCapitalize?: "off" | "words";
   required?: boolean;
+  // The on-screen keyboard to offer ("tel" for a phone number).
+  inputMode?: "text" | "tel" | "numeric";
+  maxLength?: number;
 };
 
 export function TextField({
@@ -37,6 +40,8 @@ export function TextField({
   autoComplete = "off",
   autoCapitalize = "words",
   required = false,
+  inputMode,
+  maxLength,
 }: Props) {
   const id = useId();
 
@@ -57,6 +62,8 @@ export function TextField({
         autoComplete={autoComplete}
         autoCapitalize={autoCapitalize}
         required={required}
+        inputMode={inputMode}
+        maxLength={maxLength}
         spellCheck={false}
         onChange={(event) => onChange(event.target.value)}
       />

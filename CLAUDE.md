@@ -385,6 +385,82 @@ Last month; a backwards, future or unreadable period shows today and says why).
   month, after the arrivals, board and movements seeds) against a THROWAWAY schema. It also
   drives the board's filter, the phone collapse, drift and self-approval.
 
+## THE VISITOR LOG (BUILT): screens 04, 03, 05 and the dashboard, migration 017
+
+Checking a visitor in and out WRITES to CSS's own database, exactly as attendance does. Files:
+`visits.ts` (the rules, behind a `VisitStore`; also the type, reason and outcome lists the form
+shares), `visitStore.ts` (SQL, the locks, and the reads for 03, 05 and the dashboard),
+`visitLog.ts` (grouping a day, pure), `visitForm.ts` (what the form decides the lookup came to,
+pure), `phoneNumber.ts` (E.164), `visits/new/`, `visits/page.tsx`, `visits/[id]/`,
+`visits/actions.ts`. Writes are FRONT_DESK or ADMIN (`VISIT_ROLES`), gated in each action.
+
+- CHECK IN (04): one `visit` row with the reason, who they came to see (`to_see`, optional) and
+  `checked_in_by` (the signed-in user); the time is the database's clock. A CLIENT picked from
+  the portal's list is stored as `portal_client_id` and `client_name_logged` (the name as the
+  portal gave it, a snapshot, never refreshed). Anyone else gets a `visitor` row: name, phone
+  (optional), organisation (optional) and `consent_at`.
+- CONSENT IS REQUIRED for a non-client: a tick, or check-in is refused with "write them in the
+  paper book instead". Nothing about a person is recorded without it.
+- THE PHONE is normalised to E.164 by `normalisePhone`: 0803..., +234..., 234..., 00... and a
+  "(0)" are accepted; "803 123 4567" (no 0, no country code) is REFUSED, not guessed. Shown back
+  as +234 803 123 4567.
+- LOOKUP_OUTCOME IS HONEST, decided by `personFor` from what happened on the screen and checked
+  for consistency by `planCheckIn`: a non-client type is NOT_LOOKED_UP (and never calls the
+  portal); a Client picked from the list is MATCHED; nobody found or "none of these" is NO_MATCH;
+  a search that FAILED (down, refusing, or rate limited) lets her check them in anyway as
+  PORTAL_UNAVAILABLE, a visitor row under the name she searched for, and every screen says NOT
+  VERIFIED. A Client cannot be NOT_LOOKED_UP: she must try the portal first. CHECK-IN ITSELF
+  MAKES NO PORTAL CALL, so it works when the portal is down. The server takes the form's word for
+  what the lookup came to (it cannot see the screen); it refuses every combination that cannot
+  be true, and a MATCHED id must be a UUID.
+- ONE OPEN VISIT PER PERSON: a client (by portal id) or a visitor (by visitor row) already
+  checked in is refused, naming the open visit ("since 10:12, checked in by ..."; an earlier
+  day says so). Checked under a transaction advisory lock on that person (there is no row to
+  lock before the visit exists); `visit_one_open_per_client_key` and
+  `visit_one_open_per_visitor_key` (017) are the backstop.
+- A REPEAT VISITOR is found by PHONE ONLY and only when the desk CONFIRMS it: a number on file
+  asks "That number is on file for Bola Ade, last here ... Is this the same person?" and nothing
+  is written until she answers. Yes: the visit goes on that record, under the name on file.
+  No: one number is one person, so she checks the number or leaves it empty. Never an automatic
+  merge; no phone, no match (a new visitor row). NOT BUILT: suggesting past visitors by name.
+- CHECK OUT (03's row, 05): closes the visit NOW, NORMAL, with `checked_out_by`. A stale press
+  (closed or removed by someone else) is a clear message, never a second write. A mistaken
+  check-out is undone by a correction (reopen). NO_SHOW exists in the schema and nothing sets it.
+- END OF DAY, AUTO_CLOSED. DECIDED: an EXPLICIT action on 03 ("Close N open visits...", then a
+  confirmation that names them), never a background job. Why: nothing on shared cPanel runs on a
+  timer we control (the app can be stopped when idle), a silent close would hide that the desk
+  forgot, and a person must be accountable for it (the same rule as attendance's never-signed-out
+  mark). `checked_out_by` records who closed them; `checked_out_at` is when they were CLOSED, not
+  when they left, so EVERY screen shows such a visit's length as UNKNOWN ("left: not recorded"),
+  never a duration, and 03 counts them apart. A real time can be added later (a correction, which
+  makes it NORMAL). A visit left open from an EARLIER day stays in 03's table, "Since <day>",
+  "Still open", until somebody closes it.
+- CORRECTIONS (05's "Correct..." card), the attendance discipline: change the check-in time, the
+  check-out time (or add one to an end-of-day close), reopen, the reason, who they came to see,
+  the visitor type (only between non-client types, only on a NOT_LOOKED_UP visit), a non-client's
+  NAME or PHONE (on their visitor record, so on all their visits; a client's name is kept as
+  logged), REMOVE (a void) and RESTORE. EVERY correction needs a REASON (checked first), records
+  `corrected_at`/`corrected_by`/`correction_reason` (all three or none, 017), writes an audit row,
+  and is refused if the visit's VERSION changed since she opened the panel. A corrected visit is
+  MARKED wherever it is listed ("corrected" in 03's rows, the "Corrected" note with who, when and
+  why) and 05's timeline lists every correction from audit_log. Restoring an open visit is
+  blocked if the person is checked in again meanwhile. As on attendance the row carries only the
+  LATEST correction: a restore shows as "Corrected: removed by mistake"; the earlier ones are in
+  05's timeline.
+- A REMOVED VISIT COUNTS FOR NOTHING: on no list but 03's "Removed visits", in no count, and it
+  does not keep the person "in". Any new query of `visit` MUST exclude `voided_at IS NOT NULL`.
+- AUDIT ROWS CARRY CODES AND IDS ONLY: never a client's name or portal id (portal data), never a
+  visitor's name or phone. A name or phone correction records THAT it changed.
+- 03 shows any earlier day (`?day=`) to find and correct its visits; today's chips and counts are
+  derived from the rows. 05 is the VISIT (its id), with the client's LIVE portal data beside it; a
+  portal failure there never hides the visit.
+- THE DASHBOARD reads real counts (visits today, in the building now, yesterday's total as a
+  caption; no "vs yesterday" delta: today is part of a day). Open complaints and Docs released
+  show a dash and "Not connected yet" / "Not recorded in CSS yet": no invented number.
+- Verified with `scripts/shots-visits.ts` (seed: `scripts/shots-visits.seed.sql`, after the
+  arrivals seed) against a THROWAWAY schema, with a STAND-IN PORTAL on 127.0.0.1 started by the
+  scenario's `prepare()` and switched DOWN mid-run. Never the real portal.
+
 ## Design tokens — from Figma, exact
 
 Source: https://www.figma.com/design/yWUjcYUogDXQqBJ1uKAd1B/CSS-%E2%80%94-Customer-Support-System--GEL-?node-id=3-21
@@ -531,8 +607,8 @@ do not mirror the defect in CSS.
   visits panel. The "vs yesterday" comparison text is dropped on mobile, as
   in the design.
 - Elapsed time is computed from the check-in timestamp and ticks live; never
-  store it as a string. Colour: green under 10 minutes, amber 10 to 30, red
-  over 30. Sample check-in times must agree with the elapsed values shown.
+  store it as a string. MM:SS under an hour, H:MM:SS from an hour. Colour: green
+  under 10 minutes, amber 10 to 30, red over 30.
 - Complaint age is computed from the raised-at timestamp, never stored as a
   string. Under 24 hours is neutral (--fold-dusk), 24 to 72 hours amber
   (ink), over 72 hours red. Sample raised-at times must agree.
@@ -542,11 +618,11 @@ do not mirror the defect in CSS.
   src/lib/useNow.ts; never add a per-component setInterval.
 - Visit status is derived from elapsed time, never stored: on track under
   10 minutes, long 10 to 30, overdue over 30 (VisitStatus).
-- The visit list lives once in sampleData.ts (getVisitsSample). The
-  dashboard shows the first five; 03 shows all seven. Each visit carries a
-  short and a long reason label.
-- "Check out" (03) renders enabled and is wired to nothing, with a TODO;
-  it has no backend yet. Same for "Export timesheet" (08).
+- Visits are REAL (see "THE VISITOR LOG"). The dashboard shows the five open
+  visits that have waited longest; 03 shows everyone in the building. A reason
+  chip has a short label on a phone (Documents, Contract, Meeting).
+- "Check out" (03, 05) is wired. "Export timesheet" (08) still renders enabled
+  and is wired to nothing, with a TODO.
 - Complaint queue (06) lives at /complaints. Complaints are the PORTAL's
   data. The sample rows mirror the portal's `disputes` row (id, referenceNo
   shown as CASE-0001, clientId, clientName, raisedByRole CLIENT|ADMIN, channel
@@ -594,8 +670,8 @@ do not mirror the defect in CSS.
   pill with no control. In-progress, awaiting and resolved views are
   undesigned and reuse the open card; the rail follows age (the 24h / 72h
   rule) for unresolved cases, green for resolved, silver for withdrawn.
-- The dashboard's complaints are the SAME portal-shaped list (the open ones,
-  oldest first), so the dashboard and 06 cannot disagree.
+- The dashboard shows NO complaints (a "Not connected yet" notice): the sample
+  list must not be read as real cases there. 06 still shows the SAMPLE list.
 - Attendance register (08) lives at /attendance/register and is ADMIN-ONLY,
   enforced on the server by requireRole("ADMIN") before any data is loaded (a
   Super Admin passes too; anyone else gets a plain notice). The nav's "Attendance" link
@@ -617,6 +693,7 @@ do not mirror the defect in CSS.
   the mobile frame omits the row: an admin on a phone keeps the breakdown.
   Same omission class as the missing mobile nav and complaints panel.
 - Extension points on shared components (use these, never fork):
+  TextField inputMode ("tel" for a phone) and maxLength;
   Button aria-expanded, aria-controls and aria-label (a show / hide toggle);
   ClosePrompt different ("a different place": what "No" means); PhraseField
   (free text used before: the phrase twin of NameField);
@@ -794,8 +871,8 @@ redirects), `src/proxy.ts` + `proxyDecision.ts`, `staffAdmin.ts` + `scripts/crea
 SQL migrations live in `db/migrations/`, applied in filename order, one logical
 group per file, each in its own transaction. They target PostgreSQL 10.23 (end
 of life, so plan an upgrade; they run unchanged on later versions) and need no
-extension. 001-010 have been applied to the LOCAL dev database (PostgreSQL 18); 001-009
-are reported applied on the cPanel server (010 is pending, applied outside these
+extension. 001-017 have been applied to the LOCAL dev database (PostgreSQL 18); 001-016
+are reported applied on the cPanel server (017 is pending, applied outside these
 sessions, never by Claude). The files have NOT been verified on PostgreSQL 10 by us: a local pass proves syntax and
 logic, not PG10 compatibility. How to create, apply and reset the local database
 is in `db/README.md`. Claude never touches the cPanel server. What deploying CSS needs (the
@@ -822,11 +899,13 @@ put it in `db/migrations/`, never edit it, and regenerate it (and commit both)
 after ANY change to `db/migrations/` (a new file; or an edit, which is only
 allowed before the first server apply). `npm run db:proof:check` fails if it is stale.
 The server took the proof file ONCE (001-009) and NEVER takes it again. Later migrations go
-to it as a GENERATED PENDING FILE: `db/pending-010-016.sql` (`npm run db:pending`,
-`db:pending:check`; `db/build-pending.mjs`, sharing `db/bundle.mjs` with the proof builder),
-010 to 016 verbatim with the same markers and line ranges, applied once on top of 001-009 and
-proven to give the same schema as the sixteen files. Not a migration; never in
-`db/migrations/`. The next one covers what comes after 016.
+to it as a GENERATED PENDING FILE (`npm run db:pending`, `db:pending:check`;
+`db/build-pending.mjs`, sharing `db/bundle.mjs` with the proof builder): the migrations it does
+not have yet, verbatim with the same markers and line ranges. It took `db/pending-010-016.sql`
+(now history: kept as what was applied, never applied again). The CURRENT one is
+`db/pending-017-017.sql`, applied once on top of 001-016. Not a migration; never in
+`db/migrations/`. When the server has taken it, the next one covers what comes after 017
+(`FIRST`/`LAST` and `TAKEN` in `db/build-pending.mjs`).
 
 - MIGRATIONS ARE APPEND-ONLY. AFTER THE NEXT SERVER APPLY, `db/migrations/` IS
   APPEND-ONLY WITH NO EXCEPTIONS: a change to the schema is a NEW numbered
@@ -872,6 +951,13 @@ proven to give the same schema as the sixteen files. Not a migration; never in
   HH:MM), backfilled from the setting as it is now (NULL if unreadable). The server receives 010
   to 016, one file at a time. 016 was verified from the top and old-then-new (also with an
   unreadable setting) in throwaway schemas, and applied to the local `public` schema.
+  `017_visit_corrections.sql` gives `visit` the correction columns (`correction_reason`,
+  `corrected_at`, `corrected_by`: all three or none) and `voided_at` (a removed visit),
+  `visit_to_see_not_blank_check`, and the two one-open-visit unique indexes
+  (`visit_one_open_per_client_key`, `visit_one_open_per_visitor_key`, excluding removed visits).
+  Verified from the top and 001-016-then-017 in throwaway schemas (identical schemas; each
+  constraint tripped on purpose), applied to the local `public` schema. The server receives it
+  as `db/pending-017-017.sql`.
 - NEVER DROP OR RECREATE THE LOCAL `public` SCHEMA (STANDING RULE). It holds the
   owner's real local login, whose password was typed at a prompt and cannot be
   recreated, and his sessions. Verify migrations in THROWAWAY schemas inside the
@@ -1004,7 +1090,7 @@ proven to give the same schema as the sixteen files. Not a migration; never in
 The PRD is the original spec. It and the built screens diverge in three ways.
 This is the honest scope picture; update it as items are built or dropped.
 
-PRD requirements the eight screens do NOT cover (six; none is built):
+PRD requirements the eight screens do NOT cover (six; item 4 is now partly built):
 
 1. Document release: recording a handover (6.2, FR-3.1 to 3.5) and its history.
    Schema exists (`007_handovers`). The gate is the portal's (see Decisions).
@@ -1015,11 +1101,11 @@ PRD requirements the eight screens do NOT cover (six; none is built):
    complaints.
 3. Onboarding Assist (6.4, FR-5): the side-pane portal sign-up and the signup
    webhook. The portal exposes no phone number and has no such webhook.
-4. Acting on visits (6.1, 6.5, FR-1): Check in, Check out, the 15-minute edit
-   window, adding notes, a final note at check-out. The buttons exist and are
-   wired to nothing.
-5. Looking back and reporting (FR-1, FR-6): a Completed visits history (03 is
-   Active only), visitor frequency, document volumes, CSV export.
+4. Acting on visits (6.1, 6.5, FR-1): Check in and Check out ARE BUILT (see "THE
+   VISITOR LOG"), with corrections in place of the 15-minute edit window. NOT
+   built: adding notes, a final note at check-out (`visit_event` exists, unused).
+5. Looking back and reporting (FR-1, FR-6): 03 shows any one day's visits
+   (?day=). NOT built: visitor frequency, document volumes, CSV export.
 6. Super Admin (FR-7): user management screens, dropdown management and the
    audit log viewer. (Sign-in, sessions and the four roles ARE built: see
    "Authentication". Accounts are made from the command line.)
@@ -1076,7 +1162,9 @@ Playfair and Poppins), and "Existing" versus "New" as visitor types (that is
     3457, signs in, captures each page at desktop (1280) and phone (390) into
     `screenshots/` (git-ignored, never committed), and stops the server on every
     exit path. It fails on any console error, page error, failed or 4xx/5xx
-    request, or sideways scroll. Run it from PowerShell: Git Bash rewrites a
+    request, or sideways scroll. A scenario may export `prepare()`, run before the server
+    starts, to start a local stand-in (shots-visits.ts: the portal) and pass the server its
+    environment; it lives in the runner's process and ends with it. Run it from PowerShell: Git Bash rewrites a
     leading `/path` argument into a Windows path.
   - Any change to a screen ends with capturing it at both widths and READING the
     images before reporting: say what was looked at and what was seen. A clean

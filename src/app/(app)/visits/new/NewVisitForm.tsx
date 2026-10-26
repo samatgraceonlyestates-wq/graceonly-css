@@ -5,6 +5,8 @@
 // MCP quota was spent. Check spacing, type sizes, the sub labels on the visitor
 // type cards (the wording below is OURS, not the design's), the fee pill
 // wording, and the notice styling against the frames before relying on them.
+// The non-client details (phone, organisation, consent) and "who they came to
+// see" are NOT in the frame description at all: built from shared components.
 //
 // Decisions that are not in the frame (see CLAUDE.md):
 //  - The lookup is by NAME, not phone: the portal exposes no phone number.
@@ -18,7 +20,15 @@
 //  - A non-client (any non-Client type, a lookup that finds nobody, or "none of
 //    these") is logged with no clientId, and anything they raise is an
 //    ENQUIRY, never a case.
-import { useActionState, useRef, useState, useTransition } from "react";
+//  - CHECK IN WRITES THE VISIT (visits.ts). Who is being checked in, and what the
+//    lookup came to, is decided by personFor (visitForm.ts): a client picked from the
+//    list is MATCHED; nobody found is NO_MATCH; a search that FAILED lets her check
+//    them in anyway, as PORTAL_UNAVAILABLE, and the screen says it will not be
+//    verified. Check-in itself never calls the portal, so it works when it is down.
+//  - A non-client needs CONSENT (a tick) before anything about them is recorded; their
+//    phone is optional and normalised to +234... A number already on file asks "is this
+//    <name>?" first, and nothing is written until she answers.
+import { useActionState, useEffect, useRef, useState, useTransition } from "react";
 import { Avatar } from "@/components/Avatar/Avatar";
 import { Button } from "@/components/Button/Button";
 import { Card } from "@/components/Card/Card";
@@ -30,39 +40,28 @@ import { TextField } from "@/components/TextField/TextField";
 import { ROLLUP_PILL } from "@/lib/feeRollup";
 import { firstName } from "@/lib/format";
 import type { ClientCandidate, Match } from "@/lib/portal";
+import { IDLE_CHECK_IN, NOT_LISTED, personFor, type CheckInState } from "@/lib/visitForm";
+import { MESSAGES, VISIT_LIMITS, VISIT_REASONS, type VisitorTypeCode } from "@/lib/visits";
 import { IDLE_SEARCH, type VisitSearchState } from "@/lib/visitSearch";
 import type { VisitorBriefState } from "@/lib/visitorBriefState";
-import { loadVisitorBriefAction, searchVisitorAction } from "./actions";
+import { checkInAction, loadVisitorBriefAction, searchVisitorAction } from "./actions";
 import styles from "./NewVisitForm.module.css";
 
 const VISITOR_TYPES = [
-  { value: "client", label: "Client", sub: "Has a plot or unit" },
-  { value: "realtor", label: "Realtor", sub: "Agent or partner" },
-  { value: "investor", label: "Investor", sub: "Prospective buyer" },
-  { value: "delivery", label: "Delivery", sub: "Courier or supplier" },
-  { value: "visitor", label: "Visitor", sub: "Anyone else" },
-] as const satisfies readonly ChoiceOption[];
+  { value: "CLIENT", label: "Client", sub: "Has a plot or unit" },
+  { value: "REALTOR", label: "Realtor", sub: "Agent or partner" },
+  { value: "INVESTOR", label: "Investor", sub: "Prospective buyer" },
+  { value: "DELIVERY", label: "Delivery", sub: "Courier or supplier" },
+  { value: "VISITOR", label: "Visitor", sub: "Anyone else" },
+] as const satisfies readonly (ChoiceOption & { value: VisitorTypeCode })[];
 
-type VisitorType = (typeof VISITOR_TYPES)[number]["value"];
-
-const REASONS: ChoiceOption[] = [
-  { value: "inquiry", label: "Inquiry" },
-  { value: "complaint", label: "Complaint" },
-  { value: "document-collection", label: "Document collection" },
-  { value: "contract-signing", label: "Contract signing" },
-  { value: "scheduled-meeting", label: "Scheduled meeting" },
-];
-
-// The candidate list's own last option: the visitor is not any of them.
-const NOT_LISTED = "__not_listed__";
+const REASONS: ChoiceOption[] = VISIT_REASONS.map((reason) => ({ value: reason.code, label: reason.label }));
 
 const MATCH_LABEL: Record<Match, string> = {
   MATCH_ONE_PARTY: "Exact name match",
   MATCH_ACROSS_PARTIES: "Matches across names on file",
   APPROXIMATE: "Approximate match",
 };
-
-type Person = { kind: "client"; clientId: string; name: string } | { kind: "non_client"; name: string };
 
 function CandidateDetails({ candidate }: { candidate: ClientCandidate }) {
   return (
@@ -91,9 +90,13 @@ function CandidateDetails({ candidate }: { candidate: ClientCandidate }) {
 }
 
 export function NewVisitForm() {
-  const [type, setType] = useState<VisitorType>("client");
+  const [type, setType] = useState<VisitorTypeCode>("CLIENT");
   const [name, setName] = useState("");
   const [reason, setReason] = useState<string | null>(null);
+  const [toSee, setToSee] = useState("");
+  const [phone, setPhone] = useState("");
+  const [organisation, setOrganisation] = useState("");
+  const [consent, setConsent] = useState(false);
   // Which candidate the desk picked (a clientId), or NOT_LISTED.
   const [picked, setPicked] = useState<string | null>(null);
   const [brief, setBrief] = useState<VisitorBriefState | null>(null);
@@ -102,7 +105,6 @@ export function NewVisitForm() {
   const [searchedName, setSearchedName] = useState("");
   const latestPick = useRef<string | null>(null);
   const [briefLoading, startBrief] = useTransition();
-  const [checkIn, setCheckIn] = useState<{ key: string; outcome: "not_wired" | "incomplete" } | null>(null);
 
   const [search, submitSearch, searching] = useActionState(
     async (previous: VisitSearchState, formData: FormData): Promise<VisitSearchState> => {
@@ -116,12 +118,12 @@ export function NewVisitForm() {
     IDLE_SEARCH,
   );
 
-  const isClient = type === "client";
+  const isClient = type === "CLIENT";
   const typedName = name.trim();
   const resultsVisible = isClient && search.kind !== "idle" && searchedName === typedName;
 
   function chooseType(value: string) {
-    setType(value as VisitorType);
+    setType(value as VisitorTypeCode);
     latestPick.current = null;
     setPicked(null);
     setBrief(null);
@@ -139,26 +141,36 @@ export function NewVisitForm() {
     });
   }
 
-  // Who is being checked in, as far as the screen can tell.
-  let person: Person | null = null;
-  if (!isClient) {
-    if (typedName) person = { kind: "non_client", name: typedName };
-  } else if (resultsVisible) {
-    if (search.kind === "no_match") person = { kind: "non_client", name: searchedName };
-    if (search.kind === "candidates") {
-      if (picked === NOT_LISTED) person = { kind: "non_client", name: searchedName };
-      else {
-        const candidate = search.candidates.find((entry) => entry.clientId === picked);
-        if (candidate) person = { kind: "client", clientId: candidate.clientId, name: candidate.displayName };
-      }
-    }
-  }
-
+  // Who is being checked in, and what the lookup came to.
+  const person = personFor({ isClient, typedName, search, searchedName, picked });
   const ready = person !== null && reason !== null;
 
-  // What the last Check in press said. It belongs to the person and reason it
-  // was pressed for, so it disappears as soon as either changes.
-  const checkInKey = `${person ? `${person.kind}:${person.kind === "client" ? person.clientId : person.name}` : ""}|${reason ?? ""}`;
+  // ---- check in
+  // What the last press said belongs to what it was pressed for: change any of it and the
+  // message goes, so an old refusal or question never sits beside a new person.
+  const checkInKey = JSON.stringify([type, person, reason, phone.trim(), organisation.trim(), toSee.trim(), consent]);
+  const [submittedKey, setSubmittedKey] = useState<string | null>(null);
+  const [incomplete, setIncomplete] = useState<{ key: string; message: string } | null>(null);
+  const [sameVisitorId, setSameVisitorId] = useState("");
+  const [declined, setDeclined] = useState<string | null>(null);
+  const [resubmit, setResubmit] = useState(0);
+  const checkInForm = useRef<HTMLFormElement | null>(null);
+  const [checkIn, submitCheckIn, checkingIn] = useActionState(async (previous: CheckInState, formData: FormData): Promise<CheckInState> => {
+    setSubmittedKey(String(formData.get("key")));
+    setDeclined(null);
+    return checkInAction(previous, formData);
+  }, IDLE_CHECK_IN);
+  const answer = submittedKey === checkInKey ? checkIn : IDLE_CHECK_IN;
+
+  // "Yes, it is them": the same form goes again, now naming the visitor she confirmed.
+  useEffect(() => {
+    if (resubmit > 0) checkInForm.current?.requestSubmit();
+  }, [resubmit]);
+
+  function sameVisitor(id: string) {
+    setSameVisitorId(id);
+    setResubmit((count) => count + 1);
+  }
 
   return (
     <div className={styles.form}>
@@ -188,6 +200,7 @@ export function NewVisitForm() {
             placeholder="Full name"
             describedBy="lookup-hint"
             enterKeyHint={isClient ? "search" : "done"}
+            maxLength={VISIT_LIMITS.maxNameLength}
           />
           {isClient ? (
             <Button type="submit" size="compact" disabled={searching} className={styles.lookupButton}>
@@ -214,15 +227,16 @@ export function NewVisitForm() {
         {resultsVisible && search.kind === "guidance" ? <Notice tone="guidance">{search.message}</Notice> : null}
 
         {resultsVisible && search.kind === "rate_limited" ? (
-          <Notice tone="limited" title="Try again in a moment">
-            {search.message}
+          <Notice tone="limited" title="The portal is too busy to answer">
+            {search.message} Or check them in now without it: the visit will be marked as not verified.
           </Notice>
         ) : null}
 
         {resultsVisible && search.kind === "failure" ? (
-          <Notice tone="failure" title="Something is wrong" role="alert">
+          <Notice tone="failure" title="The portal could not be reached" role="alert">
             {search.message}
-            {search.requestId ? ` Reference: ${search.requestId}.` : ""}
+            {search.requestId ? ` Reference: ${search.requestId}.` : ""} You can still check them in: the visit will be
+            marked as NOT VERIFIED, because nobody could check them against the client records.
           </Notice>
         ) : null}
 
@@ -295,7 +309,8 @@ export function NewVisitForm() {
             </Card>
           ) : brief.kind === "rate_limited" ? (
             <Notice tone="limited" title="Try again in a moment" role="status">
-              {brief.message} Their record could not be shown. Pick them again to retry.
+              {brief.message} Their record could not be shown. Pick them again to retry. Checking them in does not
+              need it.
             </Notice>
           ) : brief.kind === "not_found" ? (
             <Notice tone="failure" title="Record not found" role="alert">
@@ -310,6 +325,54 @@ export function NewVisitForm() {
         </div>
       ) : null}
 
+      {/* Anyone who is not a picked client gets a visitor record: their details, with consent. */}
+      {person?.kind === "visitor" ? (
+        <section className={styles.visitorDetails} aria-labelledby="visitor-details-heading">
+          <h2 id="visitor-details-heading" className={styles.detailsHeading}>
+            {person.lookup === "PORTAL_UNAVAILABLE"
+              ? `Checking in ${person.name} without the portal (not verified)`
+              : person.lookup === "NO_MATCH"
+                ? `Checking in ${person.name} as a non-client`
+                : "Their details"}
+          </h2>
+          <div className={styles.detailsRow}>
+            <div className={styles.detailsField}>
+              <TextField
+                label="Phone (optional)"
+                name="phone-entry"
+                value={phone}
+                onChange={setPhone}
+                placeholder="0803 123 4567"
+                inputMode="tel"
+                autoCapitalize="off"
+                autoComplete="off"
+                maxLength={40}
+                describedBy="phone-hint"
+              />
+              <p id="phone-hint" className={styles.hint}>
+                A number they have given before finds their earlier visits. It is saved as +234…
+              </p>
+            </div>
+            <TextField
+              className={styles.detailsField}
+              label="Organisation (optional)"
+              name="organisation-entry"
+              value={organisation}
+              onChange={setOrganisation}
+              placeholder="Company or firm"
+              maxLength={VISIT_LIMITS.maxOrganisationLength}
+            />
+          </div>
+          <label className={styles.consent}>
+            <input type="checkbox" checked={consent} onChange={(event) => setConsent(event.target.checked)} />
+            <span>
+              They agree to their name{phone.trim() !== "" ? " and number" : ""} being recorded in the visitor log.
+              <span className={styles.consentNote}> Required. Without it, write them in the paper book instead.</span>
+            </span>
+          </label>
+        </section>
+      ) : null}
+
       <ChoiceGroup
         legend="Reason for visit"
         name="reason"
@@ -319,42 +382,88 @@ export function NewVisitForm() {
         onChange={setReason}
       />
 
-      {person?.kind === "non_client" && reason === "complaint" ? (
+      <TextField
+        label="Here to see (optional)"
+        name="to-see-entry"
+        value={toSee}
+        onChange={setToSee}
+        placeholder="Who they came to see"
+        maxLength={VISIT_LIMITS.maxToSeeLength}
+      />
+
+      {person?.kind === "visitor" && reason === "COMPLAINT" ? (
         <Notice tone="info" title="Logged as an enquiry">
           A non-client cannot have a complaint case. What they raise is recorded as an enquiry.
         </Notice>
       ) : null}
 
-      {person?.kind === "non_client" && isClient ? (
-        <Notice tone="info" title="Checking in as a non-client">
-          Will be logged with no client record, as “{person.name}”.
-        </Notice>
-      ) : null}
-
-      {/* TODO: checking in writes a visit to CSS's own store, which does not
-          exist yet. Until it does, submitting only SAYS so: it records nothing,
-          fakes no success, and goes nowhere. The button stays enabled on
-          purpose (a disabled button reads as a bug, not as unbuilt). When the
-          store exists, the visit must carry clientId only for a picked client
-          and none for a non-client. */}
       <form
+        ref={checkInForm}
         className={styles.checkInForm}
+        action={submitCheckIn}
         onSubmit={(event) => {
+          // What the screen already knows is missing is said here; everything else the server decides.
+          if (ready) return;
           event.preventDefault();
-          setCheckIn({ key: checkInKey, outcome: ready ? "not_wired" : "incomplete" });
+          const message =
+            reason === null && person !== null
+              ? MESSAGES.reason
+              : isClient && typedName !== ""
+                ? MESSAGES.lookupFirst
+                : isClient
+                  ? "Type the client's name and look them up."
+                  : MESSAGES.name;
+          setIncomplete({ key: checkInKey, message });
         }}
       >
-        <Button type="submit" size="large" className={styles.checkIn}>
-          {person ? `Check in ${firstName(person.name)} →` : "Check in →"}
+        <input type="hidden" name="key" value={checkInKey} />
+        <input type="hidden" name="visitorType" value={type} />
+        <input type="hidden" name="reason" value={reason ?? ""} />
+        <input type="hidden" name="toSee" value={toSee} />
+        <input type="hidden" name="lookup" value={person?.lookup ?? ""} />
+        <input type="hidden" name="clientId" value={person?.kind === "client" ? person.clientId : ""} />
+        <input type="hidden" name="clientName" value={person?.kind === "client" ? person.name : ""} />
+        <input type="hidden" name="name" value={person?.kind === "visitor" ? person.name : ""} />
+        <input type="hidden" name="phone" value={person?.kind === "visitor" ? phone : ""} />
+        <input type="hidden" name="organisation" value={person?.kind === "visitor" ? organisation : ""} />
+        <input type="hidden" name="consent" value={person?.kind === "visitor" && consent ? "yes" : ""} />
+        <input type="hidden" name="sameVisitorId" value={sameVisitorId} />
+
+        <Button type="submit" size="large" className={styles.checkIn} disabled={checkingIn}>
+          {checkingIn ? "Checking in…" : person ? `Check in ${firstName(person.name)} →` : "Check in →"}
         </Button>
-        {checkIn?.key === checkInKey && checkIn.outcome === "not_wired" ? (
-          <Notice tone="info" title="Check-in is not wired up yet" role="status">
-            CSS has no visit store yet, so nothing was recorded. The client lookup above is live and reads the portal.
+
+        {incomplete?.key === checkInKey ? (
+          <Notice tone="guidance" role="status">
+            {incomplete.message}
           </Notice>
         ) : null}
-        {checkIn?.key === checkInKey && checkIn.outcome === "incomplete" ? (
+
+        {answer.status === "error" ? (
+          <Notice tone="failure" title="Not checked in" role="alert">
+            {answer.message}
+          </Notice>
+        ) : null}
+
+        {answer.status === "confirm" && declined !== answer.visitor.id ? (
+          <Notice tone="info" title="Have they been here before?" role="status">
+            <p>{answer.message}</p>
+            <p>If it is them, the visit is added to their record under the name on file, {answer.visitor.name}.</p>
+            <div className={styles.confirmActions}>
+              <Button size="compact" disabled={checkingIn} onClick={() => sameVisitor(answer.visitor.id)}>
+                Yes, it is {answer.visitor.name}
+              </Button>
+              <Button variant="row-action" onClick={() => setDeclined(answer.visitor.id)}>
+                No, a different person
+              </Button>
+            </div>
+          </Notice>
+        ) : null}
+
+        {answer.status === "confirm" && declined === answer.visitor.id ? (
           <Notice tone="guidance" role="status">
-            Choose who is here and a reason for the visit first.
+            Then that number cannot be theirs as well: one number is one person here. Check it with them, or leave the
+            phone empty.
           </Notice>
         ) : null}
       </form>

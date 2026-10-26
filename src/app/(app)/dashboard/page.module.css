@@ -1,4 +1,5 @@
-/* Mobile first (Figma 24:125). Desktop (Figma 24:2) from 768px up. */
+/* Mobile first (Figma 24:125). Desktop (Figma 24:2) from 768px up. The empty state, the
+   "more" line, the earlier-day mark and the not-connected notice are UNDESIGNED: tokens only. */
 .page {
   display: flex;
   flex-direction: column;
@@ -80,6 +81,43 @@
 
 .visitChip {
   display: none;
+}
+
+.visitLink {
+  flex: 1;
+  min-width: 0;
+  color: inherit;
+  text-decoration: none;
+  border-radius: var(--fold-radius-sm);
+}
+
+.visitLink:hover .visitPerson,
+.visitLink:focus-visible .visitPerson {
+  text-decoration: underline;
+}
+
+.visitLink:focus-visible {
+  outline: 2px solid var(--fold-gold);
+  outline-offset: 2px;
+}
+
+.older {
+  color: var(--fold-status-amber-ink);
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.empty,
+.more {
+  margin: 0;
+  color: var(--fold-dusk);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.more {
+  padding-top: var(--fold-space-10);
 }
 
 /* ---------- complaint rows ---------- */

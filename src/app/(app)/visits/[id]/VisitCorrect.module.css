@@ -1,0 +1,122 @@
+/* UNDESIGNED (not in Figma): the visit's Correct… panel. Tokens only, the same shapes as the
+   attendance board's correction panel. Mobile first; desktop from 768px. */
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--fold-space-12);
+}
+
+.head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--fold-space-10);
+}
+
+.title {
+  color: var(--fold-burgundy);
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: -0.54px;
+}
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--fold-space-10);
+  padding: var(--fold-space-12) var(--fold-space-14);
+  border-radius: var(--fold-radius-card);
+  background: var(--fold-canvas);
+}
+
+.choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--fold-space-8);
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--fold-space-10);
+}
+
+.field,
+.reasonField {
+  display: flex;
+  flex-direction: column;
+  gap: var(--fold-space-6);
+  min-width: 0;
+}
+
+.label {
+  color: var(--fold-dusk);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+}
+
+.time,
+.text,
+.select {
+  height: 40px;
+  padding: 0 var(--fold-space-14);
+  border: 1px solid var(--fold-silver);
+  border-radius: var(--fold-radius-pill);
+  background: var(--fold-white);
+  color: var(--fold-burgundy);
+  font: inherit;
+  /* Keep at 16px: iOS zooms the page on focus for anything smaller. */
+  font-size: 16px;
+}
+
+.time {
+  width: 110px;
+}
+
+.text,
+.select {
+  width: 100%;
+}
+
+.time:focus-visible,
+.text:focus-visible,
+.select:focus-visible {
+  outline: 2px solid var(--fold-gold);
+  outline-offset: 2px;
+}
+
+.note {
+  margin: 0;
+  color: var(--fold-dusk);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.error {
+  margin: 0;
+  color: var(--fold-status-red);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+@media (min-width: 768px) {
+  .form {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: flex-end;
+  }
+
+  .reasonField {
+    flex: 1;
+    min-width: 260px;
+  }
+
+  .text,
+  .select {
+    min-width: 240px;
+  }
+}

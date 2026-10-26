@@ -20,22 +20,23 @@
 -- psql reports  psql:pg10-proof.sql:LINE: ERROR: ...  Find LINE below. The line
 -- inside the source file is  LINE - first + 1.  Lines are counted in THIS file.
 --
---   001_foundation.sql               lines    42 -   171
---   002_staff_auth.sql               lines   173 -   261
---   003_visits.sql                   lines   263 -   421
---   004_enquiries.sql                lines   423 -   470
---   005_attendance.sql               lines   472 -   573
---   006_audit_log.sql                lines   575 -   616
---   007_handovers.sql                lines   618 -   705
---   008_case_links.sql               lines   707 -   788
---   009_attendance_device.sql        lines   790 -   860
---   010_roster_movements_backdating.sql lines   862 -  1016
---   011_entered_by_per_event.sql     lines  1018 -  1068
---   012_movement_entered_by_names.sql lines  1070 -  1099
---   013_signout_missing.sql          lines  1101 -  1150
---   014_corrections.sql              lines  1152 -  1215
---   015_movement_corrections.sql     lines  1217 -  1276
---   016_late_threshold_snapshot.sql  lines  1278 -  1327
+--   001_foundation.sql               lines    43 -   172
+--   002_staff_auth.sql               lines   174 -   262
+--   003_visits.sql                   lines   264 -   422
+--   004_enquiries.sql                lines   424 -   471
+--   005_attendance.sql               lines   473 -   574
+--   006_audit_log.sql                lines   576 -   617
+--   007_handovers.sql                lines   619 -   706
+--   008_case_links.sql               lines   708 -   789
+--   009_attendance_device.sql        lines   791 -   861
+--   010_roster_movements_backdating.sql lines   863 -  1017
+--   011_entered_by_per_event.sql     lines  1019 -  1069
+--   012_movement_entered_by_names.sql lines  1071 -  1100
+--   013_signout_missing.sql          lines  1102 -  1151
+--   014_corrections.sql              lines  1153 -  1216
+--   015_movement_corrections.sql     lines  1218 -  1277
+--   016_late_threshold_snapshot.sql  lines  1279 -  1328
+--   017_visit_corrections.sql        lines  1330 -  1401
 -- ============================================================================
 \set ON_ERROR_STOP on
 \echo '>>> applying 001_foundation.sql'
@@ -1323,5 +1324,78 @@ ALTER TABLE attendance_record
 UPDATE attendance_record
    SET late_after_local = (SELECT value #>> '{}' FROM setting WHERE key = 'attendance.late_after_local')
  WHERE (SELECT value #>> '{}' FROM setting WHERE key = 'attendance.late_after_local') ~ '^([01][0-9]|2[0-3]):[0-5][0-9]$';
+
+COMMIT;
+\echo '>>> applying 017_visit_corrections.sql'
+-- 017 the visitor log can be wrong too: corrections, removal, and one open visit each.
+--
+-- WHY. Check-in and check-out now write real visits (screens 03, 04, 05). The lesson from
+-- attendance (014) and movements (015) was that a write path with no way to fix it makes
+-- the front desk keep a second paper list. So `visit` gets the same correction columns,
+-- BEFORE the first real visit is written rather than after.
+--
+-- The FULL history of every correction (before and after) is in audit_log. These columns
+-- are only so a list can show AT A GLANCE that a visit was changed, by whom, when and why,
+-- and they always describe the LATEST correction. correction_reason, corrected_at and
+-- corrected_by come together or not at all, exactly as on attendance_record and movement.
+--
+-- REMOVED IS A VOID, NOT A DELETE (same reasoning as 014): the row stays, with its reason
+-- and who removed it, so audit_log, visit_event and any later enquiry or handover still
+-- point at something. A voided visit COUNTS FOR NOTHING: it is not "in the building", it is
+-- in no count on the dashboard, and it does not stop the same person checking in again. The
+-- indexes below exclude it; the application must exclude it from every query of its own.
+--
+-- ONE OPEN VISIT PER PERSON. A client (by portal id) or a non-client visitor (by visitor
+-- row) can be checked in only once at a time: a second check-in while the first is open is
+-- a double entry, not a second visit. The application checks it first (under a lock, and
+-- names the open visit); these indexes are the backstop. Nothing has written a visit before
+-- this migration, so they cannot fail on existing rows.
+--
+-- AUTO_CLOSED (003) is set only by an EXPLICIT end-of-day action that names the visits, and
+-- checked_out_by then records who closed them; checked_out_at is when they were closed, NOT
+-- when the visitor left, which nobody recorded. 003's constraints already allow that.
+
+BEGIN;
+
+ALTER TABLE visit
+  ADD COLUMN correction_reason text,
+  ADD COLUMN corrected_at timestamptz,
+  ADD COLUMN corrected_by uuid,
+  ADD COLUMN voided_at timestamptz;
+
+ALTER TABLE visit
+  ADD CONSTRAINT visit_corrected_by_fkey
+    FOREIGN KEY (corrected_by) REFERENCES staff (id);
+
+-- A reason, when present, is never blank (as attendance and movement).
+ALTER TABLE visit
+  ADD CONSTRAINT visit_correction_reason_not_blank_check
+    CHECK (correction_reason IS NULL OR btrim(correction_reason) <> '');
+
+-- When and by whom come together: a correction always says who made it.
+ALTER TABLE visit
+  ADD CONSTRAINT visit_corrected_pair_check
+    CHECK ((corrected_at IS NULL) = (corrected_by IS NULL));
+
+-- And with the reason: a reason without them, or them without a reason, is refused.
+ALTER TABLE visit
+  ADD CONSTRAINT visit_corrected_matches_reason_check
+    CHECK ((correction_reason IS NULL) = (corrected_at IS NULL));
+
+-- A removal is a correction: it carries the reason, the person and the time.
+ALTER TABLE visit
+  ADD CONSTRAINT visit_voided_needs_correction_check
+    CHECK (voided_at IS NULL OR corrected_at IS NOT NULL);
+
+-- Who they came to see, when given, is never blank (the application stores none instead).
+ALTER TABLE visit
+  ADD CONSTRAINT visit_to_see_not_blank_check
+    CHECK (to_see IS NULL OR btrim(to_see) <> '');
+
+CREATE UNIQUE INDEX visit_one_open_per_client_key ON visit (portal_client_id)
+  WHERE checked_out_at IS NULL AND voided_at IS NULL AND portal_client_id IS NOT NULL;
+
+CREATE UNIQUE INDEX visit_one_open_per_visitor_key ON visit (visitor_id)
+  WHERE checked_out_at IS NULL AND voided_at IS NULL AND visitor_id IS NOT NULL;
 
 COMMIT;

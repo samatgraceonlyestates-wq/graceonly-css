@@ -14,8 +14,12 @@ export function elapsedTone(seconds: number): ElapsedTone {
   return "red";
 }
 
+// MM:SS under an hour (04:12), H:MM:SS from an hour (1:05:12): a visitor kept two hours
+// must not read as "125:40".
 export function formatElapsed(seconds: number): string {
-  const minutes = Math.floor(seconds / 60);
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
   const rest = seconds % 60;
-  return `${String(minutes).padStart(2, "0")}:${String(rest).padStart(2, "0")}`;
+  const mmss = `${String(minutes).padStart(2, "0")}:${String(rest).padStart(2, "0")}`;
+  return hours > 0 ? `${hours}:${mmss}` : `${String(Math.floor(seconds / 60)).padStart(2, "0")}:${String(rest).padStart(2, "0")}`;
 }

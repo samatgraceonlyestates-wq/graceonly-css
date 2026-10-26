@@ -174,6 +174,21 @@ export function lagosInstantAt(date: string, hhmm: string): Date {
   return instantFromWall(year, month, day, Number(match[1]), Number(match[2]));
 }
 
+/**
+ * A page's ?day= parameter: the day asked for if it is a real "YYYY-MM-DD" Lagos day that is
+ * not after `today`, else `today`. Never throws: a bad link shows today.
+ */
+export function pastOrToday(raw: string | string[] | undefined, today: string): string {
+  const value = Array.isArray(raw) ? raw[0] : raw;
+  if (value === undefined || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return today;
+  try {
+    lagosDayRange(value);
+  } catch {
+    return today;
+  }
+  return value > today ? today : value;
+}
+
 /** The calendar date `days` after (or before, if negative) `date`. */
 export function lagosAddDays(date: string, days: number): string {
   const { year, month, day } = parseDate(date);

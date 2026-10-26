@@ -1,17 +1,26 @@
+// Screen 02, the dashboard (Figma 24:2 / 24:125). EVERY NUMBER HERE IS REAL OR SAYS IT IS
+// MISSING: no invented figure on a screen someone will read as fact.
+//  - Visits today and Active now are counted by the database from real visits (removed
+//    ones never count). "vs yesterday" deltas are NOT shown: today is a part-day, yesterday
+//    a whole one, and a percentage between them would mislead. Yesterday's total is given
+//    as a plain caption instead.
+//  - Open complaints and Docs released have NO source yet (the portal has no case endpoints;
+//    document handover is not built), so their tiles show a dash and say so. The complaints
+//    panel says the same instead of listing sample cases.
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Card } from "@/components/Card/Card";
 import { Chip } from "@/components/Chip/Chip";
-import { ComplaintAge } from "@/components/ComplaintAge/ComplaintAge";
 import { ElapsedTime } from "@/components/ElapsedTime/ElapsedTime";
+import { Notice } from "@/components/Notice/Notice";
 import { PageHeader } from "@/components/PageHeader/PageHeader";
 import { PersonCell } from "@/components/PersonCell/PersonCell";
 import { StatTile } from "@/components/StatTile/StatTile";
-import { StatusPill } from "@/components/StatusPill/StatusPill";
 import { requireSession } from "@/lib/auth";
-import { cx } from "@/lib/cx";
-import { getClockParts, greetingForHour } from "@/lib/format";
-import { disputeTypeText, getDashboardSample } from "@/lib/sampleData";
+import { firstName, formatIsoDate, getClockParts, greetingForHour } from "@/lib/format";
+import { lagosDateOf } from "@/lib/lagosTime";
+import { reasonLabel, typeLabel } from "@/lib/visits";
+import { loadOpenVisits, loadVisitCounts } from "@/lib/visitStore";
 import styles from "./page.module.css";
 
 export const metadata: Metadata = {
@@ -21,11 +30,15 @@ export const metadata: Metadata = {
 // Live front-desk state: render per request, never at build time.
 export const dynamic = "force-dynamic";
 
+const plural = (count: number, one: string, many: string) => `${count} ${count === 1 ? one : many}`;
+
 export default async function DashboardPage() {
-  await requireSession();
+  const user = await requireSession();
   const now = new Date();
-  const { asOf, user, stats, visits, complaints } = getDashboardSample(now);
+  const asOf = now.toISOString();
   const clock = getClockParts(now);
+  const today = lagosDateOf(now);
+  const [counts, open] = await Promise.all([loadVisitCounts(now), loadOpenVisits(5)]);
 
   return (
     <div className={styles.page}>
@@ -40,40 +53,21 @@ export default async function DashboardPage() {
             </span>
           </>
         }
-        title={`${greetingForHour(clock.hour)}, ${user.name}.`}
-        lede={`${stats.visitsToday.value} visitors in today. ${stats.openComplaints.value} complaints need admin eyes.`}
+        title={`${greetingForHour(clock.hour)}, ${firstName(user.fullName)}.`}
+        lede={`${plural(counts.today, "visitor", "visitors")} in today, ${counts.inBuilding} in the building now.`}
         ledeHiddenOnMobile
       />
 
       <section className={styles.kpis} aria-label="Today at a glance">
-        <StatTile
-          label="Visits today"
-          shortLabel="Today"
-          value={stats.visitsToday.value}
-          delta={stats.visitsToday.delta}
-          comparison="vs yesterday"
-        />
+        <StatTile label="Visits today" shortLabel="Today" value={counts.today} caption={`Yesterday: ${counts.yesterday} in all`} />
         <StatTile
           label="Active now"
           shortLabel="Active"
-          value={stats.activeNow.value}
-          delta={stats.activeNow.delta}
-          comparison="vs yesterday"
+          value={counts.inBuilding}
+          caption={counts.inBuildingFromEarlier > 0 ? `${counts.inBuildingFromEarlier} open from an earlier day` : "In the building"}
         />
-        <StatTile
-          label="Open complaints"
-          shortLabel="Open"
-          value={stats.openComplaints.value}
-          delta={stats.openComplaints.delta}
-          comparison="vs yesterday"
-        />
-        <StatTile
-          label="Docs released"
-          value={stats.docsReleased.value}
-          delta={stats.docsReleased.delta}
-          comparison="vs yesterday"
-          desktopOnly
-        />
+        <StatTile label="Open complaints" shortLabel="Open" value="—" caption="Not connected yet" />
+        <StatTile label="Docs released" value="—" caption="Not recorded in CSS yet" desktopOnly />
       </section>
 
       <div className={styles.panels}>
@@ -88,28 +82,47 @@ export default async function DashboardPage() {
             </Link>
           </div>
 
-          <ul className={styles.list}>
-            {visits.map((visit) => (
-              <li key={visit.id} className={styles.row}>
-                <PersonCell
-                  className={styles.visitPerson}
-                  name={visit.name}
-                  sub={
-                    <>
-                      <span className={styles.desktopOnly}>
-                        {visit.detail ? `${visit.kind} · ${visit.detail}` : visit.kind}
-                      </span>
-                      <span className={styles.mobileOnly}>
-                        {visit.kind} · {visit.reason}
-                      </span>
-                    </>
-                  }
-                />
-                <Chip className={styles.visitChip}>{visit.reason}</Chip>
-                <ElapsedTime checkInAt={visit.checkInAt} asOf={asOf} />
-              </li>
-            ))}
-          </ul>
+          {open.length === 0 ? (
+            <p className={styles.empty}>Nobody is checked in right now.</p>
+          ) : (
+            <ul className={styles.list}>
+              {open.map((visit) => {
+                const older = lagosDateOf(visit.checkedInAt) !== today;
+                return (
+                  <li key={visit.id} className={styles.row}>
+                    <Link href={`/visits/${visit.id}`} className={styles.visitLink}>
+                      <PersonCell
+                        className={styles.visitPerson}
+                        name={visit.name}
+                        sub={
+                          <>
+                            <span className={styles.desktopOnly}>
+                              {typeLabel(visit.visitorTypeCode)}
+                              {visit.lookupOutcome === "PORTAL_UNAVAILABLE" ? " · not verified" : ""}
+                            </span>
+                            <span className={styles.mobileOnly}>
+                              {typeLabel(visit.visitorTypeCode)} · {reasonLabel(visit.reasonCode)}
+                            </span>
+                          </>
+                        }
+                      />
+                    </Link>
+                    <Chip className={styles.visitChip}>{reasonLabel(visit.reasonCode)}</Chip>
+                    {older ? (
+                      <span className={styles.older}>Since {formatIsoDate(lagosDateOf(visit.checkedInAt))}</span>
+                    ) : (
+                      <ElapsedTime checkInAt={visit.checkedInAt.toISOString()} asOf={asOf} />
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+          {counts.inBuilding > open.length ? (
+            <p className={styles.more}>
+              {counts.inBuilding - open.length} more in the building. <Link href="/visits">See them all.</Link>
+            </p>
+          ) : null}
         </Card>
 
         <Card as="section" aria-labelledby="open-complaints-heading" plainOnMobile className={styles.panel}>
@@ -117,22 +130,13 @@ export default async function DashboardPage() {
             <h2 id="open-complaints-heading" className={styles.panelTitle}>
               Open complaints
             </h2>
-            <StatusPill tone="red">{stats.openComplaints.value} open</StatusPill>
           </div>
-
-          <ul className={styles.list}>
-            {complaints.map((complaint) => (
-              <li key={complaint.id} className={cx(styles.row, styles.complaint)}>
-                <div className={styles.complaintTop}>
-                  <span className={styles.complaintTitle}>{complaint.subject}</span>
-                  <ComplaintAge raisedAt={complaint.raisedAt} asOf={asOf} className={styles.age} />
-                </div>
-                <p className={styles.complaintMeta}>
-                  {complaint.clientName} · {disputeTypeText(complaint)}
-                </p>
-              </li>
-            ))}
-          </ul>
+          <Notice tone="guidance" title="Not connected yet" role="status">
+            <p>
+              Complaints belong to the client portal, which does not offer them to CSS yet, so none can be shown here. Nothing on
+              this panel is a count of real complaints.
+            </p>
+          </Notice>
         </Card>
       </div>
     </div>

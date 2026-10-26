@@ -30,7 +30,7 @@ import { requireAnyRole } from "@/lib/auth";
 import { timeLabel } from "@/lib/departureTime";
 import { loadDayBoard } from "@/lib/departureStore";
 import { formatDuration, formatIsoDate, formatLongDate } from "@/lib/format";
-import { lagosDateOf, lagosDayRange } from "@/lib/lagosTime";
+import { lagosDateOf, pastOrToday } from "@/lib/lagosTime";
 import { loadMovementSuggestions } from "@/lib/movementStore";
 import type { BoardMovement, BoardPerson } from "@/lib/todayBoard";
 import { BoardDataProvider } from "./BoardData";
@@ -83,18 +83,6 @@ const fact = (label: string, value: React.ReactNode) => (
   </p>
 );
 
-/** The day to show: the one asked for if it is a real Lagos day that is not in the future, else today. */
-function chosenDay(raw: string | string[] | undefined, today: string): string {
-  const value = Array.isArray(raw) ? raw[0] : raw;
-  if (value === undefined || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return today;
-  try {
-    lagosDayRange(value);
-  } catch {
-    return today;
-  }
-  return value > today ? today : value;
-}
-
 export default async function BoardPage({ searchParams }: { searchParams: Promise<{ day?: string | string[] }> }) {
   const { allowed } = await requireAnyRole(ARRIVAL_ROLES);
   if (!allowed) {
@@ -108,7 +96,7 @@ export default async function BoardPage({ searchParams }: { searchParams: Promis
   const now = new Date();
   const asOf = now.toISOString();
   const today = lagosDateOf(now);
-  const day = chosenDay((await searchParams).day, today);
+  const day = pastOrToday((await searchParams).day, today);
   const board = await loadDayBoard(day, now);
   // The roster (for the approver of a movement) and what has been used before (for suggestions).
   const [roster, suggestions] = await Promise.all([loadArrivalRoster(), loadMovementSuggestions()]);

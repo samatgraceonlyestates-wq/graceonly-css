@@ -145,3 +145,67 @@
   flex-direction: column;
   gap: var(--fold-space-12);
 }
+
+/* ---------- a non-client's details (UNDESIGNED: not in the frame description) ---------- */
+
+.visitorDetails {
+  display: flex;
+  flex-direction: column;
+  gap: var(--fold-space-12);
+}
+
+.detailsHeading {
+  color: var(--fold-burgundy);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.detailsRow {
+  display: flex;
+  flex-direction: column;
+  gap: var(--fold-space-12);
+}
+
+.detailsField {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: var(--fold-space-8);
+  min-width: 0;
+}
+
+.consent {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--fold-space-10);
+  color: var(--fold-burgundy);
+  font-size: 14px;
+  line-height: 1.5;
+  cursor: pointer;
+}
+
+.consent input {
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+  margin-top: 2px;
+  accent-color: var(--fold-burgundy);
+}
+
+.consentNote {
+  color: var(--fold-dusk);
+  font-size: 13px;
+}
+
+.confirmActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--fold-space-8);
+  margin-top: var(--fold-space-10);
+}
+
+@media (min-width: 768px) {
+  .detailsRow {
+    flex-direction: row;
+  }
+}

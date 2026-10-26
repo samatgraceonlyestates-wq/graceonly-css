@@ -1,4 +1,6 @@
-/* Mobile first (Figma 26:147). Desktop (Figma 26:2) from 768px up. */
+/* Mobile first (Figma 26:147). Desktop (Figma 26:2) from 768px up. The day form, the
+   Left / Removed sections and the end-of-day panel are UNDESIGNED: tokens only, the same
+   shapes as the attendance board. */
 .page {
   display: flex;
   flex-direction: column;
@@ -20,6 +22,194 @@
 
 .mobileInline {
   display: inline;
+}
+
+/* The visitor's name opens the visit (05). */
+.personLink {
+  display: block;
+  min-width: 0;
+  color: inherit;
+  text-decoration: none;
+  border-radius: var(--fold-radius-sm);
+}
+
+.listPerson {
+  --person-gap: var(--fold-space-12);
+}
+
+.personLink:hover .person,
+.personLink:focus-visible .person,
+.personLink:hover .listPerson,
+.personLink:focus-visible .listPerson {
+  text-decoration: underline;
+}
+
+.personLink:focus-visible {
+  outline: 2px solid var(--fold-gold);
+  outline-offset: 2px;
+}
+
+.older {
+  color: var(--fold-status-amber-ink);
+  font-weight: 600;
+}
+
+.unknown {
+  color: var(--fold-dusk);
+  font-weight: 600;
+}
+
+.rowCheckOut {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--fold-space-4);
+}
+
+.rowError {
+  max-width: 260px;
+  color: var(--fold-status-red);
+  font-size: 12px;
+  line-height: 1.4;
+  text-align: right;
+}
+
+/* ---- the day ---- */
+.dayForm {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--fold-space-10);
+}
+
+.dayLabel {
+  color: var(--fold-dusk);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+}
+
+.dayInput {
+  height: 40px;
+  padding: 0 var(--fold-space-14);
+  border: 1px solid var(--fold-silver);
+  border-radius: var(--fold-radius-pill);
+  background: var(--fold-white);
+  color: var(--fold-dusk);
+  font: inherit;
+  /* Keep at 16px: iOS zooms the page on focus for anything smaller. */
+  font-size: 16px;
+}
+
+.dayInput:focus-visible {
+  outline: 2px solid var(--fold-gold);
+  outline-offset: 2px;
+}
+
+/* The day in words: the picker alone shows the browser's own format, which can be misread. */
+.dayLong {
+  color: var(--fold-burgundy);
+  font-size: 15px;
+  font-weight: 600;
+}
+
+/* ---- Left, Removed, End of day ---- */
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--fold-space-12);
+}
+
+.sectionTitle {
+  color: var(--fold-burgundy);
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: -0.54px;
+}
+
+.sectionCount {
+  margin-left: var(--fold-space-6);
+  color: var(--fold-dusk);
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0;
+}
+
+.sectionNote,
+.empty {
+  margin: 0;
+  color: var(--fold-dusk);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--fold-space-6);
+  padding: var(--fold-space-14) 0;
+  border-bottom: 1px solid var(--fold-silver);
+}
+
+.item:last-child {
+  border-bottom: 0;
+}
+
+/* The facts sit under the name, in line with it (past the 36px avatar and its gap). */
+.facts,
+.note {
+  margin: 0 0 0 calc(36px + var(--fold-space-12));
+  color: var(--fold-dusk);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.note {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--fold-space-8);
+}
+
+.note q {
+  color: var(--fold-burgundy);
+  font-weight: 500;
+}
+
+.confirm {
+  display: flex;
+  flex-direction: column;
+  gap: var(--fold-space-10);
+  padding: var(--fold-space-12) var(--fold-space-14);
+  border-radius: var(--fold-radius-card);
+  background: var(--fold-mist);
+}
+
+.confirmText {
+  margin: 0;
+  color: var(--fold-dusk);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.confirmText strong {
+  color: var(--fold-burgundy);
+  font-weight: 600;
+}
+
+.confirmActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--fold-space-8);
 }
 
 /* Mobile card: person and elapsed on top; chip, check-in time and the
