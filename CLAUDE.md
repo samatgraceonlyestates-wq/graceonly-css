@@ -812,6 +812,12 @@ PG10 server. It is GENERATED (`npm run db:proof`) and is NOT a migration: never
 put it in `db/migrations/`, never edit it, and regenerate it (and commit both)
 after ANY change to `db/migrations/` (a new file; or an edit, which is only
 allowed before the first server apply). `npm run db:proof:check` fails if it is stale.
+The server took the proof file ONCE (001-009) and NEVER takes it again. Later migrations go
+to it as a GENERATED PENDING FILE: `db/pending-010-016.sql` (`npm run db:pending`,
+`db:pending:check`; `db/build-pending.mjs`, sharing `db/bundle.mjs` with the proof builder),
+010 to 016 verbatim with the same markers and line ranges, applied once on top of 001-009 and
+proven to give the same schema as the sixteen files. Not a migration; never in
+`db/migrations/`. The next one covers what comes after 016.
 
 - MIGRATIONS ARE APPEND-ONLY. AFTER THE NEXT SERVER APPLY, `db/migrations/` IS
   APPEND-ONLY WITH NO EXCEPTIONS: a change to the schema is a NEW numbered
