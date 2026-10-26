@@ -106,8 +106,9 @@ const approverOf = (formData: FormData) => ({
   confirmNew: textOf(formData, "approverConfirmNew") === "true",
 });
 
-// A person who is IN leaves the premises: where, what for, who approved it (a ROSTER
-// person, by the same name rules as the arrivals sheet), and the time they left.
+// A person who is IN leaves the premises: where, what for (resolved against what has been
+// used before: no drift), who approved it (a ROSTER person, by the same name rules as the
+// arrivals sheet; it may be themselves, which is marked), and the time they left.
 export async function recordDepartureAction(_previous: BoardActionState, formData: FormData): Promise<BoardActionState> {
   const { user, allowed } = await requireAnyRole(ARRIVAL_ROLES);
   if (!allowed) return error("Only the front desk can record a movement.");
@@ -119,6 +120,8 @@ export async function recordDepartureAction(_previous: BoardActionState, formDat
         purpose: textOf(formData, "purpose"),
         timeLeft: textOf(formData, "timeLeft"),
         approver: approverOf(formData),
+        destinationConfirmNew: textOf(formData, "destinationConfirmNew") === "true",
+        purposeConfirmNew: textOf(formData, "purposeConfirmNew") === "true",
       },
       { store: pgMovementStore, actorId: user.staffId, now: new Date(), newId: randomUUID },
     );
@@ -166,6 +169,8 @@ export async function correctMovementAction(_previous: BoardActionState, formDat
         destination: textOf(formData, "destination"),
         purpose: textOf(formData, "purpose"),
         approver: approverOf(formData),
+        destinationConfirmNew: textOf(formData, "destinationConfirmNew") === "true",
+        purposeConfirmNew: textOf(formData, "purposeConfirmNew") === "true",
         reason: textOf(formData, "reason"),
       },
       { store: pgMovementCorrectionStore, actorId: user.staffId, now: new Date(), newId: randomUUID },

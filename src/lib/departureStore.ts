@@ -50,6 +50,7 @@ export async function loadDayBoard(dayOrNow: string | Date, now: Date): Promise<
     destination: string;
     purpose: string;
     approver: string;
+    self_approved: boolean;
     returned_by: string | null;
     version: string;
     corrected_at: Date | null;
@@ -58,9 +59,10 @@ export async function loadDayBoard(dayOrNow: string | Date, now: Date): Promise<
     voided_at: Date | null;
   }>(sql`
     SELECT m.id, m.attendance_record_id, m.left_at, m.returned_at, m.destination, m.purpose, a.full_name AS approver,
-           rb.full_name AS returned_by, m.updated_at::text AS version, m.corrected_at, c.full_name AS corrected_by_name,
+           (m.approved_by = r.staff_id) AS self_approved, rb.full_name AS returned_by, m.updated_at::text AS version, m.corrected_at, c.full_name AS corrected_by_name,
            m.correction_reason, m.voided_at
       FROM movement m
+      JOIN attendance_record r ON r.id = m.attendance_record_id
       JOIN staff a ON a.id = m.approved_by
       LEFT JOIN staff rb ON rb.id = m.returned_entered_by
       LEFT JOIN staff c ON c.id = m.corrected_by
@@ -93,6 +95,7 @@ export async function loadDayBoard(dayOrNow: string | Date, now: Date): Promise<
         destination: row.destination,
         purpose: row.purpose,
         approvedByName: row.approver,
+        selfApproved: row.self_approved,
         returnedByName: row.returned_by,
         version: row.version,
         correctedAt: row.corrected_at,

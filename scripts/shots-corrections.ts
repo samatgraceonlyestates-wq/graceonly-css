@@ -39,6 +39,7 @@ export default async function scenario({ base, open, shot, problem }: ScenarioHe
   // ---------------------------------------------------------------- phone: the correction panel
   const phone = await open("phone");
   await phone.goto(`${base}/attendance`, { waitUntil: "networkidle" });
+  await phone.getByRole("button", { name: "Show Amaka Obi" }).click(); // rows are collapsed on a phone
   const phonePanel = await openCorrect(phone, "Amaka Obi");
   await phonePanel.getByRole("button", { name: "Change time in" }).click();
   await shot(phone, "corr-1-panel-phone");

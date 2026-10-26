@@ -29,6 +29,7 @@ const movement = (recordId: string, extra: Partial<BoardMovement> = {}): BoardMo
   destination: "Bank",
   purpose: "Lodgement",
   approvedByName: "Peter Obi",
+  selfApproved: false,
   returnedByName: null,
   version: "v1",
   correctedAt: null,

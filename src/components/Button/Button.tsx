@@ -18,6 +18,11 @@ type Props = {
   // For a button that changes the page it is on (never with href). Kept to one
   // handler: forms still submit through the form's own action.
   onClick?: () => void;
+  // For a button that shows and hides something (buttons only, not links).
+  "aria-expanded"?: boolean;
+  "aria-controls"?: string;
+  // When the visible text alone is ambiguous in a list ("Show" on every row); keep it starting with that text.
+  "aria-label"?: string;
   className?: string;
   children: ReactNode;
 };
@@ -33,6 +38,7 @@ export function Button({
   onClick,
   className,
   children,
+  ...aria
 }: Props) {
   const classes = cx(
     styles.button,
@@ -51,7 +57,7 @@ export function Button({
   }
 
   return (
-    <button type={type} className={classes} disabled={disabled} onClick={onClick}>
+    <button type={type} className={classes} disabled={disabled} onClick={onClick} {...aria}>
       {children}
     </button>
   );

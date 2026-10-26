@@ -10,7 +10,11 @@
 // Durations tick, and the board refreshes, on the ONE shared interval (useNow.ts): there
 // is no timer here. A record that has been corrected says so, in its row, with who, when
 // and why; a removed record is left out of every list and count and appears only in
-// "Removed records".
+// "Removed records". A movement the person approved themselves is marked "Self-approved".
+//
+// FINDING A ROW: a filter box narrows the lists by name (BoardFilter.tsx) and never changes a
+// count. ON A PHONE every row is collapsed to one line until opened (PersonRow.tsx); the
+// desktop is unchanged.
 import type { Metadata } from "next";
 import { Button } from "@/components/Button/Button";
 import { Card } from "@/components/Card/Card";
@@ -30,9 +34,11 @@ import { lagosDateOf, lagosDayRange } from "@/lib/lagosTime";
 import { loadMovementSuggestions } from "@/lib/movementStore";
 import type { BoardMovement, BoardPerson } from "@/lib/todayBoard";
 import { BoardDataProvider } from "./BoardData";
+import { BoardFilterBox, BoardFilterProvider, FilterMiss } from "./BoardFilter";
 import { BoardRefresher } from "./BoardRefresher";
 import { EndOfDay } from "./EndOfDay";
 import { MovementItem, type MovementView } from "./MovementItem";
+import { PersonRow } from "./PersonRow";
 import { RowActions, type RowState } from "./RowActions";
 import styles from "./page.module.css";
 
@@ -48,12 +54,15 @@ function Section({
   title,
   count,
   empty,
+  names,
   children,
 }: {
   id: string;
   title: string;
   count: number;
   empty: string;
+  /** The names of its rows, so it can say when the filter box hides every one of them. */
+  names: string[];
   children: React.ReactNode;
 }) {
   return (
@@ -62,6 +71,7 @@ function Section({
         {title} <span className={styles.sectionCount}>{count}</span>
       </h2>
       {count === 0 ? <p className={styles.empty}>{empty}</p> : <ul className={styles.list}>{children}</ul>}
+      <FilterMiss names={names} />
     </Card>
   );
 }
@@ -126,6 +136,7 @@ export default async function BoardPage({ searchParams }: { searchParams: Promis
     destination: movement.destination,
     purpose: movement.purpose,
     approvedBy: movement.approvedByName,
+    selfApproved: movement.selfApproved,
     removed,
     note:
       movement.correctedAt !== null
@@ -153,6 +164,7 @@ export default async function BoardPage({ searchParams }: { searchParams: Promis
   const actions = (person: BoardPerson, state: RowState) => (
     <RowActions
       recordId={person.id}
+      staffId={person.staffId}
       version={person.version}
       name={person.name}
       state={state}
@@ -165,9 +177,14 @@ export default async function BoardPage({ searchParams }: { searchParams: Promis
   );
 
   const { isToday } = board;
+  const head = (person: BoardPerson) => <PersonCell name={person.name} sub={sub(person)} size={36} />;
+  const names = (people: BoardPerson[]) => people.map((person) => person.name);
+  // The one line a COLLAPSED row shows on a phone: enough to find the person and see their state.
+  const corrected = (person: BoardPerson) => (person.correctedAt !== null ? " · Corrected" : "");
 
   return (
     <BoardDataProvider roster={roster} destinations={suggestions.destinations} purposes={suggestions.purposes}>
+    <BoardFilterProvider names={names([...board.inNow, ...board.outNow, ...board.gone, ...board.noSignout, ...board.removed])}>
     <div className={styles.page}>
       <BoardRefresher asOf={asOf} />
 
@@ -203,15 +220,31 @@ export default async function BoardPage({ searchParams }: { searchParams: Promis
         <StatTile label="No sign-out" value={board.counts.noSignout} tone="red" dot dense />
       </div>
 
+      <BoardFilterBox />
+
       <Section
         id="in-heading"
         title={isToday ? "In now" : "Still open (never closed)"}
         count={board.counts.in}
         empty={isToday ? "Nobody is recorded as in." : "Every record that day was closed."}
+        names={names(board.inNow)}
       >
         {board.inNow.map((person) => (
-          <li key={person.id} className={styles.item}>
-            <PersonCell name={person.name} sub={sub(person)} size={36} />
+          <PersonRow
+            key={person.id}
+            name={person.name}
+            head={head(person)}
+            glance={
+              person.olderDay ? (
+                <>In since {formatIsoDate(person.arrivedOn)} · still open{corrected(person)}</>
+              ) : (
+                <>
+                  In {timeLabel(person.clockInAt)} · <Duration since={person.clockInAt.toISOString()} asOf={asOf} />
+                  {corrected(person)}
+                </>
+              )
+            }
+          >
             {fact("In at", timeLabel(person.clockInAt))}
             {person.olderDay ? (
               <p className={styles.fact}>
@@ -224,7 +257,7 @@ export default async function BoardPage({ searchParams }: { searchParams: Promis
             {actions(person, "in")}
             {note(person)}
             {movementsBlock(person)}
-          </li>
+          </PersonRow>
         ))}
       </Section>
 
@@ -233,17 +266,28 @@ export default async function BoardPage({ searchParams }: { searchParams: Promis
         title="Out on a movement"
         count={board.counts.out}
         empty="Nobody is out on a movement. Use Out… on a person who is in."
+        names={names(board.outNow)}
       >
         {board.outNow.map((person) => (
-          <li key={person.id} className={styles.item}>
-            <PersonCell name={person.name} sub={sub(person)} size={36} />
+          <PersonRow
+            key={person.id}
+            name={person.name}
+            head={head(person)}
+            glance={
+              <>
+                Out: {person.movement!.destination} · since {timeLabel(person.movement!.leftAt)}
+                {person.movement!.selfApproved ? " · Self-approved" : ""}
+                {corrected(person)}
+              </>
+            }
+          >
             {fact("Left at", timeLabel(person.movement!.leftAt))}
             {fact("Gone to", `${person.movement!.destination} · ${person.movement!.purpose}`)}
             {fact("Gone for", <Duration since={person.movement!.leftAt.toISOString()} asOf={asOf} />)}
             {actions(person, "out")}
             {note(person)}
             {movementsBlock(person)}
-          </li>
+          </PersonRow>
         ))}
       </Section>
 
@@ -252,17 +296,27 @@ export default async function BoardPage({ searchParams }: { searchParams: Promis
         title="Gone for the day"
         count={board.counts.gone}
         empty={isToday ? "Nobody has been clocked out yet today." : "Nobody was clocked out that day."}
+        names={names(board.gone)}
       >
         {board.gone.map((person) => (
-          <li key={person.id} className={styles.item}>
-            <PersonCell name={person.name} sub={sub(person)} size={36} />
+          <PersonRow
+            key={person.id}
+            name={person.name}
+            head={head(person)}
+            glance={
+              <>
+                {timeLabel(person.clockInAt)} to {timeLabel(person.clockOutAt!)} · {formatDuration(person.clockOutAt!.getTime() - person.clockInAt.getTime())}
+                {corrected(person)}
+              </>
+            }
+          >
             {fact("In", timeLabel(person.clockInAt))}
             {fact("Out", timeLabel(person.clockOutAt!))}
             {fact("Time", formatDuration(person.clockOutAt!.getTime() - person.clockInAt.getTime()))}
             {actions(person, "gone")}
             {note(person)}
             {movementsBlock(person)}
-          </li>
+          </PersonRow>
         ))}
       </Section>
 
@@ -271,10 +325,19 @@ export default async function BoardPage({ searchParams }: { searchParams: Promis
         title="No sign-out"
         count={board.counts.noSignout}
         empty={isToday ? "Nobody has been marked as not signed out today." : "Nobody was marked as not signed out that day."}
+        names={names(board.noSignout)}
       >
         {board.noSignout.map((person) => (
-          <li key={person.id} className={styles.item}>
-            <PersonCell name={person.name} sub={sub(person)} size={36} />
+          <PersonRow
+            key={person.id}
+            name={person.name}
+            head={head(person)}
+            glance={
+              <>
+                In {timeLabel(person.clockInAt)} · no sign-out, hours unknown{corrected(person)}
+              </>
+            }
+          >
             {fact("In", timeLabel(person.clockInAt))}
             {fact("Out", "no time recorded")}
             <p className={styles.fact}>
@@ -284,26 +347,26 @@ export default async function BoardPage({ searchParams }: { searchParams: Promis
             {actions(person, "nosignout")}
             {note(person)}
             {movementsBlock(person)}
-          </li>
+          </PersonRow>
         ))}
       </Section>
 
       {board.removed.length > 0 ? (
-        <Section id="removed-heading" title="Removed records" count={board.removed.length} empty="">
+        <Section id="removed-heading" title="Removed records" count={board.removed.length} empty="" names={names(board.removed)}>
           {board.removed.map((person) => (
-            <li key={person.id} className={styles.item}>
-              <PersonCell name={person.name} sub={sub(person)} size={36} />
+            <PersonRow key={person.id} name={person.name} head={head(person)} glance={<>Removed · was in at {timeLabel(person.clockInAt)}</>}>
               {fact("Was in at", timeLabel(person.clockInAt))}
               {fact("Removed", person.voidedAt ? timeLabel(person.voidedAt) : "")}
               {actions(person, "removed")}
               {note(person, true)}
-            </li>
+            </PersonRow>
           ))}
         </Section>
       ) : null}
 
       {isToday ? <EndOfDay people={board.inNow.map((person) => ({ id: person.id, name: person.name }))} /> : null}
     </div>
+    </BoardFilterProvider>
     </BoardDataProvider>
   );
 }

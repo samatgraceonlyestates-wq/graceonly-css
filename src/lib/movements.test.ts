@@ -14,6 +14,7 @@ import {
   type MovementTx,
   type NewMovement,
 } from "./movements.ts";
+import { phraseKey } from "./phraseMatch.ts";
 import type { RosterName } from "./rosterMatch.ts";
 
 const ACTOR = "00000000-0000-4000-8000-0000000000b2";
@@ -82,6 +83,12 @@ class MemoryStore implements MovementStore {
       lockRecord: async () => {},
       lockMovement: async () => {},
       loadRoster: async () => this.roster.map((p) => ({ ...p })),
+      loadPhrases: async () => {
+        // One spelling per key, live movements only (as movementStore.ts does).
+        const live = this.movements.filter((m) => m.voidedAt === null);
+        const one = (values: string[]) => [...new Map(values.map((v) => [phraseKey(v), v] as const)).values()];
+        return { destinations: one(live.map((m) => m.destination)), purposes: one(live.map((m) => m.purpose)) };
+      },
       shift: async (id) => {
         const shift = this.shifts.get(id);
         // Removed (voided) movements are NOT in liveMovements: they count for nothing.
@@ -208,11 +215,44 @@ describe("recording a departure", () => {
     assert.equal(store.movements[0]!.approvedBy, "p-ada2");
   });
 
-  it("a person cannot approve their own movement", async () => {
+  it("a person MAY approve their own movement (nobody is above the most senior person): saved, and said so", async () => {
     const { store, leave } = setup();
     store.addShift("r1", "Peter Obi", { staffId: "p-peter" });
-    assert.equal(refused(await leave("r1")), "A person cannot approve their own movement.");
-    assert.equal(store.movements.length, 0);
+    const result = await leave("r1");
+    assert.deepEqual(result, { ok: true, message: "Peter Obi is out: Bank. Self-approved." });
+    assert.equal(store.movements[0]!.approvedBy, "p-peter", "the approver is the person who left; the mark is derived from that");
+  });
+
+  it("no drift: a destination or purpose differing only by case or spacing takes the EXISTING spelling", async () => {
+    const { store, leave } = setup();
+    store.addShift("r0", "Grace Nkem");
+    store.addMovement("r0", { destination: "First Bank", purpose: "Cheque lodgement", returnedAt: lagos(9, 20) });
+    store.addShift("r1", "Divine Mike");
+    const result = await leave("r1", { destination: "first   bank", purpose: "CHEQUE LODGEMENT" });
+    assert.deepEqual(result, { ok: true, message: "Divine Mike is out: First Bank. Approved by Peter Obi." });
+    assert.equal(store.movements[1]!.destination, "First Bank");
+    assert.equal(store.movements[1]!.purpose, "Cheque lodgement");
+    assert.equal(store.audits.at(-1)!.after.destination, "First Bank", "the audit row carries what was stored");
+  });
+
+  it("no drift: a CLOSE spelling is a question offering the existing one; saying 'different' stores what she typed", async () => {
+    const { store, leave } = setup();
+    store.addShift("r0", "Grace Nkem");
+    store.addMovement("r0", { destination: "First Bank", returnedAt: lagos(9, 20) });
+    store.addShift("r1", "Divine Mike");
+    assert.equal(refused(await leave("r1", { destination: "Frist Bank" })), 'Where to: "Frist Bank" is close to First Bank, used before. Say whether it is the same place or a different one.');
+    assert.equal(store.movements.length, 1, "nothing is written by a question");
+    assert.equal((await leave("r1", { destination: "Frist Bank", destinationConfirmNew: true })).ok, true);
+    assert.equal(store.movements[1]!.destination, "Frist Bank");
+  });
+
+  it("no drift: a removed movement's spelling is not offered or used", async () => {
+    const { store, leave } = setup();
+    store.addShift("r0", "Grace Nkem");
+    store.addMovement("r0", { destination: "first bank", voidedAt: lagos(9, 30) });
+    store.addShift("r1", "Divine Mike");
+    assert.equal((await leave("r1", { destination: "First Bank" })).ok, true);
+    assert.equal(store.movements[1]!.destination, "First Bank");
   });
 
   it("must sit INSIDE the shift: after the time in, and not in the future", async () => {

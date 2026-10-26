@@ -19,13 +19,19 @@
 //  * a return is after its departure; neither is in the future; movements of one record do
 //    not overlap, and a person is out at most once at a time (the database's open-movement
 //    index is the backstop).
-//  * an approver cannot be the person leaving.
+//  * the approver MAY be the person leaving: when the most senior person in the building goes
+//    out there is nobody above them to approve it. It is allowed and MARKED "self-approved"
+//    wherever the movement is shown (derived from approved_by = the record's person, never
+//    stored), the same principle as corrections: visible, not forbidden.
+//  * where to and what for are resolved against what has been used before (phraseMatch.ts):
+//    a difference of case or spacing takes the EXISTING spelling, a close one is a question.
 //  * a REMOVED (voided) movement counts for nothing: not out, not in any check here.
 // The person and the record are locked FOR UPDATE first, and every check runs under the lock.
 import { parseClockTime } from "./clockTime.ts";
 import { timeLabel } from "./departureTime.ts";
 import { lagosDateOf, lagosInstantAt } from "./lagosTime.ts";
 import { resolveName, type NameInput } from "./nameResolution.ts";
+import { resolvePhrase, type PhraseResolution } from "./phraseMatch.ts";
 import { cleanDisplayName, type RosterName } from "./rosterMatch.ts";
 
 export const MOVEMENT_LIMITS = Object.freeze({ maxDestination: 100, maxPurpose: 200 });
@@ -80,12 +86,19 @@ export interface MovementAudit {
   after: Record<string, unknown>;
 }
 
+export interface MovementPhrases {
+  destinations: string[];
+  purposes: string[];
+}
+
 export interface MovementTx {
   /** Locks the person, then the attendance record, FOR UPDATE. */
   lockRecord(recordId: string): Promise<void>;
   /** Locks the person, the attendance record and the movement, FOR UPDATE. */
   lockMovement(movementId: string): Promise<void>;
   loadRoster(): Promise<RosterName[]>;
+  /** Every destination and purpose used before, one spelling each (removed movements left out). */
+  loadPhrases(): Promise<MovementPhrases>;
   shift(recordId: string): Promise<MovementShift | null>;
   movement(movementId: string): Promise<ExistingMovement | null>;
   createPerson(input: { id: string; name: string; actorId: string }): Promise<void>;
@@ -116,6 +129,28 @@ export function cleanPhrase(raw: unknown): string {
   return typeof raw === "string" ? cleanDisplayName(raw) : "";
 }
 
+/** Where to / what for, resolved: the existing spelling, or a refusal that says what to do. */
+export function phraseOrProblem(
+  resolution: PhraseResolution,
+  field: "destination" | "purpose",
+): { ok: true; phrase: string } | { ok: false; message: string } {
+  const label = field === "destination" ? "Where to" : "What for";
+  const max = field === "destination" ? MOVEMENT_LIMITS.maxDestination : MOVEMENT_LIMITS.maxPurpose;
+  switch (resolution.kind) {
+    case "use":
+      return { ok: true, phrase: resolution.phrase };
+    case "empty":
+      return { ok: false, message: field === "destination" ? "Say where they are going." : "Say what it is for." };
+    case "tooLong":
+      return { ok: false, message: `Keep the ${field} under ${max} characters.` };
+    case "confirm":
+      return {
+        ok: false,
+        message: `${label}: "${resolution.typed}" is close to ${resolution.candidates.join(", ")}, used before. Say whether it is the same ${field === "destination" ? "place" : "thing"} or a different one.`,
+      };
+  }
+}
+
 /** The overlap rule: two intervals [leftA, returnedA) and [leftB, returnedB) (null = still out) overlap. */
 export function overlaps(a: { leftAt: Date; returnedAt: Date | null }, b: { leftAt: Date; returnedAt: Date | null }): boolean {
   const aEnd = a.returnedAt === null ? Infinity : a.returnedAt.getTime();
@@ -130,6 +165,10 @@ export interface DepartureInput {
   /** The time left, 8:15, 08:15 or 0815. */
   timeLeft: string;
   approver: NameInput;
+  /** She said the destination is DIFFERENT from the close ones used before. */
+  destinationConfirmNew?: boolean;
+  /** She said the purpose is DIFFERENT from the close ones used before. */
+  purposeConfirmNew?: boolean;
 }
 
 export async function recordDeparture(input: DepartureInput, deps: MovementDeps): Promise<MovementResult> {
@@ -163,6 +202,13 @@ export async function recordDeparture(input: DepartureInput, deps: MovementDeps)
       return fail(`${shift.name} has another movement recorded from ${timeLabel(clash.leftAt)}${clash.returnedAt ? ` to ${timeLabel(clash.returnedAt)}` : ""}, which overlaps that time.`);
     }
 
+    // Where and what for: the existing spelling when it is the same phrase, a question when close.
+    const phrases = await tx.loadPhrases();
+    const where = phraseOrProblem(resolvePhrase({ text: destination, confirmNew: input.destinationConfirmNew === true }, phrases.destinations, MOVEMENT_LIMITS.maxDestination), "destination");
+    if (!where.ok) return fail(where.message);
+    const what = phraseOrProblem(resolvePhrase({ text: purpose, confirmNew: input.purposeConfirmNew === true }, phrases.purposes, MOVEMENT_LIMITS.maxPurpose), "purpose");
+    if (!what.ok) return fail(what.message);
+
     // The approver: the SAME name rules as the arrivals sheet.
     const roster = await tx.loadRoster();
     const resolution = resolveName(input.approver, roster);
@@ -183,7 +229,8 @@ export async function recordDeparture(input: DepartureInput, deps: MovementDeps)
       approverName = resolution.name;
       created = true;
     }
-    if (approverId === shift.staffId) return fail("A person cannot approve their own movement.");
+    // Allowed, and marked wherever the movement is shown (derived, never stored).
+    const selfApproved = approverId === shift.staffId;
 
     if (created) {
       await tx.createPerson({ id: approverId, name: approverName, actorId: deps.actorId });
@@ -191,15 +238,18 @@ export async function recordDeparture(input: DepartureInput, deps: MovementDeps)
       await tx.audit({ actorId: deps.actorId, entity: "staff", entityId: approverId, action: "CREATE", after: { roster: true, via: "movement approver" } });
     }
     const id = deps.newId();
-    await tx.createMovement({ id, recordId: shift.id, leftAt, destination, purpose, approvedBy: approverId, leftEnteredBy: deps.actorId });
+    await tx.createMovement({ id, recordId: shift.id, leftAt, destination: where.phrase, purpose: what.phrase, approvedBy: approverId, leftEnteredBy: deps.actorId });
     await tx.audit({
       actorId: deps.actorId,
       entity: "movement",
       entityId: id,
       action: "CREATE",
-      after: { attendance_record_id: shift.id, left_at: leftAt.toISOString(), destination, purpose, approved_by: approverId, via: "departure" },
+      after: { attendance_record_id: shift.id, left_at: leftAt.toISOString(), destination: where.phrase, purpose: what.phrase, approved_by: approverId, via: "departure" },
     });
-    return { ok: true, message: `${shift.name} is out: ${destination}. Approved by ${approverName}.` };
+    return {
+      ok: true,
+      message: selfApproved ? `${shift.name} is out: ${where.phrase}. Self-approved.` : `${shift.name} is out: ${where.phrase}. Approved by ${approverName}.`,
+    };
   });
 }
 

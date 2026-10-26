@@ -170,3 +170,13 @@ export function suggest(query: string, roster: readonly RosterName[], limit = 6)
   hits.sort((x, y) => x.rank - y.rank || x.person.name.localeCompare(y.person.name));
   return hits.slice(0, limit).map((hit) => hit.person);
 }
+
+/**
+ * The board's filter box: does this name match what she typed? The same word rule as the
+ * suggestions (every typed word is the start of a different word of the name, case and
+ * accents ignored), so "obi" finds Peter Obi and Amaka Obi. Nothing typed matches everyone.
+ */
+export function matchesFilter(query: string, name: string): boolean {
+  const typed = wordsOf(normaliseName(query));
+  return typed.length === 0 || isPartialOf(typed, wordsOf(normaliseName(name)));
+}

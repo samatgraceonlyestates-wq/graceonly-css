@@ -2,11 +2,11 @@
 
 import { useActionState, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/Button/Button";
-import { Combobox } from "@/components/Combobox/Combobox";
 import { blankName, NameField, type NameValue } from "@/components/NameField/NameField";
+import { blankPhrase, PhraseField, type PhraseValue } from "@/components/PhraseField/PhraseField";
 import type { CorrectionKind } from "@/lib/corrections";
 import { getClockParts } from "@/lib/format";
-import { suggestPhrases } from "@/lib/phraseMatch";
+import { matchName } from "@/lib/rosterMatch";
 import {
   clockOutAction,
   correctRecordAction,
@@ -30,8 +30,11 @@ import styles from "./page.module.css";
 // EARLIER day takes its time on that day, so it has no default.
 //
 // OUT (a movement): where, what for, who approved it, and the time they left. Where and what
-// for are SUGGESTED from what has been used before; the approver is a roster person by the
-// shared NameField (suggestions, the close-name question answered from the keyboard).
+// for are SUGGESTED from what has been used before, and resolved against it by the shared
+// PhraseField (another case or spacing takes the existing spelling; a close one is a question);
+// the approver is a roster person by the shared NameField (suggestions, the close-name
+// question answered from the keyboard). The person may approve their OWN movement (the most
+// senior person has nobody above them): the panel says it will be marked self-approved.
 // A person who is OUT cannot be clocked out until they are BACK: the row says so.
 //
 // CORRECT. Change the time in; change the time out (or give one to a shift marked never signed
@@ -71,6 +74,7 @@ type Mode = "clockout" | "leave" | "return" | "correct" | null;
 
 export function RowActions({
   recordId,
+  staffId,
   version,
   name,
   state,
@@ -81,6 +85,8 @@ export function RowActions({
   asOf,
 }: {
   recordId: string;
+  /** The person whose record this is (to say when they are approving their own movement). */
+  staffId: string;
   /** The record's version as of this render. */
   version: string;
   name: string;
@@ -118,8 +124,8 @@ export function RowActions({
   }
 
   // ---- a movement: out, and back
-  const [where, setWhere] = useState("");
-  const [what, setWhat] = useState("");
+  const [where, setWhere] = useState<PhraseValue>(blankPhrase());
+  const [what, setWhat] = useState<PhraseValue>(blankPhrase());
   const [approver, setApprover] = useState<NameValue>(blankName());
   const [leftTime, setLeftTime] = useState("");
   const [backTime, setBackTime] = useState("");
@@ -131,8 +137,8 @@ export function RowActions({
   const timeEl = useRef<HTMLInputElement | null>(null);
 
   function openLeave() {
-    setWhere("");
-    setWhat("");
+    setWhere(blankPhrase());
+    setWhat(blankPhrase());
     setApprover(blankName());
     setLeftTime(olderDay === null ? nowLabel() : "");
     setMode("leave");
@@ -184,6 +190,11 @@ export function RowActions({
   const leaveMessage = leaveState.status === "error" ? leaveState.message : null;
   const backMessage = backState.status === "error" ? backState.message : null;
   const busy = clocking || marking || fixing || leaving || returning;
+
+  // Approving their own movement: allowed (nobody is above the most senior person), and marked.
+  const approverMatch = approver.personId === null && approver.name.trim() !== "" ? matchName(approver.name, roster) : null;
+  const selfApproving =
+    approver.personId === staffId || (approverMatch?.kind === "exact" && approverMatch.people.length === 1 && approverMatch.people[0]!.id === staffId);
 
   const toggle = (target: Exclude<Mode, null>, open: () => void) => (mode === target ? setMode(null) : open());
 
@@ -264,31 +275,27 @@ export function RowActions({
         <div className={styles.panel} role="group" aria-label={`${name} goes out`} data-pause-refresh="true">
           <form action={leaveAction} className={styles.leaveForm}>
             <input type="hidden" name="recordId" value={recordId} />
-            <input type="hidden" name="destination" value={where} />
-            <input type="hidden" name="purpose" value={what} />
+            <input type="hidden" name="destination" value={where.text} />
+            <input type="hidden" name="destinationConfirmNew" value={String(where.confirmNew)} />
+            <input type="hidden" name="purpose" value={what.text} />
+            <input type="hidden" name="purposeConfirmNew" value={String(what.confirmNew)} />
             <input type="hidden" name="approverName" value={approver.name} />
             <input type="hidden" name="approverId" value={approver.personId ?? ""} />
             <input type="hidden" name="approverConfirmNew" value={String(approver.confirmNew)} />
 
             <div className={styles.phraseField}>
               <span className={styles.label}>Where to</span>
-              <Combobox
+              <PhraseField
                 value={where}
                 onChange={setWhere}
-                onPick={(item) => {
-                  setWhere(item.label);
-                  whatEl.current?.focus();
-                }}
-                suggest={(text) => suggestPhrases(text, destinations).map((phrase) => ({ id: phrase, label: phrase }))}
-                onLeave={(key) => {
-                  if (key === "Enter") whatEl.current?.focus();
-                  return false;
-                }}
+                phrases={destinations}
+                onMoveOn={() => whatEl.current?.focus()}
                 inputRef={(element) => {
                   whereEl.current = element;
                 }}
                 ariaLabel={`Where ${firstName} is going`}
                 placeholder="Bank, site, court…"
+                different="a different place"
                 inputClassName={styles.reasonInput}
                 maxLength={100}
               />
@@ -296,23 +303,17 @@ export function RowActions({
 
             <div className={styles.phraseField}>
               <span className={styles.label}>What for</span>
-              <Combobox
+              <PhraseField
                 value={what}
                 onChange={setWhat}
-                onPick={(item) => {
-                  setWhat(item.label);
-                  approverEl.current?.focus();
-                }}
-                suggest={(text) => suggestPhrases(text, purposes).map((phrase) => ({ id: phrase, label: phrase }))}
-                onLeave={(key) => {
-                  if (key === "Enter") approverEl.current?.focus();
-                  return false;
-                }}
+                phrases={purposes}
+                onMoveOn={() => approverEl.current?.focus()}
                 inputRef={(element) => {
                   whatEl.current = element;
                 }}
                 ariaLabel={`What ${firstName} is going for`}
                 placeholder="Lodgement, inspection…"
+                different="something different"
                 inputClassName={styles.reasonInput}
                 maxLength={200}
               />
@@ -359,6 +360,11 @@ export function RowActions({
               </Button>
             </div>
           </form>
+          {selfApproving ? (
+            <p className={styles.selfNote}>
+              {name} is approving their own movement. That is allowed, and it will be marked self-approved wherever it is shown.
+            </p>
+          ) : null}
           <p className={styles.panelNote}>
             {olderDay !== null
               ? `${firstName} arrived on ${olderDay}: this time is on that day, after ${timeIn}.`

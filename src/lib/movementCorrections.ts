@@ -6,9 +6,10 @@
 //
 //   left          change the time they left
 //   returned      change the time they came back
-//   destination   change where they went
-//   purpose       change what it was for
-//   approver      change who approved it (a ROSTER PERSON, by the shared name rules)
+//   destination   change where they went   } resolved against what has been used before, as
+//   purpose       change what it was for   } a departure is (phraseMatch.ts): no drift
+//   approver      change who approved it (a ROSTER PERSON, by the shared name rules; the
+//                 person who left may be their own approver, which is marked, not refused)
 //   void          REMOVE a movement entirely (a void, not a delete)
 //   restore       UN-REMOVE one removed by mistake
 //
@@ -24,8 +25,9 @@ import { parseClockTime } from "./clockTime.ts";
 import { NEEDS_REASON, STALE_VERSION, CORRECTION_LIMITS } from "./corrections.ts";
 import { timeLabel } from "./departureTime.ts";
 import { lagosDateOf, lagosInstantAt } from "./lagosTime.ts";
-import { cleanPhrase, MOVEMENT_LIMITS, overlaps, type LiveMovement, type MovementAudit } from "./movements.ts";
+import { cleanPhrase, MOVEMENT_LIMITS, overlaps, phraseOrProblem, type LiveMovement, type MovementAudit, type MovementPhrases } from "./movements.ts";
 import { resolveName, type NameInput } from "./nameResolution.ts";
+import { phraseKey, resolvePhrase } from "./phraseMatch.ts";
 import type { RosterName } from "./rosterMatch.ts";
 
 export const MOVEMENT_CORRECTION_KINDS = ["left", "returned", "destination", "purpose", "approver", "void", "restore"] as const;
@@ -67,6 +69,7 @@ export interface MovementCorrectionTx {
   lock(movementId: string): Promise<void>;
   find(movementId: string): Promise<CorrectableMovement | null>;
   loadRoster(): Promise<RosterName[]>;
+  loadPhrases(): Promise<MovementPhrases>;
   createPerson(input: { id: string; name: string; actorId: string }): Promise<void>;
   /** Guarded by the version and by the state its rule just checked. False if nothing was updated. */
   apply(input: { id: string; version: string; actorId: string; reason: string; correction: MovementCorrection }): Promise<boolean>;
@@ -93,6 +96,9 @@ export interface MovementCorrectionInput {
   destination: string;
   purpose: string;
   approver: NameInput;
+  /** She said the new destination / purpose is DIFFERENT from the close ones used before. */
+  destinationConfirmNew?: boolean;
+  purposeConfirmNew?: boolean;
   reason: string;
 }
 
@@ -189,6 +195,13 @@ export async function correctMovement(input: MovementCorrectionInput, deps: Move
         break;
       }
       case "destination": {
+        const phrases = await tx.loadPhrases();
+        // Her own movement's current destination is not offered back: she is changing it.
+        if (phraseKey(destination) === phraseKey(movement.destination)) return fail(`The destination is already ${movement.destination}.`);
+        const others = phrases.destinations.filter((phrase) => phraseKey(phrase) !== phraseKey(movement.destination));
+        const where = phraseOrProblem(resolvePhrase({ text: destination, confirmNew: input.destinationConfirmNew === true }, others, MOVEMENT_LIMITS.maxDestination), "destination");
+        if (!where.ok) return fail(where.message);
+        destination = where.phrase;
         if (destination === movement.destination) return fail(`The destination is already ${movement.destination}.`);
         correction = { kind, destination };
         before = { destination: movement.destination };
@@ -197,6 +210,12 @@ export async function correctMovement(input: MovementCorrectionInput, deps: Move
         break;
       }
       case "purpose": {
+        const phrases = await tx.loadPhrases();
+        if (phraseKey(purpose) === phraseKey(movement.purpose)) return fail(`The purpose is already ${movement.purpose}.`);
+        const others = phrases.purposes.filter((phrase) => phraseKey(phrase) !== phraseKey(movement.purpose));
+        const what = phraseOrProblem(resolvePhrase({ text: purpose, confirmNew: input.purposeConfirmNew === true }, others, MOVEMENT_LIMITS.maxPurpose), "purpose");
+        if (!what.ok) return fail(what.message);
+        purpose = what.phrase;
         if (purpose === movement.purpose) return fail(`The purpose is already ${movement.purpose}.`);
         correction = { kind, purpose };
         before = { purpose: movement.purpose };
@@ -214,13 +233,12 @@ export async function correctMovement(input: MovementCorrectionInput, deps: Move
         }
         const id = resolution.kind === "person" ? resolution.person.id : deps.newId();
         const name = resolution.kind === "person" ? resolution.person.name : resolution.name;
-        if (id === movement.staffId) return fail("A person cannot approve their own movement.");
         if (id === movement.approvedById) return fail(`${name} is already the approver.`);
         if (resolution.kind === "create") newApprover = { id, name };
         correction = { kind, approvedBy: id };
         before = { approved_by: movement.approvedById };
         after = { approved_by: id };
-        message = `${movement.name}: approver changed to ${name}.`;
+        message = id === movement.staffId ? `${movement.name}: approver changed to ${name} (self-approved).` : `${movement.name}: approver changed to ${name}.`;
         break;
       }
       case "restore": {

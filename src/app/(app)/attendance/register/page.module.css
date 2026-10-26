@@ -1,12 +1,14 @@
-/* Mobile first (Figma 32:168). Desktop (Figma 32:2) from 768px up. */
+/* Screen 08 on real data. Mobile first (from Figma 32:168); desktop (32:2) from 768px.
+   Tokens only. A record is a block of labelled facts, stacked on a phone and in columns on a
+   desktop, like the board's rows. */
 .page {
   display: flex;
   flex-direction: column;
-  gap: var(--fold-space-10);
+  gap: var(--fold-space-12);
 }
 
-/* PageHeader spacing for this screen: 4px under the eyebrow and above the
-   sub line on mobile; 20px under the eyebrow and 4px above the sub line on desktop. */
+/* PageHeader spacing for this screen: 4px under the eyebrow and above the sub line on mobile;
+   20px under the eyebrow and 4px above the sub line on desktop. */
 .header {
   --page-header-eyebrow-gap: var(--fold-space-4);
   --page-header-lede-gap: var(--fold-space-4);
@@ -20,82 +22,257 @@
   display: inline;
 }
 
-/* The date is a static label: on mobile it is the line under the title instead. */
-.datePill {
-  display: none;
-  padding: var(--fold-space-10) var(--fold-space-16);
-  border: 1px solid var(--fold-silver);
-  border-radius: var(--fold-radius-pill);
-  background: var(--fold-white);
-  color: var(--fold-burgundy);
-  font-size: 13px;
-  font-weight: 600;
-  white-space: nowrap;
-}
+/* ---------- the period ---------- */
 
-/* ---------- KPI row: four across, dense ---------- */
-
-.kpis {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+.period {
+  display: flex;
+  flex-direction: column;
   gap: var(--fold-space-10);
 }
 
-/* ---------- staff cards (mobile) ---------- */
-
-/* Denser than the visit cards (Figma 32:190): 14/12 padding, 8px between cards,
-   10px between cells. Set on the wrapper so the tbody inherits them too. */
-.tableWrap {
-  --table-card-pad-x: var(--fold-space-14);
-  --table-card-pad-y: var(--fold-space-12);
-  --table-card-gap: var(--fold-space-8);
-  --table-card-col-gap: var(--fold-space-10);
+.periodForm {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--fold-space-10);
 }
 
-/* One person cell per row: 32px avatar and a sub line with 13px / 10px text on
-   mobile; 36px avatar, 14px name and no sub line on desktop. */
-.person {
-  --avatar-size: 32px;
-  --avatar-font: 13px;
-  --person-gap: var(--fold-space-10);
-  --person-name-size: 13px;
-  --person-sub-size: 10px;
-  --person-sub-display: block;
+.periodField {
+  display: flex;
+  flex-direction: column;
+  gap: var(--fold-space-6);
 }
 
-@media (max-width: 767px) {
-  .row {
-    grid-template-columns: minmax(0, 1fr) auto;
-    grid-template-areas: "person status";
-  }
-
-  .cellPerson {
-    grid-area: person;
-  }
-
-  .cellStatus {
-    grid-area: status;
-    justify-self: end;
-  }
+.dateInput {
+  height: 40px;
+  padding: 0 var(--fold-space-14);
+  border: 1px solid var(--fold-silver);
+  border-radius: var(--fold-radius-pill);
+  background: var(--fold-white);
+  color: var(--fold-dusk);
+  font: inherit;
+  /* Keep at 16px: iOS zooms the page on focus for anything smaller. */
+  font-size: 16px;
 }
 
-/* ---------- desktop ---------- */
+.dateInput:focus-visible {
+  outline: 2px solid var(--fold-gold);
+  outline-offset: 2px;
+}
 
-/* `.row .x` (two classes) so these beat the Table's own cell colour no matter
-   which stylesheet loads first. */
-.row .strong {
+.presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--fold-space-8);
+}
+
+/* The quick period being shown. `.presets .presetOn` beats the button's own colours. */
+.presets .presetOn {
+  border-color: var(--fold-burgundy);
+  background: var(--fold-burgundy);
+  color: var(--fold-white);
+}
+
+.copyNote {
+  margin: 0;
+  color: var(--fold-dusk);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+/* ---------- KPI row ---------- */
+
+.kpis {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--fold-space-10);
+}
+
+/* ---------- a section (a department, who entered, leave, no record) ---------- */
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--fold-space-12);
+}
+
+.sectionHead {
+  display: flex;
+  flex-direction: column;
+  gap: var(--fold-space-4);
+}
+
+.sectionTitle {
+  margin: 0;
   color: var(--fold-burgundy);
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: -0.54px;
+}
+
+.sectionCount {
+  margin-left: var(--fold-space-6);
+  color: var(--fold-dusk);
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0;
+}
+
+.sectionNote {
+  margin: 0;
+  color: var(--fold-dusk);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.people,
+.records,
+.enteredList,
+.nameList {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.person {
+  display: flex;
+  flex-direction: column;
+  gap: var(--fold-space-8);
+  padding: var(--fold-space-14) 0;
+  border-bottom: 1px solid var(--fold-silver);
+}
+
+.person:last-child {
+  border-bottom: 0;
+}
+
+/* One row of facts: a day's record (with the person), a person's period summary, a record
+   under it, or a front-desk person's counts. Phone: stacked. */
+.dayRow,
+.summaryRow,
+.recordRow,
+.enteredRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--fold-space-8);
+}
+
+.enteredRow {
+  padding: var(--fold-space-10) 0;
+  border-bottom: 1px solid var(--fold-silver);
+}
+
+.enteredRow:last-child {
+  border-bottom: 0;
+}
+
+/* A record under a person in a period: set in, on the canvas, so it reads as theirs. */
+.records {
+  gap: var(--fold-space-8);
+}
+
+.recordRow {
+  padding: var(--fold-space-10) var(--fold-space-12);
+  border-radius: var(--fold-radius-card);
+  background: var(--fold-canvas);
+}
+
+.fact {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--fold-space-8);
+  min-width: 0;
+  color: var(--fold-dusk);
+  font-size: 13px;
+}
+
+.factLabel {
+  min-width: 78px;
+  color: var(--fold-dusk);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+}
+
+.factValue {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--fold-space-6);
+  min-width: 0;
+}
+
+.time {
+  color: var(--fold-burgundy);
+  font-size: 14px;
   font-weight: 600;
 }
 
-/* Missing times and the 0h 00m / ON LEAVE text: dusk, not Figma's smoke. */
-.row .muted {
-  color: var(--fold-dusk);
+/* A late clock-in: amber ink, since it is text on white. */
+.late {
+  color: var(--fold-status-amber-ink);
 }
 
-/* Late clock-in time: amber ink, since it is text on white. */
-.row .late {
-  color: var(--fold-status-amber-ink);
+.by {
+  color: var(--fold-dusk);
+  font-size: 13px;
+}
+
+.unknown {
+  color: var(--fold-dusk);
+  font-weight: 600;
+}
+
+/* What happened to a record after it was typed: always shown, full width. */
+.marks {
+  display: flex;
+  flex-direction: column;
+  gap: var(--fold-space-6);
+  grid-column: 1 / -1;
+}
+
+.mark {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--fold-space-8);
+  margin: 0;
+  color: var(--fold-dusk);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.mark q {
+  color: var(--fold-burgundy);
+  font-weight: 500;
+}
+
+/* A person's plain shifts in a period, folded away (marked ones are never folded). */
+.more {
+  display: flex;
+  flex-direction: column;
+  gap: var(--fold-space-8);
+}
+
+.moreSummary {
+  color: var(--fold-burgundy-steel);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.more[open] > .moreSummary {
+  margin-bottom: var(--fold-space-8);
+}
+
+.nameList {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--fold-space-12);
 }
 
 @media (min-width: 768px) {
@@ -115,19 +292,66 @@
     display: none;
   }
 
-  .datePill {
-    display: inline-flex;
+  .period {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    justify-content: space-between;
   }
 
   .kpis {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: var(--fold-space-16);
   }
 
-  .person {
-    --avatar-size: 36px;
-    --avatar-font: 14px;
-    --person-gap: var(--fold-space-12);
-    --person-name-size: 14px;
-    --person-sub-display: none;
+  .sectionHead {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--fold-space-12);
+  }
+
+  /* person | in | out | hours | movements */
+  .dayRow {
+    grid-template-columns: minmax(0, 1.4fr) minmax(0, 1.3fr) minmax(0, 1.3fr) minmax(0, 1fr) minmax(0, 0.9fr);
+    align-items: start;
+    column-gap: var(--fold-space-16);
+    row-gap: var(--fold-space-10);
+  }
+
+  /* person | shifts | hours (wide) | entered by (wide) */
+  .summaryRow {
+    grid-template-columns: minmax(0, 1.4fr) minmax(0, 0.7fr) minmax(0, 1.6fr) minmax(0, 1.5fr);
+    align-items: start;
+    column-gap: var(--fold-space-16);
+  }
+
+  /* day | in | out | hours | movements */
+  .recordRow {
+    grid-template-columns: minmax(0, 0.7fr) minmax(0, 1.3fr) minmax(0, 1.3fr) minmax(0, 1fr) minmax(0, 0.9fr);
+    align-items: start;
+    column-gap: var(--fold-space-16);
+    row-gap: var(--fold-space-10);
+  }
+
+  .enteredRow {
+    grid-template-columns: minmax(0, 1.4fr) repeat(3, minmax(0, 1fr));
+    align-items: center;
+    column-gap: var(--fold-space-16);
+  }
+
+  .fact {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--fold-space-4);
+  }
+
+  .factLabel {
+    min-width: 0;
+  }
+
+  .nameList {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }

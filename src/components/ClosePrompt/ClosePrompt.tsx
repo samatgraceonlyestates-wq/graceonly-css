@@ -12,7 +12,8 @@ import styles from "./ClosePrompt.module.css";
 //   Y or 1   the first person offered       2, 3   the others
 //   N        a different person
 //   Left and Right move between the buttons; Enter or Space presses the focused one.
-// It never decides: nothing happens until she answers.
+// It never decides: nothing happens until she answers. Used for a PERSON (the roster) and for a
+// PHRASE used before (a destination, a purpose): `different` names what "No" means.
 
 export function ClosePrompt({
   candidates,
@@ -20,6 +21,7 @@ export function ClosePrompt({
   onYes,
   onNo,
   registerRef,
+  different = "a different person",
 }: {
   /** Up to three people close to what she typed. */
   candidates: Suggestion[];
@@ -27,6 +29,8 @@ export function ClosePrompt({
   onYes: (candidate: Suggestion) => void;
   onNo: () => void;
   registerRef?: (element: HTMLDivElement | null) => void;
+  /** What "No" says: "a different person" (the default), "a different place", ... */
+  different?: string;
 }) {
   const shown = candidates.slice(0, 3);
 
@@ -70,10 +74,10 @@ export function ClosePrompt({
           </Button>
         ))}
         <Button variant="row-action" onClick={onNo}>
-          No, a different person
+          No, {different}
         </Button>
       </div>
-      <p className={styles.keys}>Keys: Y for yes{shown.length > 1 ? " (or 1, 2, 3)" : ""}, N for a different person.</p>
+      <p className={styles.keys}>Keys: Y for yes{shown.length > 1 ? " (or 1, 2, 3)" : ""}, N for {different}.</p>
     </div>
   );
 }

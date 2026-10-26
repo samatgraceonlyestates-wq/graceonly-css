@@ -1,0 +1,13 @@
+/* The same shape as NameField: the box, then the question or a one-line hint under it. */
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--fold-space-6);
+  min-width: 0;
+}
+
+.hint {
+  margin: 0;
+  color: var(--fold-dusk);
+  font-size: 13px;
+}

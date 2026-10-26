@@ -11,7 +11,7 @@
 // checked, and sets corrected_at, corrected_by and correction_reason together.
 import { query, sql, transaction as dbTransaction, type Tx } from "./db.ts";
 import type { CorrectableMovement, MovementCorrectionStore, MovementCorrectionTx } from "./movementCorrections.ts";
-import type { ExistingMovement, LiveMovement, MovementAudit, MovementShift, MovementStore, MovementTx } from "./movements.ts";
+import type { ExistingMovement, LiveMovement, MovementAudit, MovementPhrases, MovementShift, MovementStore, MovementTx } from "./movements.ts";
 import type { RosterName } from "./rosterMatch.ts";
 
 // ---- the parts both transactions share ---------------------------------------------------
@@ -39,6 +39,36 @@ async function loadRoster(db: Tx): Promise<RosterName[]> {
   const { rows } = await db.query<{ id: string; full_name: string; department: string | null }>(sql`
     SELECT id, full_name, department FROM staff WHERE is_active ORDER BY full_name`);
   return rows.map((row): RosterName => ({ id: row.id, name: row.full_name, department: row.department }));
+}
+
+/**
+ * The destinations and purposes already used, most used first, ONE spelling each: spellings
+ * that differ only by case or spacing are one phrase (the key below is phraseKey in
+ * phraseMatch.ts), and the spelling kept is the one used most (the earliest on a tie), so it
+ * does not change under her. Removed movements are left out. The SAME list is sent to the
+ * screen (suggestions, the close-phrase question) and read in the transaction (the check), so
+ * the two cannot disagree. Matched in the application, as the roster is: no index, no extension.
+ */
+async function loadPhrases(db: Pick<Tx, "query">): Promise<MovementPhrases> {
+  const destinations = await db.query<{ phrase: string }>(sql`
+    WITH spelling AS (
+      SELECT destination AS phrase, lower(regexp_replace(destination, '[[:space:]]+', '', 'g')) AS key,
+             count(*) AS uses, min(created_at) AS first_at, max(created_at) AS last_at
+        FROM movement WHERE voided_at IS NULL
+       GROUP BY destination)
+    SELECT (array_agg(phrase ORDER BY uses DESC, first_at))[1] AS phrase
+      FROM spelling GROUP BY key
+     ORDER BY sum(uses) DESC, max(last_at) DESC`);
+  const purposes = await db.query<{ phrase: string }>(sql`
+    WITH spelling AS (
+      SELECT purpose AS phrase, lower(regexp_replace(purpose, '[[:space:]]+', '', 'g')) AS key,
+             count(*) AS uses, min(created_at) AS first_at, max(created_at) AS last_at
+        FROM movement WHERE voided_at IS NULL
+       GROUP BY purpose)
+    SELECT (array_agg(phrase ORDER BY uses DESC, first_at))[1] AS phrase
+      FROM spelling GROUP BY key
+     ORDER BY sum(uses) DESC, max(last_at) DESC`);
+  return { destinations: destinations.rows.map((row) => row.phrase), purposes: purposes.rows.map((row) => row.phrase) };
 }
 
 async function createPerson(db: Tx, input: { id: string; name: string }): Promise<void> {
@@ -72,6 +102,7 @@ export const pgMovementStore: MovementStore = {
         lockRecord: (recordId) => lockPersonAndRecord(db, recordId),
         lockMovement: (movementId) => lockThroughMovement(db, movementId),
         loadRoster: () => loadRoster(db),
+        loadPhrases: () => loadPhrases(db),
 
         async shift(recordId) {
           const { rows } = await db.query<{
@@ -171,6 +202,7 @@ export const pgMovementCorrectionStore: MovementCorrectionStore = {
       const tx: MovementCorrectionTx = {
         lock: (movementId) => lockThroughMovement(db, movementId),
         loadRoster: () => loadRoster(db),
+        loadPhrases: () => loadPhrases(db),
         createPerson: (input) => createPerson(db, input),
         audit: (entry) => audit(db, entry),
 
@@ -290,24 +322,7 @@ export const pgMovementCorrectionStore: MovementCorrectionStore = {
 
 // ---- what has been used before -----------------------------------------------------------
 
-/**
- * The destinations and purposes already used, most used first, one spelling each (the most
- * recent). She will type "bank" and "site" over and over; the matching is done in the
- * application over this short list, as the roster is, with no index and no extension.
- * Removed movements are left out.
- */
-export async function loadMovementSuggestions(): Promise<{ destinations: string[]; purposes: string[] }> {
-  const destinations = await query<{ phrase: string }>(sql`
-    SELECT (array_agg(destination ORDER BY created_at DESC))[1] AS phrase
-      FROM movement WHERE voided_at IS NULL
-     GROUP BY lower(btrim(destination))
-     ORDER BY count(*) DESC, max(created_at) DESC
-     LIMIT 200`);
-  const purposes = await query<{ phrase: string }>(sql`
-    SELECT (array_agg(purpose ORDER BY created_at DESC))[1] AS phrase
-      FROM movement WHERE voided_at IS NULL
-     GROUP BY lower(btrim(purpose))
-     ORDER BY count(*) DESC, max(created_at) DESC
-     LIMIT 200`);
-  return { destinations: destinations.rows.map((row) => row.phrase), purposes: purposes.rows.map((row) => row.phrase) };
+/** The phrase lists for the screen: the same query the transactions check against. */
+export function loadMovementSuggestions(): Promise<MovementPhrases> {
+  return loadPhrases({ query });
 }

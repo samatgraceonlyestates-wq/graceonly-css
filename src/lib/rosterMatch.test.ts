@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { cleanDisplayName, editDistance, isClose, matchName, normaliseName, suggest, type RosterName } from "./rosterMatch.ts";
+import { cleanDisplayName, editDistance, isClose, matchesFilter, matchName, normaliseName, type RosterName, suggest } from "./rosterMatch.ts";
 
 const person = (id: string, name: string, department: string | null = null): RosterName => ({ id, name, department });
 const ROSTER = [
@@ -153,5 +153,24 @@ describe("personDetails: telling two people of one name apart", () => {
     const group = Array.from({ length: 4 }, (_, i) => ({ id: String(i), name: "Ada Okafor", department: i < 2 ? "Legal" : "Finance", since: "2026-10-12" }));
     const labels = [...personDetails(group).values()];
     assert.equal(new Set(labels).size, 4);
+  });
+});
+
+describe("matchesFilter (the board's filter box)", () => {
+  it("matches any word of the name, from its start, ignoring case and accents", () => {
+    assert.equal(matchesFilter("obi", "Peter Obi"), true);
+    assert.equal(matchesFilter("OBI", "Amaka Obi-Eze"), true);
+    assert.equal(matchesFilter("am ob", "Amaka Obi"), true);
+    assert.equal(matchesFilter("ade", "Adébáyọ̀ Cole"), true);
+  });
+
+  it("needs every typed word, and the start of a word", () => {
+    assert.equal(matchesFilter("eter", "Peter Obi"), false);
+    assert.equal(matchesFilter("peter mike", "Peter Obi"), false);
+  });
+
+  it("nothing typed matches everyone", () => {
+    assert.equal(matchesFilter("", "Peter Obi"), true);
+    assert.equal(matchesFilter("   ", "Peter Obi"), true);
   });
 });

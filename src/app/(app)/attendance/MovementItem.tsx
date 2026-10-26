@@ -2,13 +2,12 @@
 
 import { useActionState, useState } from "react";
 import { Button } from "@/components/Button/Button";
-import { Combobox } from "@/components/Combobox/Combobox";
 import { Duration } from "@/components/Duration/Duration";
 import { blankName, NameField, type NameValue } from "@/components/NameField/NameField";
+import { blankPhrase, PhraseField, type PhraseValue } from "@/components/PhraseField/PhraseField";
 import { StatusPill } from "@/components/StatusPill/StatusPill";
 import { cx } from "@/lib/cx";
 import type { MovementCorrectionKind } from "@/lib/movementCorrections";
-import { suggestPhrases } from "@/lib/phraseMatch";
 import { correctMovementAction, type BoardActionState } from "./actions";
 import { useBoardData } from "./BoardData";
 import styles from "./page.module.css";
@@ -23,8 +22,10 @@ import styles from "./page.module.css";
 //   * a success closes the panel: the line then carries "Corrected at ... by ...: reason";
 //   * a REMOVED movement counts for nothing and is shown struck through, with a way back.
 // The approver is a roster person by the shared NameField (suggestions, the close-name
-// question, answered from the keyboard); destinations and purposes are suggested from what has
-// been used before.
+// question, answered from the keyboard); destinations and purposes by the shared PhraseField
+// (suggested from what has been used before; another case or spacing takes the existing
+// spelling; a close one is a question). A movement the person approved THEMSELVES is allowed
+// and is MARKED "Self-approved" in its line: visible, not forbidden.
 
 export interface MovementView {
   id: string;
@@ -38,6 +39,8 @@ export interface MovementView {
   destination: string;
   purpose: string;
   approvedBy: string;
+  /** The person who left approved it themselves. */
+  selfApproved: boolean;
   removed: boolean;
   /** "Changed at 11:14 by Desk B: reason", for a movement that was corrected or removed. */
   note: string | null;
@@ -58,8 +61,8 @@ export function MovementItem({ movement, asOf }: { movement: MovementView; asOf:
   const [kind, setKind] = useState<MovementCorrectionKind | null>(null);
   const [openedVersion, setOpenedVersion] = useState(movement.version);
   const [time, setTime] = useState("");
-  const [where, setWhere] = useState("");
-  const [what, setWhat] = useState("");
+  const [where, setWhere] = useState<PhraseValue>(blankPhrase());
+  const [what, setWhat] = useState<PhraseValue>(blankPhrase());
   const [approver, setApprover] = useState<NameValue>(blankName());
   const [reason, setReason] = useState("");
   const [state, action, pending] = useActionState<BoardActionState, FormData>(correctMovementAction, { status: "idle" });
@@ -84,8 +87,8 @@ export function MovementItem({ movement, asOf }: { movement: MovementView; asOf:
   function choose(next: MovementCorrectionKind) {
     setKind(next);
     setTime(next === "left" ? movement.left : next === "returned" ? (movement.returned ?? "") : "");
-    setWhere(next === "destination" ? movement.destination : "");
-    setWhat(next === "purpose" ? movement.purpose : "");
+    setWhere(blankPhrase(next === "destination" ? movement.destination : ""));
+    setWhat(blankPhrase(next === "purpose" ? movement.purpose : ""));
     setApprover(blankName());
   }
 
@@ -102,7 +105,8 @@ export function MovementItem({ movement, asOf }: { movement: MovementView; asOf:
             <Duration since={movement.leftIso} asOf={asOf} />
           </>
         ) : null}{" "}
-        · approved by {movement.approvedBy}
+        {movement.selfApproved ? " · " : ` · approved by ${movement.approvedBy}`}
+        {movement.selfApproved ? <StatusPill tone="amber">Self-approved</StatusPill> : null}
         {movement.removed ? <StatusPill tone="steel">Removed</StatusPill> : null}
       </p>
       {movement.note !== null ? (
@@ -143,8 +147,10 @@ export function MovementItem({ movement, asOf }: { movement: MovementView; asOf:
               <input type="hidden" name="version" value={openedVersion} />
               <input type="hidden" name="kind" value={kind} />
               <input type="hidden" name="time" value={kind === "left" || kind === "returned" ? time : ""} />
-              <input type="hidden" name="destination" value={kind === "destination" ? where : ""} />
-              <input type="hidden" name="purpose" value={kind === "purpose" ? what : ""} />
+              <input type="hidden" name="destination" value={kind === "destination" ? where.text : ""} />
+              <input type="hidden" name="destinationConfirmNew" value={String(kind === "destination" && where.confirmNew)} />
+              <input type="hidden" name="purpose" value={kind === "purpose" ? what.text : ""} />
+              <input type="hidden" name="purposeConfirmNew" value={String(kind === "purpose" && what.confirmNew)} />
               <input type="hidden" name="approverName" value={kind === "approver" ? approver.name : ""} />
               <input type="hidden" name="approverId" value={kind === "approver" ? (approver.personId ?? "") : ""} />
               <input type="hidden" name="approverConfirmNew" value={kind === "approver" ? String(approver.confirmNew) : "false"} />
@@ -171,11 +177,11 @@ export function MovementItem({ movement, asOf }: { movement: MovementView; asOf:
               {kind === "destination" ? (
                 <div className={styles.phraseField}>
                   <span className={styles.label}>New destination</span>
-                  <Combobox
+                  <PhraseField
                     value={where}
                     onChange={setWhere}
-                    onPick={(item) => setWhere(item.label)}
-                    suggest={(text) => suggestPhrases(text, destinations).map((phrase) => ({ id: phrase, label: phrase }))}
+                    phrases={destinations.filter((phrase) => phrase !== movement.destination)}
+                    different="a different place"
                     ariaLabel="New destination"
                     inputClassName={styles.reasonInput}
                     maxLength={100}
@@ -186,11 +192,11 @@ export function MovementItem({ movement, asOf }: { movement: MovementView; asOf:
               {kind === "purpose" ? (
                 <div className={styles.phraseField}>
                   <span className={styles.label}>New purpose</span>
-                  <Combobox
+                  <PhraseField
                     value={what}
                     onChange={setWhat}
-                    onPick={(item) => setWhat(item.label)}
-                    suggest={(text) => suggestPhrases(text, purposes).map((phrase) => ({ id: phrase, label: phrase }))}
+                    phrases={purposes.filter((phrase) => phrase !== movement.purpose)}
+                    different="something different"
                     ariaLabel="New purpose"
                     inputClassName={styles.reasonInput}
                     maxLength={200}

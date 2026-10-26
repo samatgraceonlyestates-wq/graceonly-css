@@ -45,6 +45,8 @@ export interface BoardMovement {
   destination: string;
   purpose: string;
   approvedByName: string;
+  /** The person who left approved it themselves: allowed, and marked wherever it is shown. Derived, never stored. */
+  selfApproved: boolean;
   /** Who typed the return (it may not be who typed the departure). */
   returnedByName: string | null;
   /** Changes whenever the movement changes: a correction sends back the one it was looking at (015). */

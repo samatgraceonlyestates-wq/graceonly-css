@@ -14,6 +14,7 @@ import {
   type MovementCorrectionTx,
 } from "./movementCorrections.ts";
 import type { MovementAudit } from "./movements.ts";
+import { phraseKey } from "./phraseMatch.ts";
 import type { RosterName } from "./rosterMatch.ts";
 
 const ACTOR = "00000000-0000-4000-8000-0000000000b2";
@@ -34,6 +35,8 @@ class MemoryStore implements MovementCorrectionStore {
     { id: "p-chidi", name: "Chidi Eze", department: "Legal" },
   ];
   createdPeople: { id: string; name: string }[] = [];
+  /** Phrases used by OTHER movements (not in this store). */
+  used = { destinations: [] as string[], purposes: [] as string[] };
   private counter = 0;
 
   add(id: string, extra: Partial<Stored> = {}) {
@@ -80,6 +83,11 @@ class MemoryStore implements MovementCorrectionStore {
       lock: async () => {},
       find: async (id) => (this.movements.has(id) ? { ...this.movements.get(id)! } : null),
       loadRoster: async () => this.roster.map((p) => ({ ...p })),
+      loadPhrases: async () => {
+        const live = [...this.movements.values()].filter((m) => m.voidedAt === null);
+        const one = (values: string[]) => [...new Map(values.map((v) => [phraseKey(v), v] as const)).values()];
+        return { destinations: one([...this.used.destinations, ...live.map((m) => m.destination)]), purposes: one([...this.used.purposes, ...live.map((m) => m.purpose)]) };
+      },
       createPerson: async ({ id, name }) => {
         this.roster.push({ id, name, department: null });
         this.createdPeople.push({ id, name });
@@ -174,6 +182,7 @@ describe("what can be corrected, and who and why it records", () => {
     store.add("m1");
     assert.equal((await run("m1", "returned", { time: "10:00" })).ok, true);
     assert.equal(store.get("m1").returnedAt!.toISOString(), "2026-10-21T09:00:00.000Z");
+    // "First Bank" is close to nothing but this movement's own "Bank", which is not offered back.
     assert.equal((await run("m1", "destination", { destination: "  First   Bank " })).ok, true);
     assert.equal(store.get("m1").destination, "First Bank");
     assert.equal((await run("m1", "purpose", { purpose: "Cheque lodgement" })).ok, true);
@@ -192,11 +201,25 @@ describe("what can be corrected, and who and why it records", () => {
     assert.ok(!JSON.stringify(store.audits).includes("Ezee"), "the audit log never carries a name");
   });
 
-  it("the approver cannot be the person who left, or already the approver", async () => {
+  it("the approver MAY be the person who left (marked self-approved), and cannot be already the approver", async () => {
     const { store, run } = setup();
     store.add("m1", { staffId: "p-chidi", name: "Chidi Eze" });
-    assert.equal(refused(await run("m1", "approver", { approver: { name: "Chidi Eze", personId: null, confirmNew: false } })), "A person cannot approve their own movement.");
     assert.match(refused(await run("m1", "approver", { approver: { name: "Peter Obi", personId: null, confirmNew: false } })), /already the approver/);
+    const result = await run("m1", "approver", { approver: { name: "Chidi Eze", personId: null, confirmNew: false } });
+    assert.deepEqual(result, { ok: true, message: "Chidi Eze: approver changed to Chidi Eze (self-approved)." });
+    assert.equal(store.get("m1").approvedById, "p-chidi");
+  });
+
+  it("no drift on a correction: case or spacing takes the existing spelling; a close one is a question", async () => {
+    const { store, run } = setup();
+    store.used = { destinations: ["GraceWaters Site"], purposes: ["Site inspection"] };
+    store.add("m1");
+    assert.equal((await run("m1", "destination", { destination: "gracewaters  site" })).ok, true);
+    assert.equal(store.get("m1").destination, "GraceWaters Site");
+    assert.match(refused(await run("m1", "purpose", { purpose: "Site inspecton" })), /^What for: "Site inspecton" is close to Site inspection, used before\./);
+    assert.equal((await run("m1", "purpose", { purpose: "Site inspecton", purposeConfirmNew: true })).ok, true);
+    assert.equal(store.get("m1").purpose, "Site inspecton");
+    assert.match(refused(await run("m1", "destination", { destination: "GRACEWATERS SITE" })), /already GraceWaters Site/);
   });
 
   it("removing a movement entirely is a void: the row stays, with the reason", async () => {

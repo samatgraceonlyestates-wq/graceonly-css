@@ -66,6 +66,56 @@
   border-bottom: 0;
 }
 
+/* Hidden by the filter box (the grid above would otherwise override [hidden]). */
+.item[hidden] {
+  display: none;
+}
+
+/* ---- a row's head and body (PersonRow.tsx) ----
+   Phone: the head is the name, one line and a Show button; the body (facts, actions,
+   movements) is hidden until the row is opened. Desktop: both are display: contents, so every
+   cell sits in the row's grid exactly as before, and the line and the button are not drawn. */
+.rowHead {
+  display: grid;
+  grid-template-areas:
+    "person toggle"
+    "glance toggle";
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: var(--fold-space-10);
+  row-gap: var(--fold-space-4);
+}
+
+.rowHead > :first-child {
+  grid-area: person;
+}
+
+.rowGlance {
+  grid-area: glance;
+  margin: 0;
+  /* Under the name, past the 36px avatar and its gap. */
+  padding-left: 48px;
+  color: var(--fold-dusk);
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.rowToggle {
+  display: flex;
+  grid-area: toggle;
+}
+
+.rowBody {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--fold-space-8);
+  padding-top: var(--fold-space-6);
+}
+
+.item[data-expanded="false"] .rowBody {
+  display: none;
+}
+
 .fact {
   display: flex;
   flex-wrap: wrap;
@@ -214,9 +264,20 @@
     column-gap: var(--fold-space-16);
   }
 
-  /* A row with no action (out, gone, no sign-out) has four cells. */
-  .item > :nth-child(4):last-child {
-    grid-column: 4 / -1;
+  .rowHead,
+  .rowBody,
+  .item[data-expanded="false"] .rowBody {
+    display: contents;
+  }
+
+  .rowGlance,
+  .rowToggle {
+    display: none;
+  }
+
+  /* The phone's named area means nothing in the desktop row: place it like any other cell. */
+  .rowHead > :first-child {
+    grid-area: auto;
   }
 
   .fact {
@@ -415,5 +476,56 @@
 
   .leaveSubmit {
     padding-top: 22px;
+  }
+}
+
+/* A person approving their own movement: allowed, and said before it is saved. */
+.selfNote {
+  margin: 0;
+  color: var(--fold-status-amber-ink);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.5;
+}
+
+/* ---- the filter box (BoardFilter.tsx) ---- */
+.filter {
+  display: flex;
+  flex-direction: column;
+  gap: var(--fold-space-6);
+}
+
+.filterInput {
+  width: 100%;
+  height: 48px;
+  padding: 0 var(--fold-space-20);
+  border: 1px solid var(--fold-silver);
+  border-radius: var(--fold-radius-pill);
+  background: var(--fold-white);
+  color: var(--fold-dusk);
+  font: inherit;
+  /* Keep at 16px: iOS zooms the page on focus for anything smaller. */
+  font-size: 16px;
+}
+
+.filterInput::placeholder {
+  color: var(--fold-smoke);
+  opacity: 1;
+}
+
+.filterInput:focus-visible {
+  outline: 2px solid var(--fold-gold);
+  outline-offset: 2px;
+}
+
+.filterNote {
+  margin: 0;
+  color: var(--fold-dusk);
+  font-size: 13px;
+}
+
+@media (min-width: 768px) {
+  .filterInput {
+    max-width: 420px;
   }
 }

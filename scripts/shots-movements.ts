@@ -52,6 +52,7 @@ export default async function scenario({ base, open, shot, problem }: ScenarioHe
   // ---------------------------------------------------------------- phone: the board with a movement, and the panel
   const phone = await open("phone");
   await phone.goto(`${base}/attendance`, { waitUntil: "networkidle" });
+  await phone.getByRole("button", { name: "Show Divine Mike" }).click(); // rows are collapsed on a phone
   await rowButton(phone, "Divine Mike", "Out…").click();
   await shot(phone, "mv-1-leave-panel-phone");
 
@@ -103,7 +104,7 @@ export default async function scenario({ base, open, shot, problem }: ScenarioHe
   await a.waitForFunction(() => document.body.innerText.includes("Court"), null, { timeout: 20_000 });
   await waitTile(a, "Out on a movement", 3, "desktop: Faith should be OUT now");
 
-  // 3. Peter cannot approve his own movement; a time before his arrival is refused.
+  // 3. A time before his arrival is refused; Peter MAY approve his own movement (marked), then comes back.
   await rowButton(a, "Peter Obi", "Out…").click();
   await a.getByLabel("Where Peter is going").fill("Bank");
   await a.getByLabel("What Peter is going for").fill("Lodgement");
@@ -115,10 +116,14 @@ export default async function scenario({ base, open, shot, problem }: ScenarioHe
   await a.getByRole("button", { name: "Peter goes out" }).click();
   await a.getByText("Enter a time.").waitFor({ timeout: 20_000 });
   await a.getByLabel("Time left").fill("0030");
+  await a.getByText("is approving their own movement").waitFor();
   await a.getByRole("button", { name: "Peter goes out" }).click();
-  await a.getByText("A person cannot approve their own movement.").waitFor({ timeout: 20_000 });
+  await row(a, "Peter Obi").getByText("Self-approved", { exact: true }).first().waitFor({ timeout: 20_000 });
   await shot(a, "mv-6-self-approval-desktop");
-  await rowButton(a, "Peter Obi", "Close").click();
+  await waitTile(a, "Out on a movement", 4, "desktop: Peter should be OUT, self-approved");
+  await rowButton(a, "Peter Obi", "Back…").click();
+  await a.getByRole("button", { name: "Peter is back" }).click();
+  await waitTile(a, "Out on a movement", 3, "desktop: Peter should be back");
 
   // 4. B (stale: still showing Amaka IN, with its panel open) tries to clock her out: refused, with the reason.
   const typedStill = await bPanel.getByRole("textbox").inputValue();

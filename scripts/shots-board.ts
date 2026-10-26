@@ -24,6 +24,7 @@ export default async function scenario({ base, open, shot, problem }: ScenarioHe
   const phone = await open("phone");
   await phone.goto(`${base}/attendance`, { waitUntil: "networkidle" });
   await shot(phone, "board-1-phone");
+  await phone.getByRole("button", { name: /^Show / }).first().click(); // rows are collapsed on a phone
   await phone.getByRole("button", { name: "Clock out" }).first().click();
   await phone.getByRole("group", { name: /^Clock out / }).waitFor();
   await shot(phone, "board-2-panel-phone");
@@ -82,7 +83,9 @@ export default async function scenario({ base, open, shot, problem }: ScenarioHe
   await ngozi.getByRole("button", { name: "Clock out" }).click();
   const ngoziPanel = page.getByRole("group", { name: "Clock out Ngozi Adeyemi" });
   expect((await ngoziPanel.getByRole("textbox").inputValue()) === "", "desktop: an earlier day's shift has no default time");
-  expect((await ngoziPanel.innerText()).includes("arrived on Monday"), "desktop: the panel should say which day they arrived");
+  // The seed puts her arrival two days ago: the weekday depends on when this runs.
+  const twoDaysAgo = new Intl.DateTimeFormat("en-GB", { timeZone: "Africa/Lagos", weekday: "long" }).format(new Date(Date.now() - 2 * 24 * 3600 * 1000));
+  expect((await ngoziPanel.innerText()).includes(`arrived on ${twoDaysAgo}`), "desktop: the panel should say which day they arrived");
   await shot(page, "board-6-older-day-desktop");
   await page.getByRole("button", { name: "Ngozi never signed out" }).click();
   await page.waitForFunction(() => !document.body.innerText.includes("Ngozi Adeyemi"), null, { timeout: 20_000 });

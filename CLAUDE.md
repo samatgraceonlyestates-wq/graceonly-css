@@ -226,7 +226,7 @@ rules, behind a `CorrectionStore`), `correctionStore.ts` (SQL), `RowActions.tsx`
   at 10:47 by <name>"). Never a database error, never a silent double write.
 - A CORRECTED RECORD IS VISIBLY MARKED WHEREVER IT IS LISTED: a "Corrected" pill and
   "Changed at 11:14 by <name>: <reason>" in its row. SCREEN 08 MUST DO THE SAME when it
-  reads real data (it is still sample-driven): a reader of the register must see that a
+  reads real data (it now does): a reader of the register must see that a
   time was changed, by whom and why, without going looking.
 - Reopening or unmarking puts the record back to OPEN, and a person may have only ONE open
   shift: if they already have one it is refused, naming it ("already recorded as in since
@@ -274,14 +274,30 @@ and the suggestions), `phraseMatch.ts`, `nameResolution.ts`, the shared componen
 - THE APPROVER IS A ROSTER PERSON, resolved by the ONE name rule used by the arrivals sheet
   (`nameResolution.ts`, the `NameField` component): suggestions as she types, a CLOSE name
   asks "Did you mean ...?" and is answered from the keyboard (Y, N, 1-3), a name nobody has
-  creates a roster person. Do NOT write a second matcher or a second combobox. A person
-  CANNOT APPROVE THEIR OWN movement.
+  creates a roster person. Do NOT write a second matcher or a second combobox.
+- A PERSON MAY APPROVE THEIR OWN MOVEMENT (owner's decision; it used to be refused). When the
+  most senior person in the building leaves there is nobody above them, and refusing it left her
+  unable to record the movement at all. It is allowed and MARKED "Self-approved" wherever the
+  movement is shown (its line on the board, the phone row's one line, the register's row, with an
+  amber pill). Visible, not forbidden: the same principle as corrections. It is DERIVED
+  (`approved_by` = the record's `staff_id`), never stored. The Out… panel says so before saving.
 - A RETURN is recorded from a person who is OUT ("Back…"): the time back (default now,
   editable), as `returned_entered_by`, which may be a different person from `left_entered_by`.
   A return must be after the departure, not in the future, and before any time out.
 - DESTINATIONS and PURPOSES are SUGGESTED from what has been used before: the distinct values
   (one spelling each, most used first, removed movements left out) are loaded and matched in
   the application, as the roster is (`phraseMatch.ts`). No index, no extension.
+- NO DRIFT in destinations and purposes ("Bank", "bank" and "First Bank" as three places make
+  any report on movements worthless). `resolvePhrase` (phraseMatch.ts), on the screen
+  (`PhraseField`, built from the same Combobox and ClosePrompt) and again on the server:
+  differing ONLY BY CASE OR SPACING (`phraseKey`: lower case, every space removed, so "FirstBank"
+  is "First Bank") takes the EXISTING spelling, which the box shows ("Same as one used before:
+  saved with this spelling"); a CLOSE one (the roster's isClose rule: a typo, a partial, other
+  punctuation or word order) is a question offering the existing one ("Did you mean First
+  Bank?", Y / N / 1-3, "No, a different place"); anything else is new and kept as typed. The
+  phrase list is ONE query (`loadPhrases`: grouped by the same key, the most-used spelling kept),
+  sent to the screen and read in the transaction, so the two cannot disagree. A correction does
+  not offer the movement's own current value back. Existing drift in old rows is not rewritten.
 - A PERSON OUT ON A MOVEMENT CANNOT BE CLOCKED OUT until they are back, and the message says
   why: "<name> is recorded as out on a movement. Record their return first." The row offers
   Back…, not Clock out. Likewise they cannot be marked never-signed-out, and a record with
@@ -299,6 +315,61 @@ and the suggestions), `phraseMatch.ts`, `nameResolution.ts`, the shared componen
   `voided_at IS NOT NULL` the same way.
 - Verified with `scripts/shots-movements.ts` (seed: `scripts/shots-movements.seed.sql`, after
   the arrivals and board seeds) against a THROWAWAY schema, including the refresh pause.
+
+### Finding a row on the board (BUILT; UNDESIGNED)
+
+- A FILTER BOX ("Find a person", `BoardFilter.tsx`): type part of a name and the lists narrow
+  (the suggestions' word rule, `matchesFilter`). It filters WHAT IS SHOWN and NEVER A COUNT: the
+  tiles and section counts are the day's truth, not a view of it, and the box says "Showing 2 of
+  16 people on the board. The counts are for the whole day". A section the filter empties says
+  so. It does not touch the end-of-day list. Escape clears it.
+- ON A PHONE every row is COLLAPSED by default (`PersonRow.tsx`) to the name and one line ("In
+  08:05 · 2h 10m", "Out: Bank · since 10:12", "No sign-out", "· Corrected"), with a Show button;
+  opened, it shows the facts, movements and actions. Thirty open rows were 5000px. When the
+  filter leaves ONE person, that row opens by itself. The DESKTOP IS UNCHANGED: the head and body
+  are `display: contents` there. A collapsed row keeps its panel (and the refresh pause).
+
+### Settled, NOT doing (do not revisit)
+
+- THE APPROVER CONFIRMATION STAYS. A close approver name is a question; that is the guard
+  working, not friction to remove.
+- NO MOVEMENT FOR SOMEONE NOT RECORDED IN. Sort the attendance record out first (enter the
+  arrival, reopen, or correct), then record the movement.
+- THE DEPARTURE TIME KEEPS DEFAULTING TO NOW. She records movements as they happen; a blank field
+  would cost about thirty keystrokes a day to save the occasional correction, which "Correct…"
+  already handles.
+
+### The attendance register, screen 08 (BUILT on real data)
+
+/attendance/register, ADMIN only (requireRole before anything loads). Files: `register.ts` (the
+rules, pure, tested), `registerStore.ts` (SQL, read only), `attendance/register/`. Any Lagos day
+or period (`?from=&to=`, at most 92 days; quick links Today, Yesterday, This week, This month,
+Last month; a backwards, future or unreadable period shows today and says why).
+
+- HOURS: EVERY SHIFT IS ONE OF FOUR KINDS, counted the same way everywhere (period, department,
+  person): COMPLETE (in and out: known hours, the ONLY thing in the total); NO SIGN-OUT (hours
+  UNKNOWN); OPEN FROM AN EARLIER DAY ("Never closed": hours UNKNOWN, exactly like a no-sign-out;
+  it counts as a shift that day and can be late, but is never completed and never run up to now);
+  IN PROGRESS (open, today: not finished, shown with its time so far, not in the total). A total
+  is NEVER shown without the unknown count beside it, and `honestyNote` says in words what it
+  leaves out ("it is a minimum, not the hours worked"), and from 20% unknown that it says little.
+  Hours are time in to time out; movements are NOT deducted (said on the screen).
+- REMOVED records are not read (only their number, "5 removed records ... are not counted").
+- WHO ENTERED: each record shows "entered by" for the arrival and for the departure separately
+  (and "marked by" for a no-sign-out); a "Who entered" card counts each front-desk person's
+  arrivals, departures and no-sign-out marks for the period.
+- MARKS, visible in the row: Corrected (who, when, why), RESTORED (from audit_log: the latest
+  correction whose kind is `restore`, so a later correction cannot hide it), Back-dated (the
+  reason), Self-approved movements. In a period, a person's PLAIN completed shifts fold into
+  "N shifts, all complete and unchanged"; a marked shift is never folded.
+- LATE is by `attendance.late_after_local`, strictly after it on the record's own Lagos day. A
+  missing or unreadable setting shows lateness as unknown ("late rule not set"), never 09:15.
+- Grouped by department A to Z, "No department" last. People with leave and no record: "On
+  leave". Active people with neither: "No record", worded as not proof of absence. The
+  department chips stay static counts (people with a record), derived from the data.
+- Verified with `scripts/shots-register.ts` (seed: `scripts/shots-register.seed.sql`, a messy
+  month, after the arrivals, board and movements seeds) against a THROWAWAY schema. It also
+  drives the board's filter, the phone collapse, drift and self-approval.
 
 ## Design tokens — from Figma, exact
 
@@ -514,37 +585,27 @@ do not mirror the defect in CSS.
 - Attendance register (08) lives at /attendance/register and is ADMIN-ONLY,
   enforced on the server by requireRole("ADMIN") before any data is loaded (a
   Super Admin passes too; anyone else gets a plain notice). The nav's "Attendance" link
-  stays on /attendance (07, a person's own attendance). TODO when it reads real
-  data: it must show WHO ENTERED each record (see "ATTENDANCE: HOW IT REALLY
-  WORKS"). The earlier requirement to mark PERSONAL-device clock-ins is WITHDRAWN.
-- 08's date control is a STATIC label. Figma draws "◀ Fri 16 Oct 2026 ▶" as
-  one text layer with no component and no prototype link (0 interactions in
-  either frame). It is rendered without the arrows, since arrows would
-  promise a day stepper; a real stepper needs a date in the route and
-  per-date data. On mobile the date is the line under the title.
-- Attendance state is derived, never stored: on leave, else absent (no
-  clock-in), else late (clock-in after the late-after instant, 09:15 in the
-  design), else present. The KPI tiles are counted from the data. Sample
-  data has 24 staff (9 from the design, 15 placeholders) so the totals are
-  19 / 3 / 1 / 1; durations tick on the shared interval (Duration).
-- The sample attendance day is ANCHORED TO now, like the visits list: each
-  clock-in is now minus its design duration, so every duration equals the
-  design's and none is ever in the future or clamped to 0h 00m. Clock-in
-  times of day therefore move with now, and the sample's late line moves
-  with them (same offset from the day's start as 09:15 has from 10:42), so
-  the "after HH:MM" caption is computed. Real data uses the fixed 09:15 rule.
+  stays on /attendance (07, the board). It reads REAL data and shows WHO ENTERED
+  each record: see "The attendance register, screen 08". The earlier requirement
+  to mark PERSONAL-device clock-ins is WITHDRAWN. Its sample data (and
+  attendance.ts, Present / Absent) is REMOVED: "Absent" cannot be known from a
+  copy of the book, so it says "No record". Figma's "◀ date ▶" is now a real
+  From / To form with quick links.
 - Screen 07 is now the TODAY BOARD (see "The today board" under "ATTENDANCE: HOW IT
   REALLY WORKS"). The old sample-driven "My Attendance" (its shift states, week
   table, totals, targets and the /attendance?scenario= switch) is REMOVED, with its
   sample data and TargetPercent. Figma frames 31:2 / 31:90 no longer describe it.
 - The big clock (LiveClock) reads the shared useNow at minute granularity; it
   is the one use of the 100px display type (56px, capped at 14.3vw, on mobile).
-- 08's department filters are derived from the staff data, in order of first
-  appearance (so HR appears, unlike the design), with computed counts. They
+- 08's department filters are derived from the data (A to Z, "No department"
+  last), with computed counts. They
   are static (counts only, a TODO) and shown on mobile, wrapping, although
   the mobile frame omits the row: an admin on a phone keeps the breakdown.
   Same omission class as the missing mobile nav and complaints panel.
 - Extension points on shared components (use these, never fork):
+  Button aria-expanded, aria-controls and aria-label (a show / hide toggle);
+  ClosePrompt different ("a different place": what "No" means); PhraseField
+  (free text used before: the phrase twin of NameField);
   StatusPill compactOnMobile (dot-less 9px, short labels); StatTile dense
   and dot; PageHeader ledeSize="sm", className, --page-header-eyebrow-gap and
   --page-header-lede-gap; PersonCell --person-name-size, --person-sub-size,
