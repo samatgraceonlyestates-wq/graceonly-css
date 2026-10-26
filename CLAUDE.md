@@ -916,6 +916,17 @@ proven to give the same schema as the sixteen files. Not a migration; never in
     identifier we chose and carries no visitor or client data; it is the most
     useful thing for diagnosing a failure. These are logged (by the database
     layer only) and are not put in anything a user sees.
+    ALSO SAFE, FOR SQLSTATE 42P01 (undefined_table) ONLY: the RELATION NAME that
+    does not exist (log key `relation`). PostgreSQL gives it only inside the
+    message ('relation "staff" does not exist'), so `dbErrors.ts` takes the quoted
+    name from that one fixed form and logs nothing else of the message. Why that
+    is safe where `message` and `detail` in general are not: for this error the
+    only variable part is a name exactly as written in our SQL TEXT, and every SQL
+    text in CSS is a literal in our source (the `sql` tag makes every value a
+    parameter, so no visitor, client or staff data can be in a name). It is a
+    schema identifier we chose, like a constraint name. It is logged only if it is
+    a bare identifier (or schema.name); another form or language logs none. An
+    error class that cannot name what failed costs a round trip every time.
   The database layer (`src/lib/db.ts`) catches every `pg` error at one boundary
   and maps it to a fixed, app-controlled message, keyed by CONSTRAINT NAME (by
   table and column for a NOT NULL violation, which has no constraint, and by

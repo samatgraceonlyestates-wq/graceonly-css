@@ -227,7 +227,7 @@ describe("what is logged, and what is not", () => {
     toDbError(rawError({ code: "23505", constraint: "unmapped_key", table: "visit" }), { log });
     toDbError(rawError({ code: "ECONNREFUSED" }), { log });
     toDbError(rawError({}), { log });
-    const allowed = new Set(["event", "errorId", "kind", "sqlstate", "constraint", "table"]);
+    const allowed = new Set(["event", "errorId", "kind", "sqlstate", "constraint", "table", "relation"]);
     for (const entry of entries) {
       for (const key of Object.keys(entry)) assert.ok(allowed.has(key), `unexpected log key ${key}`);
     }
@@ -240,6 +240,49 @@ describe("what is logged, and what is not", () => {
     assert.equal(entries[0]?.constraint, undefined);
     assert.equal(entries[0]?.table, undefined);
     assertNoLeak(JSON.stringify(entries));
+  });
+
+  // 42P01 (undefined_table): the name is only in the message, so it is taken from there, for
+  // this SQLSTATE only, and only if it is a bare identifier. The canaries ride in every other field.
+  const undefinedTable = (message: string, code = "42P01") =>
+    Object.assign(new Error(message), {
+      code,
+      detail: `${CANARY} detail`,
+      hint: `${CANARY} hint`,
+      where: `${CANARY} where`,
+      schema: `${CANARY}_schema`,
+      host: "db.canary-host.example",
+      user: "canary_user",
+    });
+
+  it("42P01 names the relation that does not exist, so the log says WHICH table", () => {
+    const { entries, log } = capture();
+    toDbError(undefinedTable('relation "staff" does not exist'), { log, newId: () => "E-TEST" });
+    toDbError(undefinedTable('relation "public.audit_log" does not exist'), { log, newId: () => "E-TEST" });
+    toDbError(undefinedTable('missing FROM-clause entry for table "r"'), { log, newId: () => "E-TEST" });
+    assert.deepEqual(entries, [
+      { event: "db_error", errorId: "E-TEST", kind: "unexpected", sqlstate: "42P01", relation: "staff" },
+      { event: "db_error", errorId: "E-TEST", kind: "unexpected", sqlstate: "42P01", relation: "public.audit_log" },
+      { event: "db_error", errorId: "E-TEST", kind: "unexpected", sqlstate: "42P01", relation: "r" },
+    ]);
+    assertNoLeak(JSON.stringify(entries));
+  });
+
+  it("42P01 logs no relation when the name is not a plain identifier, or the message is in another form or language", () => {
+    const { entries, log } = capture();
+    toDbError(undefinedTable(`relation "x ${CANARY}" does not exist`), { log });
+    toDbError(undefinedTable(`relation "a.b.c" does not exist`), { log });
+    toDbError(undefinedTable(`relation "staff" does not exist :: ${CANARY}`), { log });
+    toDbError(undefinedTable(`la relation « staff » n'existe pas`), { log });
+    for (const entry of entries) assert.equal(entry.relation, undefined);
+    assertNoLeak(JSON.stringify(entries));
+  });
+
+  it("only 42P01 reads a relation from the message: any other error with the same words logs none", () => {
+    const { entries, log } = capture();
+    toDbError(undefinedTable('relation "staff" does not exist', "23505"), { log });
+    toDbError(undefinedTable('relation "staff" does not exist', "42501"), { log });
+    for (const entry of entries) assert.equal(entry.relation, undefined);
   });
 
   it("drops a code that is not a SQLSTATE", () => {

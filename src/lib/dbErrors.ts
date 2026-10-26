@@ -13,8 +13,10 @@
 //    This file READS message (to tell a timeout from a dropped connection) and
 //    column (to find a NOT NULL rule). It never stores or logs either.
 //  - SAFE TO LOG, NEVER RETURNED: SQLSTATE, constraint name, table name and the
-//    error id. Each is checked against a strict pattern before it is logged, so
-//    an odd value cannot smuggle text into a log line.
+//    error id; and, for SQLSTATE 42P01 (undefined_table) ONLY, the name of the
+//    relation that does not exist (see relationOf below). Each is checked against
+//    a strict pattern before it is logged, so an odd value cannot smuggle text
+//    into a log line.
 //
 // No `cause` is attached to a DbError: a cause would carry the raw error along.
 //
@@ -91,6 +93,8 @@ export interface DbErrorLogEntry {
   sqlstate?: string;
   constraint?: string;
   table?: string;
+  /** 42P01 only: the relation that does not exist, as named in OUR SQL ("staff", "public.staff"). */
+  relation?: string;
 }
 
 export interface ToDbErrorOptions {
@@ -127,6 +131,30 @@ const NETWORK_TIMEOUT_CODES: ReadonlySet<string> = new Set(["ETIMEDOUT", "ESOCKE
 
 const SQLSTATE = /^[0-9A-Z]{5}$/;
 const IDENTIFIER = /^[A-Za-z0-9_]{1,63}$/;
+/** A relation name, optionally schema-qualified: identifiers and one dot, nothing else. */
+const RELATION = /^[A-Za-z0-9_]{1,63}(\.[A-Za-z0-9_]{1,63})?$/;
+
+// SQLSTATE 42P01, undefined_table. PostgreSQL does not fill the `table` field for it: the name
+// is ONLY in the message, in one of these fixed forms (English server messages):
+//   relation "staff" does not exist
+//   missing FROM-clause entry for table "r"
+// WHY THIS IS SAFE TO LOG when `message` in general is not: for this error the only variable
+// part of the message is a relation name exactly as it is written in the SQL TEXT, and every
+// SQL text in CSS is a literal in our own source (the sql tag makes every value a parameter, so
+// no visitor, client or staff data can ever be in a name). It is a schema identifier we chose,
+// like a constraint name. Only the quoted name is taken, only for 42P01, and only if it is a
+// bare identifier (optionally schema.name); anything else, or a message in another language,
+// logs no relation at all. The rest of the message is never stored or logged.
+const UNDEFINED_TABLE_TEXT = [/^relation "([^"]{1,130})" does not exist$/, /^missing FROM-clause entry for table "([^"]{1,130})"$/];
+
+function relationOf(sqlstate: string | undefined, text: string): string | undefined {
+  if (sqlstate !== "42P01") return undefined;
+  for (const pattern of UNDEFINED_TABLE_TEXT) {
+    const name = pattern.exec(text)?.[1];
+    if (name !== undefined && RELATION.test(name)) return name;
+  }
+  return undefined;
+}
 
 // Text the pg client and pool produce with NO code. Matched for classification
 // only; the text is never stored, logged or returned.
@@ -248,6 +276,8 @@ export function toDbError(raw: unknown, options: ToDbErrorOptions = {}): DbError
   if (sqlstate !== undefined) entry.sqlstate = sqlstate;
   if (facts.constraint !== undefined && IDENTIFIER.test(facts.constraint)) entry.constraint = facts.constraint;
   if (facts.table !== undefined && IDENTIFIER.test(facts.table)) entry.table = facts.table;
+  const relation = relationOf(sqlstate, facts.text);
+  if (relation !== undefined) entry.relation = relation;
 
   try {
     log(entry);
