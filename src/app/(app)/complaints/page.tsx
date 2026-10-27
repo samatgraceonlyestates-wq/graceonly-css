@@ -219,7 +219,7 @@ export default async function ComplaintsPage({
                 </p>
 
                 <div className={styles.action}>
-                  <Button variant="row-action" href={`/complaints/${c.id}`}>Open →</Button>
+                  <Link href={`/complaints/${c.id}`} className={styles.openLink}>Open →</Link>
                 </div>
               </Card>
             </li>

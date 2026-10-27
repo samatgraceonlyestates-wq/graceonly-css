@@ -4,7 +4,6 @@ import { revalidatePath } from "next/cache";
 import { requireSession } from "@/lib/auth";
 import {
   escalateCase,
-  moveCase,
   resolveCase,
   sendCaseMessage,
 } from "@/lib/portal";
@@ -94,24 +93,3 @@ export async function escalateCaseAction(
   return { status: "done", message: "Case escalated." };
 }
 
-export async function moveCaseAction(
-  _previous: CaseActionState,
-  formData: FormData,
-): Promise<CaseActionState> {
-  await requireSession();
-  const caseId = textOf(formData, "caseId");
-  const newCaseType = textOf(formData, "newCaseType");
-  const reason = textOf(formData, "reason");
-  const version = intOf(formData, "version");
-  if (!newCaseType) return error("Choose a case type.");
-  if (!reason.trim()) return error("A reason for the change is required.");
-  if (isNaN(version)) return error("Missing case version.");
-
-  const result = await moveCase(caseId, { newCaseType, reason: reason.trim(), version });
-  if (!result.ok) {
-    if (result.error.kind === "conflict") return error(CONFLICT_MESSAGE);
-    return error(result.error.message);
-  }
-  refresh(caseId);
-  return { status: "done", message: "Case type changed." };
-}

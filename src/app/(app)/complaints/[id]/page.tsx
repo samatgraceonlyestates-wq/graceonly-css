@@ -9,7 +9,6 @@ import { StatusPill } from "@/components/StatusPill/StatusPill";
 import { requireSession } from "@/lib/auth";
 import {
   getCase,
-  listCaseTypes,
   type CaseChannel,
   type CaseStatus,
   type PortalCaseDetail,
@@ -91,7 +90,7 @@ export default async function ComplaintDetailPage({
   const now = new Date();
   const asOf = now.toISOString();
 
-  const [caseResult, typesResult] = await Promise.all([getCase(id), listCaseTypes()]);
+  const caseResult = await getCase(id);
 
   if (!caseResult.ok) {
     const isNotFound = caseResult.error.kind === "not_found";
@@ -110,7 +109,6 @@ export default async function ComplaintDetailPage({
 
   const c = caseResult.data;
   const pill = STATUS_PILL[c.status];
-  const caseTypes = typesResult.ok ? typesResult.data : [];
   const events = [...c.events].sort(
     (a, b) => Date.parse(a.at) - Date.parse(b.at),
   );
@@ -168,8 +166,6 @@ export default async function ComplaintDetailPage({
             caseId={c.id}
             version={c.version}
             escalated={c.escalated}
-            caseTypes={caseTypes}
-            currentTypeCode={c.typeCode}
           />
         </Card>
       ) : null}

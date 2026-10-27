@@ -1101,7 +1101,7 @@ export function listCaseTypes(): Promise<PortalResult<PortalCaseType[]>> {
   return portalGet("/support-case-types", { parse: parseCaseTypes });
 }
 
-// ----- GET /cases  (the queue: all cases visible to this key) ----------------
+// ----- GET /support-cases  (the queue: all cases visible to this key) --------
 
 export interface PortalCase {
   id: string;
@@ -1156,13 +1156,13 @@ const parseCaseList = enveloped(object({ cases: list(parsePortalCase) }));
 export function listCases(filter?: { status?: CaseStatus }): Promise<PortalResult<PortalCaseList>> {
   const query: Record<string, string> = {};
   if (filter?.status) query.status = filter.status;
-  return portalGet("/cases", {
+  return portalGet("/support-cases", {
     parse: parseCaseList,
     query: Object.keys(query).length > 0 ? query : undefined,
   });
 }
 
-// ----- GET /cases/{id}  (case detail with events) ----------------------------
+// ----- GET /support-cases/{id}  (case detail with events) --------------------
 
 export interface PortalCaseEvent {
   id: string;
@@ -1192,10 +1192,10 @@ const parseCaseDetailInner: Parser<PortalCaseDetail> = (raw, path) => {
 };
 
 export function getCase(caseId: string): Promise<PortalResult<PortalCaseDetail>> {
-  return portalGet(`/cases/${encodeURIComponent(caseId)}`, { parse: enveloped(parseCaseDetailInner) });
+  return portalGet(`/support-cases/${encodeURIComponent(caseId)}`, { parse: enveloped(parseCaseDetailInner) });
 }
 
-// ----- POST /cases/start  (open a new case) ----------------------------------
+// ----- POST /clients/{clientId}/support-cases  (create a new case) -----------
 
 export interface CreateCaseBody {
   clientId: string;
@@ -1207,49 +1207,52 @@ export interface CreateCaseBody {
 }
 
 export function createCase(body: CreateCaseBody): Promise<PortalResult<PortalCase>> {
-  return portalPost("/cases/start", body, { parse: enveloped(parsePortalCase) });
+  const { clientId, ...payload } = body;
+  return portalPost(`/clients/${encodeURIComponent(clientId)}/support-cases`, payload, {
+    parse: enveloped(parsePortalCase),
+  });
 }
 
-// ----- POST /cases/{id}/message  (add a message) ----------------------------
+// ----- POST /support-cases/{id}/messages  (add a message) --------------------
 
 export function sendCaseMessage(
   caseId: string,
   body: { body: string; version: number },
 ): Promise<PortalResult<PortalCase>> {
-  return portalPost(`/cases/${encodeURIComponent(caseId)}/message`, body, {
+  return portalPost(`/support-cases/${encodeURIComponent(caseId)}/messages`, body, {
     parse: enveloped(parsePortalCase),
   });
 }
 
-// ----- POST /cases/{id}/resolve  (resolve a case) ---------------------------
+// ----- POST /support-cases/{id}/resolve  (resolve a case) --------------------
 
 export function resolveCase(
   caseId: string,
   body: { body: string; version: number },
 ): Promise<PortalResult<PortalCase>> {
-  return portalPost(`/cases/${encodeURIComponent(caseId)}/resolve`, body, {
+  return portalPost(`/support-cases/${encodeURIComponent(caseId)}/resolve`, body, {
     parse: enveloped(parsePortalCase),
   });
 }
 
-// ----- POST /cases/{id}/escalate  (escalate a case, admin only) --------------
+// ----- POST /support-cases/{id}/escalate  (escalate a case) ------------------
 
 export function escalateCase(
   caseId: string,
   body: { body: string; version: number },
 ): Promise<PortalResult<PortalCase>> {
-  return portalPost(`/cases/${encodeURIComponent(caseId)}/escalate`, body, {
+  return portalPost(`/support-cases/${encodeURIComponent(caseId)}/escalate`, body, {
     parse: enveloped(parsePortalCase),
   });
 }
 
-// ----- POST /cases/{id}/move  (change case type) ----------------------------
+// ----- POST /support-cases/{id}/start  (start working a case) ----------------
 
-export function moveCase(
+export function startCase(
   caseId: string,
-  body: { newCaseType: string; reason: string; version: number },
+  body: { version: number },
 ): Promise<PortalResult<PortalCase>> {
-  return portalPost(`/cases/${encodeURIComponent(caseId)}/move`, body, {
+  return portalPost(`/support-cases/${encodeURIComponent(caseId)}/start`, body, {
     parse: enveloped(parsePortalCase),
   });
 }
