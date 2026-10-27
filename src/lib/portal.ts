@@ -67,6 +67,12 @@ export interface PortalGetOptions<T> {
   timeoutMs?: number;
 }
 
+export interface PortalPostOptions<T> {
+  parse: (raw: unknown) => T;
+  onStatus?: Readonly<Record<number, (body: unknown) => T | null>>;
+  timeoutMs?: number;
+}
+
 type Config = { baseUrl: string; serviceKey: string };
 
 function failure(
@@ -224,6 +230,81 @@ export async function portalGet<T>(path: string, options: PortalGetOptions<T>): 
       return { ok: true, status: response.status, data: options.parse(body), requestId };
     } catch (error) {
       // A ShapeError names the field, never its value.
+      const detail = error instanceof ShapeError ? ` ${error.message}` : "";
+      return failure("unexpected", `The portal's response was not the shape expected.${detail}`, {
+        status: response.status,
+        requestId,
+        body,
+      });
+    }
+  }
+
+  const kind = kindForStatus(response.status);
+  return failure(kind, kind === "unexpected" ? `${KIND_MESSAGE.unexpected} (${response.status}).` : KIND_MESSAGE[kind], {
+    status: response.status,
+    code: readCode(body),
+    retryAfterSeconds: retryAfter(response.headers),
+    requestId,
+    body,
+  });
+}
+
+export async function portalPost<T>(
+  path: string,
+  payload: unknown,
+  options: PortalPostOptions<T>,
+): Promise<PortalResult<T>> {
+  const configured = readConfig();
+  if (!configured.ok) return configured;
+  const { baseUrl, serviceKey } = configured.config;
+
+  if (!path.startsWith("/")) return failure("config", "Portal paths must start with /.");
+
+  let response: Response;
+  try {
+    response = await fetch(`${baseUrl}${path}`, {
+      method: "POST",
+      headers: {
+        "X-Service-Key": serviceKey,
+        "Content-Type": "application/json",
+        Accept: "application/json",
+      },
+      body: JSON.stringify(payload),
+      redirect: "manual",
+      cache: "no-store",
+      signal: AbortSignal.timeout(options.timeoutMs ?? DEFAULT_TIMEOUT_MS),
+    });
+  } catch (error) {
+    if (error instanceof Error && (error.name === "TimeoutError" || error.name === "AbortError")) {
+      return failure("timeout", KIND_MESSAGE.timeout);
+    }
+    const cause = error instanceof Error ? error.cause : undefined;
+    const code =
+      typeof cause === "object" && cause !== null && "code" in cause && typeof cause.code === "string"
+        ? cause.code
+        : null;
+    return failure("network", code ? `${KIND_MESSAGE.network} (${code})` : KIND_MESSAGE.network);
+  }
+
+  let body: unknown;
+  try {
+    body = scrubBody(readBody(await response.text()), serviceKey);
+  } catch {
+    return failure("network", KIND_MESSAGE.network, { status: response.status });
+  }
+
+  const requestId = readRequestId(body);
+
+  const outcome = options.onStatus?.[response.status];
+  if (outcome) {
+    const accepted = outcome(body);
+    if (accepted !== null) return { ok: true, status: response.status, data: accepted, requestId };
+  }
+
+  if (response.status >= 200 && response.status < 300) {
+    try {
+      return { ok: true, status: response.status, data: options.parse(body), requestId };
+    } catch (error) {
       const detail = error instanceof ShapeError ? ` ${error.message}` : "";
       return failure("unexpected", `The portal's response was not the shape expected.${detail}`, {
         status: response.status,
@@ -977,5 +1058,198 @@ export function getReleaseCheck(
         }
       },
     },
+  });
+}
+
+// ===== SUPPORT CASES (the portal's case/dispute endpoints) ===================
+//
+// Response shapes are inferred from SampleDispute (sampleData.ts), which was
+// designed to mirror the portal's disputes row. The typed parsers will reject
+// any mismatch at runtime with a clear error path.
+
+export const CASE_STATUSES = ["OPEN", "IN_PROGRESS", "AWAITING_CLIENT", "RESOLVED", "WITHDRAWN"] as const;
+export type CaseStatus = (typeof CASE_STATUSES)[number];
+
+export const CASE_CHANNELS = ["PORTAL", "PHONE", "WHATSAPP", "IN_PERSON", "EMAIL"] as const;
+export type CaseChannel = (typeof CASE_CHANNELS)[number];
+
+export const CASE_RAISED_BY_ROLES = ["CLIENT", "ADMIN"] as const;
+export type CaseRaisedByRole = (typeof CASE_RAISED_BY_ROLES)[number];
+
+export const CASE_KINDS = ["ISSUE", "QUESTION"] as const;
+export type CaseKind = (typeof CASE_KINDS)[number];
+
+const caseStatus = oneOf(CASE_STATUSES);
+const caseChannel = oneOf(CASE_CHANNELS);
+const caseRaisedByRole = oneOf(CASE_RAISED_BY_ROLES);
+const caseKind = oneOf(CASE_KINDS);
+
+// ----- GET /support-case-types -----------------------------------------------
+
+export interface PortalCaseType {
+  code: string;
+  kind: CaseKind;
+  label: string | null;
+  targetsPurchase: boolean;
+}
+
+const parseCaseTypes = enveloped(
+  list(object({ code: str, kind: caseKind, label: nullable(str), targetsPurchase: bool })),
+);
+
+export function listCaseTypes(): Promise<PortalResult<PortalCaseType[]>> {
+  return portalGet("/support-case-types", { parse: parseCaseTypes });
+}
+
+// ----- GET /cases  (the queue: all cases visible to this key) ----------------
+
+export interface PortalCase {
+  id: string;
+  referenceNo: string;
+  clientId: string;
+  clientName: string;
+  raisedByRole: CaseRaisedByRole;
+  channel: CaseChannel;
+  typeCode: string;
+  typeLabel: string | null;
+  kind: CaseKind;
+  purchaseId: string | null;
+  subject: string;
+  description: string;
+  status: CaseStatus;
+  version: number;
+  raisedAt: string;
+  lastClientReplyAt: string | null;
+  resolvedAt: string | null;
+  resolutionNote: string | null;
+  escalated: boolean;
+}
+
+const parsePortalCase = object({
+  id: str,
+  referenceNo: str,
+  clientId: str,
+  clientName: str,
+  raisedByRole: caseRaisedByRole,
+  channel: caseChannel,
+  typeCode: str,
+  typeLabel: nullable(str),
+  kind: caseKind,
+  purchaseId: nullable(str),
+  subject: str,
+  description: str,
+  status: caseStatus,
+  version: int,
+  raisedAt: str,
+  lastClientReplyAt: nullable(str),
+  resolvedAt: nullable(str),
+  resolutionNote: nullable(str),
+  escalated: bool,
+});
+
+export interface PortalCaseList {
+  cases: PortalCase[];
+}
+
+const parseCaseList = enveloped(object({ cases: list(parsePortalCase) }));
+
+export function listCases(filter?: { status?: CaseStatus }): Promise<PortalResult<PortalCaseList>> {
+  const query: Record<string, string> = {};
+  if (filter?.status) query.status = filter.status;
+  return portalGet("/cases", {
+    parse: parseCaseList,
+    query: Object.keys(query).length > 0 ? query : undefined,
+  });
+}
+
+// ----- GET /cases/{id}  (case detail with events) ----------------------------
+
+export interface PortalCaseEvent {
+  id: string;
+  type: string;
+  body: string | null;
+  by: string;
+  at: string;
+}
+
+export interface PortalCaseDetail extends PortalCase {
+  events: PortalCaseEvent[];
+}
+
+const parseCaseEvent = object({
+  id: str,
+  type: str,
+  body: nullable(str),
+  by: str,
+  at: str,
+});
+
+const parseCaseDetailInner: Parser<PortalCaseDetail> = (raw, path) => {
+  const base = parsePortalCase(raw, path);
+  const record = asRecord(raw, path);
+  const events = list(parseCaseEvent)(record.events, `${path}.events`);
+  return { ...base, events };
+};
+
+export function getCase(caseId: string): Promise<PortalResult<PortalCaseDetail>> {
+  return portalGet(`/cases/${encodeURIComponent(caseId)}`, { parse: enveloped(parseCaseDetailInner) });
+}
+
+// ----- POST /cases/start  (open a new case) ----------------------------------
+
+export interface CreateCaseBody {
+  clientId: string;
+  typeCode: string;
+  subject: string;
+  description: string;
+  channel: CaseChannel;
+  purchaseId?: string;
+}
+
+export function createCase(body: CreateCaseBody): Promise<PortalResult<PortalCase>> {
+  return portalPost("/cases/start", body, { parse: enveloped(parsePortalCase) });
+}
+
+// ----- POST /cases/{id}/message  (add a message) ----------------------------
+
+export function sendCaseMessage(
+  caseId: string,
+  body: { body: string; version: number },
+): Promise<PortalResult<PortalCase>> {
+  return portalPost(`/cases/${encodeURIComponent(caseId)}/message`, body, {
+    parse: enveloped(parsePortalCase),
+  });
+}
+
+// ----- POST /cases/{id}/resolve  (resolve a case) ---------------------------
+
+export function resolveCase(
+  caseId: string,
+  body: { body: string; version: number },
+): Promise<PortalResult<PortalCase>> {
+  return portalPost(`/cases/${encodeURIComponent(caseId)}/resolve`, body, {
+    parse: enveloped(parsePortalCase),
+  });
+}
+
+// ----- POST /cases/{id}/escalate  (escalate a case, admin only) --------------
+
+export function escalateCase(
+  caseId: string,
+  body: { body: string; version: number },
+): Promise<PortalResult<PortalCase>> {
+  return portalPost(`/cases/${encodeURIComponent(caseId)}/escalate`, body, {
+    parse: enveloped(parsePortalCase),
+  });
+}
+
+// ----- POST /cases/{id}/move  (change case type) ----------------------------
+
+export function moveCase(
+  caseId: string,
+  body: { newCaseType: string; reason: string; version: number },
+): Promise<PortalResult<PortalCase>> {
+  return portalPost(`/cases/${encodeURIComponent(caseId)}/move`, body, {
+    parse: enveloped(parsePortalCase),
   });
 }

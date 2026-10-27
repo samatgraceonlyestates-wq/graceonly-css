@@ -1,0 +1,163 @@
+.wrap {
+  display: flex;
+  flex-direction: column;
+  gap: var(--fold-space-16);
+}
+
+.card {
+  padding: var(--fold-space-24);
+}
+
+.heading {
+  margin: 0 0 var(--fold-space-16);
+  color: var(--fold-burgundy);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.searchRow {
+  display: flex;
+  gap: var(--fold-space-8);
+}
+
+.searchRow .input {
+  flex: 1;
+}
+
+.input {
+  height: 48px;
+  padding: 0 var(--fold-space-16);
+  border: 1px solid var(--fold-silver);
+  border-radius: 9999px;
+  background: var(--fold-canvas);
+  color: var(--fold-burgundy);
+  font-family: inherit;
+  font-size: 16px;
+}
+
+.input::placeholder {
+  color: var(--fold-smoke);
+}
+
+.empty {
+  padding: var(--fold-space-12) 0;
+  color: var(--fold-dusk);
+  font-size: 13px;
+}
+
+.candidates {
+  display: flex;
+  flex-direction: column;
+  gap: var(--fold-space-4);
+  margin: var(--fold-space-12) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.candidate {
+  display: flex;
+}
+
+.candidateButton {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  padding: var(--fold-space-10) var(--fold-space-12);
+  border: 1px solid var(--fold-silver);
+  border-radius: var(--fold-radius-card);
+  background: var(--fold-white);
+  color: var(--fold-burgundy);
+  font-family: inherit;
+  font-size: 14px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.candidateButton:hover {
+  border-color: var(--fold-burgundy-steel);
+}
+
+.candidateSelected {
+  border-color: var(--fold-burgundy);
+  background: var(--fold-mist);
+}
+
+.candidateName {
+  font-weight: 600;
+}
+
+.candidateSub {
+  color: var(--fold-dusk);
+  font-size: 12px;
+}
+
+.picked {
+  margin-top: var(--fold-space-12);
+  color: var(--fold-dusk);
+  font-size: 13px;
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--fold-space-16);
+}
+
+.fieldGroup {
+  display: flex;
+  flex-direction: column;
+  gap: var(--fold-space-4);
+}
+
+.label {
+  color: var(--fold-dusk);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+}
+
+.select {
+  height: 48px;
+  padding: 0 var(--fold-space-16);
+  border: 1px solid var(--fold-silver);
+  border-radius: 9999px;
+  background: var(--fold-canvas);
+  color: var(--fold-burgundy);
+  font-family: inherit;
+  font-size: 16px;
+}
+
+.textarea {
+  width: 100%;
+  min-height: 100px;
+  padding: var(--fold-space-12) var(--fold-space-16);
+  border: 1px solid var(--fold-silver);
+  border-radius: var(--fold-radius-card);
+  background: var(--fold-canvas);
+  color: var(--fold-burgundy);
+  font-family: inherit;
+  font-size: 16px;
+  line-height: 1.5;
+  resize: vertical;
+}
+
+.textarea::placeholder {
+  color: var(--fold-smoke);
+}
+
+.hint {
+  color: var(--fold-status-amber-ink);
+  font-size: 12px;
+}
+
+@media (min-width: 768px) {
+  .wrap {
+    gap: var(--fold-space-24);
+  }
+
+  .card {
+    padding: var(--fold-space-32);
+  }
+}

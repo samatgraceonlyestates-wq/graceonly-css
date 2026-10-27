@@ -5,6 +5,13 @@
   gap: var(--fold-space-10);
 }
 
+.titleRow {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--fold-space-12);
+}
+
 .desktopInline {
   display: none;
 }

@@ -1,0 +1,85 @@
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--fold-space-8);
+}
+
+.panel {
+  margin-top: var(--fold-space-8);
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--fold-space-12);
+}
+
+.formLabel {
+  color: var(--fold-burgundy);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.fieldLabel {
+  display: block;
+  margin-bottom: var(--fold-space-4);
+  color: var(--fold-dusk);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+}
+
+.selectWrap {
+  display: flex;
+  flex-direction: column;
+}
+
+.select {
+  height: 48px;
+  padding: 0 var(--fold-space-16);
+  border: 1px solid var(--fold-silver);
+  border-radius: 9999px;
+  background: var(--fold-canvas);
+  color: var(--fold-burgundy);
+  font-family: inherit;
+  font-size: 16px;
+}
+
+.formButtons {
+  display: flex;
+  align-items: center;
+  gap: var(--fold-space-12);
+}
+
+.cancel {
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--fold-dusk);
+  font-family: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.cancel:hover {
+  color: var(--fold-burgundy);
+}
+
+.textarea {
+  width: 100%;
+  min-height: 80px;
+  padding: var(--fold-space-12) var(--fold-space-16);
+  border: 1px solid var(--fold-silver);
+  border-radius: var(--fold-radius-card);
+  background: var(--fold-canvas);
+  color: var(--fold-burgundy);
+  font-family: inherit;
+  font-size: 16px;
+  line-height: 1.5;
+  resize: vertical;
+}
+
+.textarea::placeholder {
+  color: var(--fold-smoke);
+}

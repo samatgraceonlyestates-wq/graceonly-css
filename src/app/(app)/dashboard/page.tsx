@@ -6,12 +6,13 @@
 //    as a plain caption instead.
 //  - Docs released counts today's document HANDOVERS (not withdrawn) and says how many nobody
 //    verified (recorded while the portal's gate was off or it could not answer).
-//  - Open complaints has NO source yet (the portal's case endpoints are being built), so its
-//    tile shows a dash and says so. The complaints panel says the same instead of sample cases.
+//  - Open complaints is the count of unresolved cases from the portal. When the portal is
+//    unreachable the tile shows a dash and the panel says so.
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Card } from "@/components/Card/Card";
 import { Chip } from "@/components/Chip/Chip";
+import { ComplaintAge } from "@/components/ComplaintAge/ComplaintAge";
 import { ElapsedTime } from "@/components/ElapsedTime/ElapsedTime";
 import { Notice } from "@/components/Notice/Notice";
 import { PageHeader } from "@/components/PageHeader/PageHeader";
@@ -20,6 +21,7 @@ import { StatTile } from "@/components/StatTile/StatTile";
 import { requireSession } from "@/lib/auth";
 import { firstName, formatIsoDate, getClockParts, greetingForHour } from "@/lib/format";
 import { lagosDateOf } from "@/lib/lagosTime";
+import { listCases } from "@/lib/portal";
 import { reasonLabel, typeLabel } from "@/lib/visits";
 import { loadOpenVisits, loadVisitCounts } from "@/lib/visitStore";
 import styles from "./page.module.css";
@@ -39,7 +41,10 @@ export default async function DashboardPage() {
   const asOf = now.toISOString();
   const clock = getClockParts(now);
   const today = lagosDateOf(now);
-  const [counts, open] = await Promise.all([loadVisitCounts(now), loadOpenVisits(5)]);
+  const [counts, open, casesResult] = await Promise.all([loadVisitCounts(now), loadOpenVisits(5), listCases()]);
+  const allCases = casesResult.ok ? casesResult.data.cases : null;
+  const openCases = allCases?.filter((c) => c.status !== "RESOLVED" && c.status !== "WITHDRAWN") ?? null;
+  const openCount = openCases?.length ?? null;
 
   return (
     <div className={styles.page}>
@@ -67,7 +72,12 @@ export default async function DashboardPage() {
           value={counts.inBuilding}
           caption={counts.inBuildingFromEarlier > 0 ? `${counts.inBuildingFromEarlier} open from an earlier day` : "In the building"}
         />
-        <StatTile label="Open complaints" shortLabel="Open" value="—" caption="Not connected yet" />
+        <StatTile
+          label="Open complaints"
+          shortLabel="Open"
+          value={openCount !== null ? openCount : "—"}
+          caption={openCount !== null ? "Unresolved cases" : "Could not reach the portal"}
+        />
         <StatTile
           label="Docs released"
           value={counts.handoversToday}
@@ -136,13 +146,40 @@ export default async function DashboardPage() {
             <h2 id="open-complaints-heading" className={styles.panelTitle}>
               Open complaints
             </h2>
+            {openCases !== null && openCases.length > 0 ? (
+              <Link href="/complaints" className={styles.panelLink}>
+                <span className={styles.desktopOnly}>View all →</span>
+                <span className={styles.mobileOnly}>All →</span>
+              </Link>
+            ) : null}
           </div>
-          <Notice tone="guidance" title="Not connected yet" role="status">
-            <p>
-              Complaints belong to the client portal, which does not offer them to CSS yet, so none can be shown here. Nothing on
-              this panel is a count of real complaints.
+          {openCases === null ? (
+            <Notice tone="guidance" title="Could not reach the portal" role="status">
+              <p>Complaints belong to the client portal and could not be loaded right now.</p>
+            </Notice>
+          ) : openCases.length === 0 ? (
+            <p className={styles.empty}>No open complaints.</p>
+          ) : (
+            <ul className={styles.list}>
+              {openCases.slice(0, 5).map((c) => (
+                <li key={c.id} className={styles.row}>
+                  <Link href={`/complaints/${c.id}`} className={styles.visitLink}>
+                    <PersonCell
+                      className={styles.visitPerson}
+                      name={c.clientName}
+                      sub={c.subject}
+                    />
+                  </Link>
+                  <ComplaintAge raisedAt={c.raisedAt} asOf={asOf} />
+                </li>
+              ))}
+            </ul>
+          )}
+          {openCases !== null && openCases.length > 5 ? (
+            <p className={styles.more}>
+              {openCases.length - 5} more open. <Link href="/complaints">See them all.</Link>
             </p>
-          </Notice>
+          ) : null}
         </Card>
       </div>
     </div>

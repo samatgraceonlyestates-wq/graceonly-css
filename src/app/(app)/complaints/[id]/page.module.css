@@ -1,0 +1,140 @@
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--fold-space-16);
+}
+
+.backLink {
+  color: var(--fold-gold);
+  font-size: 13px;
+  font-weight: 500;
+  text-decoration: none;
+}
+
+.backLink:hover {
+  text-decoration: underline;
+}
+
+.header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--fold-space-10);
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--fold-space-8);
+}
+
+.age {
+  font-size: 14px;
+}
+
+.descriptionCard,
+.timelineCard,
+.actionsCard {
+  padding: var(--fold-space-24);
+}
+
+.sectionTitle {
+  margin: 0 0 var(--fold-space-12);
+  color: var(--fold-burgundy);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.subTitle {
+  margin: var(--fold-space-16) 0 var(--fold-space-8);
+  color: var(--fold-burgundy);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.description {
+  color: var(--fold-dusk);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+/* Timeline */
+.timeline {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.event {
+  padding: var(--fold-space-12) 0;
+  border-bottom: 1px solid var(--fold-silver);
+}
+
+.event:last-child {
+  border-bottom: none;
+}
+
+.eventMeta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--fold-space-8);
+}
+
+.eventType {
+  color: var(--fold-burgundy);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.eventTime {
+  color: var(--fold-dusk);
+  font-size: 12px;
+}
+
+.eventBy {
+  color: var(--fold-dusk);
+  font-size: 12px;
+}
+
+.eventBody {
+  margin: var(--fold-space-6) 0 0;
+  color: var(--fold-dusk);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+/* Meta line at the bottom */
+.meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--fold-space-8);
+  color: var(--fold-dusk);
+  font-size: 11px;
+}
+
+.meta > span:not(:last-child)::after {
+  content: " ·";
+}
+
+@media (min-width: 768px) {
+  .page {
+    gap: var(--fold-space-24);
+  }
+
+  .age {
+    --complaint-age-weight: 700;
+    font-size: 22px;
+    letter-spacing: -0.66px;
+  }
+
+  .descriptionCard,
+  .timelineCard,
+  .actionsCard {
+    padding: var(--fold-space-32);
+  }
+}
