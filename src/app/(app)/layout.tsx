@@ -10,5 +10,5 @@ import { requireSession } from "@/lib/auth";
 // the data. This call is here for the shell's own need: the signed-in name.
 export default async function AppLayout({ children }: { children: ReactNode }) {
   const user = await requireSession();
-  return <AppShell user={{ name: user.fullName }}>{children}</AppShell>;
+  return <AppShell user={{ name: user.fullName, roles: user.roles }}>{children}</AppShell>;
 }

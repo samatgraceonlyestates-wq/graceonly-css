@@ -34,7 +34,7 @@ import { requireSession } from "@/lib/auth";
 import { timeLabel } from "@/lib/departureTime";
 import { formatDuration, formatIsoDate } from "@/lib/format";
 import { lagosDateOf } from "@/lib/lagosTime";
-import { loadHandovers } from "@/lib/handoverStore";
+import { loadHandovers, loadSyncStatus } from "@/lib/handoverStore";
 import { formatPhone } from "@/lib/phoneNumber";
 import { loadVisitDetail } from "@/lib/visitDetail";
 import { lengthOf } from "@/lib/visitLog";
@@ -140,6 +140,7 @@ export default async function VisitDetailPage({
   // A client's live record, from the portal. A failure here never hides the visit.
   const [portal, handovers] = await Promise.all([visit.clientId !== null ? loadVisitDetail(visit.clientId) : null, loadHandovers(visit.id)]);
   const live = portal?.kind === "loaded" ? portal.summary : null;
+  const syncMap = await loadSyncStatus(handovers.map((h) => h.id));
   const handoverRows: HandoverCardRow[] = handovers.map((handover) => ({
     id: handover.id,
     releasedAt: handover.releasedAt.toISOString(),
@@ -154,6 +155,7 @@ export default async function VisitDetailPage({
       : null,
     replacedBy: handover.replacedBy ? { id: handover.replacedBy.id, releasedAt: handover.replacedBy.releasedAt.toISOString() } : null,
     replaces: handover.replaces ? { id: handover.replaces.id, releasedAt: handover.replaces.releasedAt.toISOString(), reason: handover.replaces.reason } : null,
+    sync: syncMap.has(handover.id) ? { portalReleaseId: syncMap.get(handover.id)!.portalReleaseId, lastError: syncMap.get(handover.id)!.lastError } : null,
   }));
 
   const day = lagosDateOf(visit.checkedInAt);
@@ -299,6 +301,7 @@ export default async function VisitDetailPage({
 
       <HandoverCard
         visitId={visit.id}
+        clientId={visit.clientId}
         canRecord={visit.clientId !== null && state !== "removed"}
         notClientText={
           visit.clientId !== null

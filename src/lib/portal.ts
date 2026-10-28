@@ -67,8 +67,14 @@ export interface PortalGetOptions<T> {
   timeoutMs?: number;
 }
 
+export interface ActingStaff {
+  id: string;
+  name: string;
+}
+
 export interface PortalPostOptions<T> {
   parse: (raw: unknown) => T;
+  actingStaff?: ActingStaff;
   onStatus?: Readonly<Record<number, (body: unknown) => T | null>>;
   timeoutMs?: number;
 }
@@ -260,6 +266,13 @@ export async function portalPost<T>(
 
   if (!path.startsWith("/")) return failure("config", "Portal paths must start with /.");
 
+  const idempotencyKey = crypto.randomUUID().replace(/-/g, "");
+  const enrichedPayload = {
+    ...(typeof payload === "object" && payload !== null ? payload : {}),
+    idempotencyKey,
+    ...(options.actingStaff ? { actingStaff: options.actingStaff } : {}),
+  };
+
   let response: Response;
   try {
     response = await fetch(`${baseUrl}${path}`, {
@@ -269,7 +282,7 @@ export async function portalPost<T>(
         "Content-Type": "application/json",
         Accept: "application/json",
       },
-      body: JSON.stringify(payload),
+      body: JSON.stringify(enrichedPayload),
       redirect: "manual",
       cache: "no-store",
       signal: AbortSignal.timeout(options.timeoutMs ?? DEFAULT_TIMEOUT_MS),
@@ -1086,15 +1099,30 @@ const caseKind = oneOf(CASE_KINDS);
 
 // ----- GET /support-case-types -----------------------------------------------
 
+const TARGET_KINDS = ["PURCHASE", "NONE"] as const;
+type TargetKind = (typeof TARGET_KINDS)[number];
+const targetKind = oneOf(TARGET_KINDS);
+
 export interface PortalCaseType {
   code: string;
   kind: CaseKind;
   label: string | null;
+  description: string | null;
+  targetKind: TargetKind;
+  recordOnly: boolean;
   targetsPurchase: boolean;
 }
 
+const parseRawCaseType = object({
+  code: str, kind: caseKind, label: nullable(str),
+  description: nullable(str), targetKind, recordOnly: bool,
+});
+
 const parseCaseTypes = enveloped(
-  list(object({ code: str, kind: caseKind, label: nullable(str), targetsPurchase: bool })),
+  list((raw, path) => {
+    const t = parseRawCaseType(raw, path);
+    return { ...t, targetsPurchase: t.targetKind === "PURCHASE" } as PortalCaseType;
+  }),
 );
 
 export function listCaseTypes(): Promise<PortalResult<PortalCaseType[]>> {
@@ -1103,49 +1131,96 @@ export function listCaseTypes(): Promise<PortalResult<PortalCaseType[]>> {
 
 // ----- GET /support-cases  (the queue: all cases visible to this key) --------
 
-export interface PortalCase {
+export interface PortalCaseRecordedBy {
+  via: string;
+  staffName: string;
+  role: string;
+}
+
+interface CaseBase {
   id: string;
-  referenceNo: string;
-  clientId: string;
-  clientName: string;
-  raisedByRole: CaseRaisedByRole;
+  reference: string;
+  referenceNo: number;
   channel: CaseChannel;
   typeCode: string;
   typeLabel: string | null;
   kind: CaseKind;
   purchaseId: string | null;
+  purchaseLabel: string | null;
   subject: string;
-  description: string;
   status: CaseStatus;
+  statusLabel: string;
   version: number;
+  via: string;
+  recordedBy: PortalCaseRecordedBy;
   raisedAt: string;
-  lastClientReplyAt: string | null;
   resolvedAt: string | null;
-  resolutionNote: string | null;
   escalated: boolean;
+  lastEventSeq: number;
 }
 
-const parsePortalCase = object({
+export interface PortalCase extends CaseBase {
+  clientId: string;
+  clientName: string;
+  updatedAt: string;
+}
+
+const parseRecordedBy = object({ via: str, staffName: str, role: str });
+
+const parseRawCaseBase = object({
   id: str,
-  referenceNo: str,
-  clientId: str,
-  clientName: str,
-  raisedByRole: caseRaisedByRole,
+  reference: str,
+  referenceNo: int,
   channel: caseChannel,
-  typeCode: str,
-  typeLabel: nullable(str),
-  kind: caseKind,
+  type: object({ code: str, label: nullable(str), kind: caseKind }),
   purchaseId: nullable(str),
+  purchaseLabel: nullable(str),
   subject: str,
-  description: str,
   status: caseStatus,
+  statusLabel: str,
   version: int,
+  via: str,
+  recordedBy: parseRecordedBy,
   raisedAt: str,
-  lastClientReplyAt: nullable(str),
   resolvedAt: nullable(str),
-  resolutionNote: nullable(str),
   escalated: bool,
+  lastEventSeq: int,
 });
+
+function flattenCaseBase(r: ReturnType<typeof parseRawCaseBase>): CaseBase {
+  return {
+    id: r.id,
+    reference: r.reference,
+    referenceNo: r.referenceNo,
+    channel: r.channel,
+    typeCode: r.type.code,
+    typeLabel: r.type.label,
+    kind: r.type.kind,
+    purchaseId: r.purchaseId,
+    purchaseLabel: r.purchaseLabel,
+    subject: r.subject,
+    status: r.status,
+    statusLabel: r.statusLabel,
+    version: r.version,
+    via: r.via,
+    recordedBy: r.recordedBy,
+    raisedAt: r.raisedAt,
+    resolvedAt: r.resolvedAt,
+    escalated: r.escalated,
+    lastEventSeq: r.lastEventSeq,
+  };
+}
+
+const parsePortalCase: Parser<PortalCase> = (raw, path) => {
+  const base = flattenCaseBase(parseRawCaseBase(raw, path));
+  const record = asRecord(raw, path);
+  return {
+    ...base,
+    clientId: str(record.clientId, `${path}.clientId`),
+    clientName: str(record.clientName, `${path}.clientName`),
+    updatedAt: str(record.updatedAt, `${path}.updatedAt`),
+  };
+};
 
 export interface PortalCaseList {
   cases: PortalCase[];
@@ -1164,31 +1239,51 @@ export function listCases(filter?: { status?: CaseStatus }): Promise<PortalResul
 
 // ----- GET /support-cases/{id}  (case detail with events) --------------------
 
-export interface PortalCaseEvent {
-  id: string;
-  type: string;
-  body: string | null;
-  by: string;
-  at: string;
+export interface PortalCaseEventActor {
+  role: string;
+  via: string;
+  name: string;
 }
 
-export interface PortalCaseDetail extends PortalCase {
+export interface PortalCaseEvent {
+  id: string;
+  seq: number;
+  kind: string;
+  actor: PortalCaseEventActor;
+  body: string | null;
+  fromStatus: string | null;
+  toStatus: string | null;
+  visibleToClient: boolean;
+  createdAt: string;
+}
+
+export interface PortalCaseDetail extends CaseBase {
+  description: string | null;
+  resolutionNote: string | null;
   events: PortalCaseEvent[];
 }
 
+const parseCaseEventActor = object({ role: str, via: str, name: str });
+
 const parseCaseEvent = object({
   id: str,
-  type: str,
+  seq: int,
+  kind: str,
+  actor: parseCaseEventActor,
   body: nullable(str),
-  by: str,
-  at: str,
+  fromStatus: nullable(str),
+  toStatus: nullable(str),
+  visibleToClient: bool,
+  createdAt: str,
 });
 
 const parseCaseDetailInner: Parser<PortalCaseDetail> = (raw, path) => {
-  const base = parsePortalCase(raw, path);
+  const base = flattenCaseBase(parseRawCaseBase(raw, path));
   const record = asRecord(raw, path);
   const events = list(parseCaseEvent)(record.events, `${path}.events`);
-  return { ...base, events };
+  const description = record.description != null ? str(record.description, `${path}.description`) : null;
+  const resolutionNote = record.resolutionNote != null ? str(record.resolutionNote, `${path}.resolutionNote`) : null;
+  return { ...base, description, resolutionNote, events };
 };
 
 export function getCase(caseId: string): Promise<PortalResult<PortalCaseDetail>> {
@@ -1200,27 +1295,75 @@ export function getCase(caseId: string): Promise<PortalResult<PortalCaseDetail>>
 export interface CreateCaseBody {
   clientId: string;
   typeCode: string;
+  kind: CaseKind;
   subject: string;
   description: string;
   channel: CaseChannel;
   purchaseId?: string;
 }
 
-export function createCase(body: CreateCaseBody): Promise<PortalResult<PortalCase>> {
+export interface CreateCaseResult {
+  id: string;
+  reference: string;
+  referenceNo: number;
+  status: CaseStatus;
+  version: number;
+  eventId: string;
+  duplicate: boolean;
+}
+
+const parseCreateCaseResult = object({
+  id: str,
+  reference: str,
+  referenceNo: int,
+  status: caseStatus,
+  version: int,
+  eventId: str,
+  duplicate: bool,
+});
+
+export function createCase(
+  body: CreateCaseBody,
+  actingStaff: ActingStaff,
+): Promise<PortalResult<CreateCaseResult>> {
   const { clientId, ...payload } = body;
   return portalPost(`/clients/${encodeURIComponent(clientId)}/support-cases`, payload, {
-    parse: enveloped(parsePortalCase),
+    parse: enveloped(parseCreateCaseResult),
+    actingStaff,
   });
 }
+
+// ----- Shared slim result for all POST writes --------------------------------
+
+export interface WriteCaseResult {
+  caseId: string;
+  eventId: string;
+  status: string;
+  version: number;
+  duplicate: boolean;
+}
+
+const parseWriteCaseResult: Parser<WriteCaseResult> = (raw, path) => {
+  const record = asRecord(raw, path);
+  return {
+    caseId: str(record.caseId, `${path}.caseId`),
+    eventId: str(record.eventId, `${path}.eventId`),
+    status: str(record.status, `${path}.status`),
+    version: int(record.version, `${path}.version`),
+    duplicate: bool(record.duplicate, `${path}.duplicate`),
+  };
+};
 
 // ----- POST /support-cases/{id}/messages  (add a message) --------------------
 
 export function sendCaseMessage(
   caseId: string,
-  body: { body: string; version: number },
-): Promise<PortalResult<PortalCase>> {
+  body: { message: string; channel: CaseChannel; version: number },
+  actingStaff: ActingStaff,
+): Promise<PortalResult<WriteCaseResult>> {
   return portalPost(`/support-cases/${encodeURIComponent(caseId)}/messages`, body, {
-    parse: enveloped(parsePortalCase),
+    parse: enveloped(parseWriteCaseResult),
+    actingStaff,
   });
 }
 
@@ -1228,10 +1371,12 @@ export function sendCaseMessage(
 
 export function resolveCase(
   caseId: string,
-  body: { body: string; version: number },
-): Promise<PortalResult<PortalCase>> {
+  body: { resolutionNote: string; version: number },
+  actingStaff: ActingStaff,
+): Promise<PortalResult<WriteCaseResult>> {
   return portalPost(`/support-cases/${encodeURIComponent(caseId)}/resolve`, body, {
-    parse: enveloped(parsePortalCase),
+    parse: enveloped(parseWriteCaseResult),
+    actingStaff,
   });
 }
 
@@ -1239,10 +1384,12 @@ export function resolveCase(
 
 export function escalateCase(
   caseId: string,
-  body: { body: string; version: number },
-): Promise<PortalResult<PortalCase>> {
+  body: { reason: string; version: number },
+  actingStaff: ActingStaff,
+): Promise<PortalResult<WriteCaseResult>> {
   return portalPost(`/support-cases/${encodeURIComponent(caseId)}/escalate`, body, {
-    parse: enveloped(parsePortalCase),
+    parse: enveloped(parseWriteCaseResult),
+    actingStaff,
   });
 }
 
@@ -1251,8 +1398,73 @@ export function escalateCase(
 export function startCase(
   caseId: string,
   body: { version: number },
-): Promise<PortalResult<PortalCase>> {
+  actingStaff: ActingStaff,
+): Promise<PortalResult<WriteCaseResult>> {
   return portalPost(`/support-cases/${encodeURIComponent(caseId)}/start`, body, {
-    parse: enveloped(parsePortalCase),
+    parse: enveloped(parseWriteCaseResult),
+    actingStaff,
   });
+}
+
+// ===== DOCUMENT RELEASE (telling the portal a document was physically handed over) ==
+
+// ----- POST /clients/{id}/documents/release ----------------------------------
+
+export interface ReleaseDocumentBody {
+  documentType: string;
+  purchaseId: string;
+  receivedByName?: string;
+  notes?: string;
+}
+
+export interface ReleaseDocumentResult {
+  releaseId: string;
+  documentType: string;
+  purchaseId: string;
+  releasedAt: string;
+  status: string;
+  duplicate: boolean;
+}
+
+const parseReleaseDocumentResult = object({
+  releaseId: str,
+  documentType: str,
+  purchaseId: str,
+  releasedAt: str,
+  status: str,
+  duplicate: bool,
+});
+
+export function releaseDocument(
+  clientId: string,
+  body: ReleaseDocumentBody,
+  actingStaff: ActingStaff,
+): Promise<PortalResult<ReleaseDocumentResult>> {
+  return portalPost(
+    `/clients/${encodeURIComponent(clientId)}/documents/release`,
+    body,
+    { parse: enveloped(parseReleaseDocumentResult), actingStaff },
+  );
+}
+
+// ----- GET /clients/{id}/documents/releases ----------------------------------
+
+export interface PortalRelease {
+  releaseId: string;
+  documentType: string;
+  purchaseId: string;
+  releasedAt: string;
+  status: string;
+}
+
+export interface PortalReleaseList {
+  releases: PortalRelease[];
+}
+
+const parseReleaseList = enveloped(
+  object({ releases: list(object({ releaseId: str, documentType: str, purchaseId: str, releasedAt: str, status: str })) }),
+);
+
+export function listReleases(clientId: string): Promise<PortalResult<PortalReleaseList>> {
+  return portalGet(`/clients/${encodeURIComponent(clientId)}/documents/releases`, { parse: parseReleaseList });
 }

@@ -191,6 +191,24 @@
   line-height: 1.5;
 }
 
+.syncRow {
+  display: flex;
+  align-items: center;
+  gap: var(--fold-space-8);
+}
+
+.retryForm {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--fold-space-8);
+}
+
+.retryError {
+  color: var(--fold-status-red);
+  font-size: 13px;
+}
+
 @media (min-width: 768px) {
   .documents {
     grid-template-columns: repeat(2, minmax(0, 1fr));

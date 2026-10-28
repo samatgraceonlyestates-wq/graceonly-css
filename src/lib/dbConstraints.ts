@@ -299,6 +299,9 @@ export const UNTRIPPABLE_CONSTRAINTS: Readonly<Record<string, string>> = Object.
   enquiry_pkey: APP_ID,
   handover_pkey: APP_ID,
   handover_correction_pkey: APP_ID,
+  handover_portal_sync_pkey: "One sync row per handover, written by the application when recording.",
+  handover_portal_sync_handover_fkey:
+    "The handover is written in a transaction before the sync attempt, so the row always exists.",
   leave_pkey: APP_ID,
   movement_pkey: APP_ID,
   role_pkey: "The four roles are fixed by migration 001 and cannot be created.",

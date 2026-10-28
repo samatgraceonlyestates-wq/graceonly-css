@@ -1,0 +1,107 @@
+.card {
+  padding: var(--fold-space-24);
+}
+
+.heading {
+  margin: 0 0 var(--fold-space-16);
+  color: var(--fold-burgundy);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--fold-space-16);
+}
+
+.fieldGroup {
+  display: flex;
+  flex-direction: column;
+  gap: var(--fold-space-4);
+}
+
+.label {
+  color: var(--fold-dusk);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+}
+
+.input {
+  height: 48px;
+  padding: 0 var(--fold-space-16);
+  border: 1px solid var(--fold-silver);
+  border-radius: 9999px;
+  background: var(--fold-canvas);
+  color: var(--fold-burgundy);
+  font-family: inherit;
+  font-size: 16px;
+}
+
+.input::placeholder {
+  color: var(--fold-smoke);
+}
+
+.roleGroup {
+  display: flex;
+  flex-direction: column;
+  gap: var(--fold-space-8);
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.roleGroup legend {
+  margin-bottom: var(--fold-space-6);
+}
+
+.roleCheck {
+  display: flex;
+  align-items: center;
+  gap: var(--fold-space-8);
+  color: var(--fold-burgundy);
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.roleCheck input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--fold-burgundy);
+}
+
+.passwordBox {
+  display: flex;
+  align-items: center;
+  gap: var(--fold-space-12);
+  padding: var(--fold-space-12) var(--fold-space-16);
+  border-radius: var(--fold-radius-card);
+  background: var(--fold-canvas);
+  margin: var(--fold-space-12) 0;
+}
+
+.passwordLabel {
+  margin: 0;
+  color: var(--fold-dusk);
+  font-size: 13px;
+}
+
+.passwordValue {
+  padding: var(--fold-space-6) var(--fold-space-10);
+  border-radius: var(--fold-radius-card);
+  background: var(--fold-white);
+  border: 1px solid var(--fold-silver);
+  color: var(--fold-burgundy);
+  font-size: 14px;
+  font-weight: 600;
+  user-select: all;
+}
+
+@media (min-width: 768px) {
+  .card {
+    padding: var(--fold-space-32);
+    max-width: 560px;
+  }
+}

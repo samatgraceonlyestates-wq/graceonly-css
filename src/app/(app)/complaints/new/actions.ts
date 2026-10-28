@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireSession } from "@/lib/auth";
-import { createCase, searchClients, listCaseTypes, type PortalCaseType } from "@/lib/portal";
+import { createCase, searchClients, listCaseTypes, type PortalCaseType, type ActingStaff } from "@/lib/portal";
 import type { CaseSearchState, CreateCaseState } from "./types";
 
 export async function searchClientsAction(
@@ -44,10 +44,12 @@ export async function createCaseAction(
   _previous: CreateCaseState,
   formData: FormData,
 ): Promise<CreateCaseState> {
-  await requireSession();
+  const user = await requireSession();
 
   const clientId = textOf(formData, "clientId");
   const typeCode = textOf(formData, "typeCode");
+  const kind = textOf(formData, "kind");
+  const channel = textOf(formData, "channel");
   const subject = textOf(formData, "subject");
   const description = textOf(formData, "description");
   const purchaseId = textOf(formData, "purchaseId") || undefined;
@@ -55,17 +57,22 @@ export async function createCaseAction(
   if (!clientId) return { status: "error", message: "Pick a client first." };
   if (!typeCode) return { status: "error", message: "Choose a case type." };
   if (typeCode === "REALTOR_CONDUCT") return { status: "error", message: "REALTOR_CONDUCT cases cannot be created from CSS." };
+  if (kind !== "ISSUE" && kind !== "QUESTION") return { status: "error", message: "Invalid case kind." };
+  if (!["PORTAL", "PHONE", "WHATSAPP", "IN_PERSON", "EMAIL"].includes(channel)) return { status: "error", message: "Choose a channel." };
   if (!subject.trim()) return { status: "error", message: "A subject is required." };
   if (!description.trim()) return { status: "error", message: "A description is required." };
+
+  const actingStaff: ActingStaff = { id: user.staffId, name: user.fullName };
 
   const result = await createCase({
     clientId,
     typeCode,
+    kind,
     subject: subject.trim(),
     description: description.trim(),
-    channel: "IN_PERSON",
+    channel: channel as "PORTAL" | "PHONE" | "WHATSAPP" | "IN_PERSON" | "EMAIL",
     purchaseId,
-  });
+  }, actingStaff);
 
   if (!result.ok) {
     return { status: "error", message: result.error.message };

@@ -17,6 +17,7 @@ export function NewCaseForm() {
   const [selectedPurchase, setSelectedPurchase] = useState<string>("");
   const [caseTypes, setCaseTypes] = useState<PortalCaseType[]>([]);
   const [selectedType, setSelectedType] = useState("");
+  const [channel, setChannel] = useState("IN_PERSON");
   const [subject, setSubject] = useState("");
   const [description, setDescription] = useState("");
 
@@ -41,7 +42,7 @@ export function NewCaseForm() {
   }, []);
 
   const typeInfo = caseTypes.find((t) => t.code === selectedType);
-  const needsPurchase = typeInfo?.targetsPurchase ?? false;
+  const needsPurchase = typeInfo ? typeInfo.targetKind === "PURCHASE" : false;
 
   return (
     <div className={styles.wrap}>
@@ -109,8 +110,27 @@ export function NewCaseForm() {
           <h2 className={styles.heading}>2. Case details</h2>
           <form action={submitCreate} className={styles.form}>
             <input type="hidden" name="clientId" value={picked.clientId} />
+            <input type="hidden" name="kind" value={typeInfo?.kind ?? ""} />
 
-            {picked.purchases.length > 1 ? (
+            <div className={styles.fieldGroup}>
+              <label htmlFor="channel" className={styles.label}>Channel</label>
+              <select
+                id="channel"
+                name="channel"
+                className={styles.select}
+                value={channel}
+                onChange={(e) => setChannel(e.target.value)}
+                required
+              >
+                <option value="IN_PERSON">In-person</option>
+                <option value="PHONE">Phone</option>
+                <option value="WHATSAPP">WhatsApp</option>
+                <option value="EMAIL">Email</option>
+                <option value="PORTAL">Portal</option>
+              </select>
+            </div>
+
+            {needsPurchase && picked.purchases.length > 1 ? (
               <div className={styles.fieldGroup}>
                 <label htmlFor="purchaseId" className={styles.label}>Purchase</label>
                 <select
@@ -126,7 +146,7 @@ export function NewCaseForm() {
                   ))}
                 </select>
               </div>
-            ) : picked.purchases.length === 1 ? (
+            ) : needsPurchase && picked.purchases.length === 1 ? (
               <input type="hidden" name="purchaseId" value={picked.purchases[0].purchaseId} />
             ) : null}
 

@@ -7,6 +7,7 @@
 import { query, sql, transaction as dbTransaction } from "./db.ts";
 import {
   assembleHandovers,
+  HANDOVER_DOCUMENTS,
   type GateAnswer,
   type HandoverCorrectionRow,
   type HandoverRef,
@@ -73,6 +74,172 @@ export async function loadHandovers(visitId: string): Promise<HandoverView[]> {
       (row): HandoverCorrectionRow => ({ handoverId: row.handover_id, reason: row.reason, correctedAt: row.corrected_at, correctedByName: row.corrected_by_name }),
     ),
   );
+}
+
+// Portal sync tracking (019). The handover table is append-only; this table
+// sits beside it and CAN be updated for retries.
+export interface HandoverSyncRow {
+  handoverId: string;
+  portalReleaseId: string | null;
+  syncedAt: Date | null;
+  lastError: string | null;
+  lastAttemptAt: Date;
+}
+
+export async function loadSyncStatus(handoverIds: string[]): Promise<Map<string, HandoverSyncRow>> {
+  if (handoverIds.length === 0) return new Map();
+  const { rows } = await query<{
+    handover_id: string;
+    portal_release_id: string | null;
+    synced_at: Date | null;
+    last_error: string | null;
+    last_attempt_at: Date;
+  }>(sql`SELECT handover_id, portal_release_id, synced_at, last_error, last_attempt_at
+           FROM handover_portal_sync WHERE handover_id = ANY(${handoverIds}::uuid[])`);
+  const map = new Map<string, HandoverSyncRow>();
+  for (const row of rows) {
+    map.set(row.handover_id, {
+      handoverId: row.handover_id,
+      portalReleaseId: row.portal_release_id,
+      syncedAt: row.synced_at,
+      lastError: row.last_error,
+      lastAttemptAt: row.last_attempt_at,
+    });
+  }
+  return map;
+}
+
+export async function upsertSync(handoverId: string, releaseId: string | null, error: string | null): Promise<void> {
+  if (releaseId) {
+    await query(sql`
+      INSERT INTO handover_portal_sync (handover_id, portal_release_id, synced_at, last_error, last_attempt_at)
+      VALUES (${handoverId}::uuid, ${releaseId}, now(), NULL, now())
+      ON CONFLICT (handover_id) DO UPDATE
+        SET portal_release_id = ${releaseId}, synced_at = now(), last_error = NULL, last_attempt_at = now()`);
+  } else {
+    await query(sql`
+      INSERT INTO handover_portal_sync (handover_id, portal_release_id, synced_at, last_error, last_attempt_at)
+      VALUES (${handoverId}::uuid, NULL, NULL, ${error}, now())
+      ON CONFLICT (handover_id) DO UPDATE
+        SET last_error = ${error}, last_attempt_at = now()`);
+  }
+}
+
+export interface HandoverHistoryRow {
+  id: string;
+  releasedAt: Date;
+  releasedByName: string | null;
+  visitId: string;
+  clientName: string | null;
+  purchaseId: string | null;
+  gateAnswer: GateAnswer;
+  items: { code: string; label: string; quantity: number }[];
+  portalReleaseId: string | null;
+  syncedAt: Date | null;
+  lastError: string | null;
+  withdrawnAt: Date | null;
+}
+
+export async function loadHandoverHistory(options: {
+  limit: number;
+  offset: number;
+  search?: string;
+}): Promise<{ rows: HandoverHistoryRow[]; total: number }> {
+  const searchFilter = options.search?.trim();
+  const hasSearch = searchFilter && searchFilter.length > 0;
+
+  const countResult = await query<{ count: string }>(
+    hasSearch
+      ? sql`SELECT count(*)::text FROM handover h
+              JOIN visit v ON v.id = h.visit_id
+              LEFT JOIN visitor vr ON vr.id = v.visitor_id
+             WHERE h.visit_id NOT IN (SELECT id FROM visit WHERE voided_at IS NOT NULL)
+               AND (v.client_name_logged ILIKE ${"%" + searchFilter + "%"}
+                    OR vr.display_name ILIKE ${"%" + searchFilter + "%"})`
+      : sql`SELECT count(*)::text FROM handover h
+              JOIN visit v ON v.id = h.visit_id
+             WHERE h.visit_id NOT IN (SELECT id FROM visit WHERE voided_at IS NOT NULL)`,
+  );
+  const total = Number(countResult.rows[0]?.count ?? "0");
+
+  const { rows } = await query<{
+    id: string;
+    released_at: Date;
+    released_by_name: string | null;
+    visit_id: string;
+    client_name: string | null;
+    portal_purchase_id: string | null;
+    gate_answer: GateAnswer;
+    portal_release_id: string | null;
+    synced_at: Date | null;
+    last_error: string | null;
+    withdrawn_at: Date | null;
+  }>(
+    hasSearch
+      ? sql`SELECT h.id, h.released_at, s.full_name AS released_by_name, h.visit_id,
+                   coalesce(v.client_name_logged, vr.display_name) AS client_name,
+                   h.portal_purchase_id, h.gate_answer,
+                   ps.portal_release_id, ps.synced_at, ps.last_error,
+                   hc.corrected_at AS withdrawn_at
+              FROM handover h
+              JOIN visit v ON v.id = h.visit_id
+              LEFT JOIN visitor vr ON vr.id = v.visitor_id
+              LEFT JOIN staff s ON s.id = h.released_by
+              LEFT JOIN handover_portal_sync ps ON ps.handover_id = h.id
+              LEFT JOIN handover_correction hc ON hc.handover_id = h.id
+             WHERE v.voided_at IS NULL
+               AND (v.client_name_logged ILIKE ${"%" + searchFilter + "%"}
+                    OR vr.display_name ILIKE ${"%" + searchFilter + "%"})
+             ORDER BY h.released_at DESC
+             LIMIT ${options.limit} OFFSET ${options.offset}`
+      : sql`SELECT h.id, h.released_at, s.full_name AS released_by_name, h.visit_id,
+                   coalesce(v.client_name_logged, vr.display_name) AS client_name,
+                   h.portal_purchase_id, h.gate_answer,
+                   ps.portal_release_id, ps.synced_at, ps.last_error,
+                   hc.corrected_at AS withdrawn_at
+              FROM handover h
+              JOIN visit v ON v.id = h.visit_id
+              LEFT JOIN visitor vr ON vr.id = v.visitor_id
+              LEFT JOIN staff s ON s.id = h.released_by
+              LEFT JOIN handover_portal_sync ps ON ps.handover_id = h.id
+              LEFT JOIN handover_correction hc ON hc.handover_id = h.id
+             WHERE v.voided_at IS NULL
+             ORDER BY h.released_at DESC
+             LIMIT ${options.limit} OFFSET ${options.offset}`,
+  );
+
+  const ids = rows.map((r) => r.id);
+  const itemRows = ids.length > 0
+    ? await query<{ handover_id: string; document_type_code: string; quantity: number }>(
+        sql`SELECT handover_id, document_type_code, quantity FROM handover_item WHERE handover_id = ANY(${ids}::uuid[])`,
+      )
+    : { rows: [] as { handover_id: string; document_type_code: string; quantity: number }[] };
+
+  const itemMap = new Map<string, { code: string; label: string; quantity: number }[]>();
+  for (const item of itemRows.rows) {
+    const list = itemMap.get(item.handover_id) ?? [];
+    const doc = HANDOVER_DOCUMENTS.find((d) => d.code === item.document_type_code);
+    list.push({ code: item.document_type_code, label: doc?.label ?? item.document_type_code, quantity: item.quantity });
+    itemMap.set(item.handover_id, list);
+  }
+
+  return {
+    total,
+    rows: rows.map((r) => ({
+      id: r.id,
+      releasedAt: r.released_at,
+      releasedByName: r.released_by_name,
+      visitId: r.visit_id,
+      clientName: r.client_name,
+      purchaseId: r.portal_purchase_id,
+      gateAnswer: r.gate_answer,
+      items: itemMap.get(r.id) ?? [],
+      portalReleaseId: r.portal_release_id,
+      syncedAt: r.synced_at,
+      lastError: r.last_error,
+      withdrawnAt: r.withdrawn_at,
+    })),
+  };
 }
 
 export const pgHandoverStore: HandoverStore = {

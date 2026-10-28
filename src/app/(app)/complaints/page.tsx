@@ -206,20 +206,15 @@ export default async function ComplaintsPage({
                   <ComplaintAge raisedAt={c.raisedAt} asOf={asOf} className={styles.age} />
                 )}
 
-                <p className={styles.description}>
-                  {c.description}
-                  {c.status === "RESOLVED" && c.resolutionNote
-                    ? ` Resolution: ${c.resolutionNote}`
-                    : ""}
-                </p>
+                <p className={styles.description}>{c.subject}</p>
 
                 <p className={styles.meta}>
-                  {c.referenceNo} · {c.raisedByRole === "CLIENT" ? "Lodged by" : "Logged for"}{" "}
+                  {c.reference} · {c.recordedBy.role === "CLIENT" ? "Lodged by" : "Logged for"}{" "}
                   {c.clientName} · {caseTypeText(c)}
                 </p>
 
                 <div className={styles.action}>
-                  <Link href={`/complaints/${c.id}`} className={styles.openLink}>Open →</Link>
+                  <Link href={`/complaints/${c.id}?name=${encodeURIComponent(c.clientName)}`} className={styles.openLink}>Open →</Link>
                 </div>
               </Card>
             </li>

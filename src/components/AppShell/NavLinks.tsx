@@ -3,16 +3,17 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cx } from "@/lib/cx";
-import { NAV_ITEMS, isActive } from "./navItems";
+import { navItemsFor, isActive } from "./navItems";
 import styles from "./AppShell.module.css";
 
-export function NavLinks() {
+export function NavLinks({ roles }: { roles: string[] }) {
   const pathname = usePathname();
+  const items = navItemsFor(roles);
 
   return (
     <nav className={styles.links} aria-label="Primary">
       <ul className={styles.linkList}>
-        {NAV_ITEMS.map((item) => {
+        {items.map((item) => {
           const active = isActive(pathname, item.href);
           return (
             <li key={item.href}>

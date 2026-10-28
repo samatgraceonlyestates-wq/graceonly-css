@@ -9,7 +9,7 @@ import styles from "./AppShell.module.css";
 
 // Wraps every signed-in screen (02 to 08). Login has its own bar and does not
 // use this. Desktop: floating nav. Mobile: top bar plus a bottom tab bar.
-export function AppShell({ user, children }: { user: { name: string }; children: ReactNode }) {
+export function AppShell({ user, children }: { user: { name: string; roles: string[] }; children: ReactNode }) {
   return (
     <div className={styles.shell}>
       <header className={styles.header}>
@@ -21,7 +21,7 @@ export function AppShell({ user, children }: { user: { name: string }; children:
             <span className={styles.brandName}>CSS</span>
           </Link>
 
-          <NavLinks />
+          <NavLinks roles={user.roles} />
 
           <div className={styles.actions}>
             {/* Shown on mobile too: starting a visit is the front desk's main action (04). */}
@@ -46,7 +46,7 @@ export function AppShell({ user, children }: { user: { name: string }; children:
 
       <main className={styles.main}>{children}</main>
 
-      <TabBar />
+      <TabBar roles={user.roles} />
     </div>
   );
 }

@@ -7,7 +7,7 @@ import { Notice } from "@/components/Notice/Notice";
 import { StatusPill } from "@/components/StatusPill/StatusPill";
 import { timeLabel } from "@/lib/departureTime";
 import { GATE_ANSWER_TEXT, HANDOVER_DOCUMENTS, HANDOVER_LIMITS, type GateAnswer } from "@/lib/handovers";
-import { recordHandoverAction, withdrawHandoverAction, type HandoverActionState } from "./handoverActions";
+import { recordHandoverAction, retrySyncAction, withdrawHandoverAction, type HandoverActionState } from "./handoverActions";
 import styles from "./HandoverCard.module.css";
 
 // UNDESIGNED (not in Figma). DOCUMENT HANDOVERS, on the visit that produced them (handovers.ts).
@@ -33,6 +33,7 @@ export type HandoverCardRow = {
   correction: { reason: string; correctedAt: string; correctedByName: string | null } | null;
   replacedBy: { id: string; releasedAt: string } | null;
   replaces: { id: string; releasedAt: string; reason: string | null } | null;
+  sync: { portalReleaseId: string | null; lastError: string | null } | null;
 };
 
 const at = (iso: string) => timeLabel(new Date(iso));
@@ -89,14 +90,40 @@ function Withdraw({ visitId, handoverId }: { visitId: string; handoverId: string
   );
 }
 
+function RetrySync({ visitId, clientId, handover }: { visitId: string; clientId: string; handover: HandoverCardRow }) {
+  const [state, action, pending] = useActionState<HandoverActionState, FormData>(retrySyncAction, { status: "idle" });
+  if (state.status === "done") return <StatusPill tone="green">Synced to portal</StatusPill>;
+  return (
+    <form action={action} className={styles.retryForm}>
+      <input type="hidden" name="visitId" value={visitId} />
+      <input type="hidden" name="handoverId" value={handover.id} />
+      <input type="hidden" name="clientId" value={clientId} />
+      <input type="hidden" name="purchaseId" value={handover.purchaseId ?? ""} />
+      {handover.items.map((item) => (
+        <span key={item.code}>
+          <input type="hidden" name="itemCode" value={item.code} />
+          <input type="hidden" name="itemQty" value={String(item.quantity)} />
+        </span>
+      ))}
+      <StatusPill tone="amber">Not synced to portal</StatusPill>
+      <Button variant="row-action" type="submit" disabled={pending}>
+        {pending ? "Retrying…" : "Retry"}
+      </Button>
+      {state.status === "error" ? <span className={styles.retryError}>{state.message}</span> : null}
+    </form>
+  );
+}
+
 export function HandoverCard({
   visitId,
+  clientId,
   canRecord,
   notClientText,
   purchases,
   handovers,
 }: {
   visitId: string;
+  clientId: string | null;
   /** A client's visit that is not removed. */
   canRecord: boolean;
   /** Why nothing can be recorded on this visit, when it is not a client's. */
@@ -162,8 +189,9 @@ export function HandoverCard({
       {notClientText !== null ? <p className={styles.note}>{notClientText}</p> : null}
 
       {state.status === "done" && !open ? (
-        <Notice tone="info" role="status">
+        <Notice tone={state.portalWarning ? "limited" : "info"} role="status">
           <p>{state.message}</p>
+          {state.portalWarning ? <p>{state.portalWarning}</p> : null}
         </Notice>
       ) : null}
 
@@ -202,6 +230,11 @@ export function HandoverCard({
                     {handover.replacedBy ? ` Replaced by the record of ${at(handover.replacedBy.releasedAt)}.` : ""}
                   </p>
                 ) : null}
+                {!withdrawn && clientId !== null && handover.sync !== null ? (
+                  handover.sync.portalReleaseId !== null
+                    ? <p className={styles.facts}><StatusPill tone="green">Synced to portal</StatusPill></p>
+                    : <div className={styles.syncRow}><RetrySync visitId={visitId} clientId={clientId} handover={handover} /></div>
+                ) : null}
                 <div className={styles.actions}>
                   {!withdrawn ? <Withdraw visitId={visitId} handoverId={handover.id} /> : null}
                   {withdrawn && handover.replacedBy === null && canRecord && !open ? (
@@ -219,6 +252,7 @@ export function HandoverCard({
       {open ? (
         <form ref={form} action={action} className={styles.form} aria-label="Record a handover">
           <input type="hidden" name="visitId" value={visitId} />
+          <input type="hidden" name="clientId" value={clientId ?? ""} />
           <input type="hidden" name="replacesHandoverId" value={replaces?.id ?? ""} />
           <input type="hidden" name="acknowledgeUnverified" value={acknowledge ? "yes" : ""} />
 

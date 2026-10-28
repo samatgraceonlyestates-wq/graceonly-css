@@ -1,0 +1,137 @@
+.card {
+  padding: var(--fold-space-24);
+}
+
+.searchRow {
+  display: flex;
+  gap: var(--fold-space-8);
+  margin-bottom: var(--fold-space-16);
+}
+
+.searchRow .input {
+  flex: 1;
+}
+
+.input {
+  height: 48px;
+  padding: 0 var(--fold-space-16);
+  border: 1px solid var(--fold-silver);
+  border-radius: 9999px;
+  background: var(--fold-canvas);
+  color: var(--fold-burgundy);
+  font-family: inherit;
+  font-size: 16px;
+}
+
+.input::placeholder {
+  color: var(--fold-smoke);
+}
+
+.searchButton {
+  height: 48px;
+  padding: 0 var(--fold-space-20);
+  border: none;
+  border-radius: 9999px;
+  background: var(--fold-burgundy);
+  color: var(--fold-white);
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.empty {
+  padding: var(--fold-space-12) 0;
+  color: var(--fold-dusk);
+  font-size: 13px;
+}
+
+.tableWrap {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.th {
+  padding: var(--fold-space-10) var(--fold-space-16) var(--fold-space-10) 0;
+  border-bottom: 2px solid var(--fold-silver);
+  color: var(--fold-dusk);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.4px;
+  text-align: left;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.td {
+  padding: var(--fold-space-14) var(--fold-space-16) var(--fold-space-14) 0;
+  border-bottom: 1px solid var(--fold-silver);
+  color: var(--fold-burgundy);
+  font-size: 13px;
+  vertical-align: top;
+}
+
+.withdrawn {
+  opacity: 0.5;
+  text-decoration: line-through;
+}
+
+.link {
+  color: var(--fold-gold);
+  font-weight: 500;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.link:hover {
+  text-decoration: underline;
+}
+
+.muted {
+  color: var(--fold-dusk);
+}
+
+.pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--fold-space-16);
+  margin-top: var(--fold-space-16);
+}
+
+.pageLink {
+  color: var(--fold-gold);
+  font-size: 13px;
+  font-weight: 500;
+  text-decoration: none;
+}
+
+.pageLink:hover {
+  text-decoration: underline;
+}
+
+.pageInfo {
+  color: var(--fold-dusk);
+  font-size: 13px;
+}
+
+@media (min-width: 768px) {
+  .card {
+    padding: var(--fold-space-32);
+  }
+}
+
+@media (max-width: 767px) {
+  .th:nth-child(n+4) {
+    display: none;
+  }
+
+  .td:nth-child(n+4) {
+    display: none;
+  }
+}

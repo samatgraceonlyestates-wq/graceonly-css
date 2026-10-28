@@ -42,12 +42,13 @@ const CHANNEL_LABEL: Record<CaseChannel, string> = {
   EMAIL: "Email",
 };
 
-const EVENT_TYPE_LABEL: Record<string, string> = {
-  message: "Message",
-  status_change: "Status changed",
-  escalated: "Escalated",
-  type_change: "Type changed",
-  created: "Case opened",
+const EVENT_KIND_LABEL: Record<string, string> = {
+  RAISED: "Case opened",
+  MESSAGE: "Message",
+  STATUS_CHANGE: "Status changed",
+  ESCALATED: "Escalated",
+  TYPE_CHANGE: "Type changed",
+  RESOLVED: "Resolved",
 };
 
 function caseTypeText(c: Pick<PortalCaseDetail, "typeCode" | "typeLabel">): string {
@@ -67,13 +68,13 @@ function isActionable(status: CaseStatus): boolean {
 }
 
 function EventItem({ event }: { event: PortalCaseEvent }) {
-  const label = EVENT_TYPE_LABEL[event.type] ?? event.type;
+  const label = EVENT_KIND_LABEL[event.kind] ?? event.kind;
   return (
     <li className={styles.event}>
       <span className={styles.eventMeta}>
         <span className={styles.eventType}>{label}</span>
-        <span className={styles.eventTime}>{formatEventTime(event.at)}</span>
-        <span className={styles.eventBy}>{event.by}</span>
+        <span className={styles.eventTime}>{formatEventTime(event.createdAt)}</span>
+        <span className={styles.eventBy}>{event.actor.name}</span>
       </span>
       {event.body ? <p className={styles.eventBody}>{event.body}</p> : null}
     </li>
@@ -82,11 +83,15 @@ function EventItem({ event }: { event: PortalCaseEvent }) {
 
 export default async function ComplaintDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   await requireSession();
   const { id } = await params;
+  const sp = await searchParams;
+  const clientName = typeof sp.name === "string" ? sp.name : null;
   const now = new Date();
   const asOf = now.toISOString();
 
@@ -110,15 +115,19 @@ export default async function ComplaintDetailPage({
   const c = caseResult.data;
   const pill = STATUS_PILL[c.status];
   const events = [...c.events].sort(
-    (a, b) => Date.parse(a.at) - Date.parse(b.at),
+    (a, b) => a.seq - b.seq,
   );
+
+  const ledeparts = [c.reference];
+  if (clientName) ledeparts.push(clientName);
+  ledeparts.push(caseTypeText(c));
 
   return (
     <div className={styles.page}>
       <PageHeader
         eyebrow={<Link href="/complaints" className={styles.backLink}>← Back to complaints</Link>}
         title={c.subject}
-        lede={`${c.referenceNo} · ${c.clientName} · ${caseTypeText(c)}`}
+        lede={ledeparts.join(" · ")}
       />
 
       <div className={styles.header}>
@@ -137,16 +146,18 @@ export default async function ComplaintDetailPage({
         </div>
       </div>
 
-      <Card className={styles.descriptionCard}>
-        <h2 className={styles.sectionTitle}>Description</h2>
-        <p className={styles.description}>{c.description}</p>
-        {c.status === "RESOLVED" && c.resolutionNote ? (
-          <>
-            <h3 className={styles.subTitle}>Resolution</h3>
-            <p className={styles.description}>{c.resolutionNote}</p>
-          </>
-        ) : null}
-      </Card>
+      {c.description ? (
+        <Card className={styles.descriptionCard}>
+          <h2 className={styles.sectionTitle}>Description</h2>
+          <p className={styles.description}>{c.description}</p>
+          {c.status === "RESOLVED" && c.resolutionNote ? (
+            <>
+              <h3 className={styles.subTitle}>Resolution</h3>
+              <p className={styles.description}>{c.resolutionNote}</p>
+            </>
+          ) : null}
+        </Card>
+      ) : null}
 
       {events.length > 0 ? (
         <Card className={styles.timelineCard}>
@@ -172,9 +183,8 @@ export default async function ComplaintDetailPage({
 
       <div className={styles.meta}>
         <span>Raised {formatEventTime(c.raisedAt)}</span>
-        <span>{c.raisedByRole === "CLIENT" ? "Lodged by client" : "Logged by admin"}</span>
-        {c.purchaseId ? <span>Purchase: {c.purchaseId}</span> : null}
-        {c.lastClientReplyAt ? <span>Last client reply: {formatEventTime(c.lastClientReplyAt)}</span> : null}
+        <span>{c.recordedBy.role === "CLIENT" ? "Lodged by client" : `Logged by ${c.recordedBy.staffName}`}</span>
+        {c.purchaseLabel ? <span>Purchase: {c.purchaseLabel}</span> : c.purchaseId ? <span>Purchase: {c.purchaseId}</span> : null}
       </div>
     </div>
   );
