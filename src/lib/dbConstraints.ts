@@ -255,6 +255,7 @@ export const UNTRIPPABLE_CONSTRAINTS: Readonly<Record<string, string>> = Object.
   movement_returned_entered_by_fkey: SESSION_STAFF,
   audit_log_actor_staff_id_fkey: SESSION_STAFF,
   case_request_requested_by_fkey: SESSION_STAFF,
+  case_staff_assignments_assigned_by_fkey: SESSION_STAFF,
   device_registered_by_fkey: SESSION_STAFF,
   enquiry_assigned_to_fkey: PICKED_STAFF,
   enquiry_closed_by_fkey: SESSION_STAFF,
@@ -295,6 +296,7 @@ export const UNTRIPPABLE_CONSTRAINTS: Readonly<Record<string, string>> = Object.
   audit_log_pkey: "An identity column the database assigns; nothing supplies a value.",
   case_request_pkey:
     "The id IS the idempotency key. A repeat is a replayed request, which the caller handles (read the existing row, or INSERT ... ON CONFLICT DO NOTHING); it is not a form error.",
+  case_staff_assignments_pkey: APP_ID,
   device_pkey: APP_ID,
   enquiry_pkey: APP_ID,
   handover_pkey: APP_ID,

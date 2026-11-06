@@ -108,6 +108,48 @@
   line-height: 1.5;
 }
 
+/* Assignments list */
+.assignments {
+  display: flex;
+  flex-direction: column;
+  gap: var(--fold-space-12);
+  margin: 0 0 var(--fold-space-16);
+  padding: 0;
+  list-style: none;
+}
+
+.assignment {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-bottom: var(--fold-space-12);
+  border-bottom: 1px solid var(--fold-silver);
+}
+
+.assignment:last-child {
+  padding-bottom: 0;
+  border-bottom: none;
+}
+
+.assignmentWho {
+  color: var(--fold-dusk);
+  font-size: 14px;
+}
+
+.assignmentWho strong {
+  color: var(--fold-burgundy);
+  font-weight: 600;
+}
+
+.assignmentMeta {
+  color: var(--fold-dusk);
+  font-size: 12px;
+}
+
+.assignAction {
+  margin-top: var(--fold-space-8);
+}
+
 /* Meta line at the bottom */
 .meta {
   display: flex;

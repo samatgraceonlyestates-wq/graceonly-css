@@ -19,9 +19,14 @@ repo, separate database from the client portal.
    - The five BUILT endpoints are read-only: health, client search, client
      summary, client documents, release-check. CSS never writes through them
      and never touches the portal database directly.
-   - The CASE endpoints read AND write: create, message, start, ask,
-     resolve, escalate. They are DESIGNED in sections 5.4, 6.1 and 6.4 but
-     NONE is built yet, so rule 2 describes intent, not current behaviour.
+   - The CASE endpoints read AND write and ARE NOW BUILT and live (commits up to
+     2227e53): GET /support-cases (list), GET /support-cases/{id} (detail with
+     events), GET /support-case-types, POST /clients/{id}/support-cases (create),
+     and POST /support-cases/{id}/{messages,start,resolve,escalate}. They are the
+     portal callers in `portal.ts` and are wired into screen 06 and the complaint
+     detail screen (see "Complaint queue"). So rule 2 is now CURRENT behaviour for
+     these, not just intent. (Still not built: an "ask" action, internal notes, a
+     client-facing reply thread, and the admin emails.)
 5. Every screen is designed for desktop AND mobile. Both are in Figma.
    Responsive is a requirement, not a later pass — the visit log and the
    staff attendance screens above all.
@@ -514,6 +519,60 @@ no separate documents section.
   shots-visits.ts) switched through gate off, allowing, blocking and down; it also tries UPDATE
   and DELETE on the three tables directly and requires the trigger's refusal (SQLSTATE 23001).
 
+## ASSIGN A COMPLAINT TO STAFF (BUILT; UNDESIGNED): on the complaint detail, migration 020
+
+A NEW, SEPARATE integration from the portal's own escalate. On the complaint detail
+(/complaints/{id}) a CSS user can assign the dispute to a colleague, which creates a
+TASK in the STAFF PORTAL — a DIFFERENT system from the client portal in `portal.ts`
+— via its team:* API. Files: `staffPortal.ts` (the client), `assignments.ts` (the
+pure rules: title/description/body builders, priorities), `assignmentStore.ts` (SQL),
+`complaints/[id]/AssignToStaff.tsx` (the panel), `complaints/[id]/actions.ts`
+(`loadStaffAction`, `assignToStaffAction`).
+
+- THE STAFF PORTAL IS NOT THE CLIENT PORTAL. `staffPortal.ts` is its OWN module with
+  its OWN environment (NEVER CSS_PORTAL_*): STAFF_PORTAL_BASE_URL (the staff portal's
+  ORIGIN only — the code adds the /api/team/v1/... path; dev http://localhost:3002)
+  and TEAM_SERVICE_KEY (its X-Service-Key; surrounding quotes stripped, as the cPanel
+  launcher can leave them). It MIRRORS portal.ts's hardening: redirect:manual, no-store,
+  a 10s timeout, HTTPS except a localhost stand-in, a result union, typed parsers that
+  reject drift, and the key is never logged, echoed or put in an error (scrubbed from
+  any returned text). It is server-only.
+- THE team:* CONTRACT (from the live staff portal) differs from the client portal's:
+  no `{data}` envelope and no requestId/code. GET /api/team/v1/staff -> 200
+  { staff: [ {id, full_name, email, department|null, role: CEO|GM|Director|HOD|Staff} ] }.
+  POST /api/team/v1/tasks -> 201 (new) or 200 (replay of the same idempotencyKey, SAME
+  taskId+linkPath, no duplicate) { ok:true, taskId, linkPath, replayed }. Errors on
+  either are non-2xx { error }: SUCCESS IS DECIDED BY HTTP STATUS, not an ok flag.
+  linkPath is a PATH, resolved against the origin for a "view task" link.
+- THE TASK CARRIES: idempotencyKey (a fresh UUID per assignment), assigneeEmail, title
+  "Dispute: <subject> (<reference>)", a description (the complaint's own text plus the
+  reference/kind/type), source "css", sourceRef = the portal case id, sourceUrl =
+  `${CSS_PUBLIC_ORIGIN}/complaints/{id}` (OMITTED when CSS_PUBLIC_ORIGIN is unset), and
+  an optional priority (Low|Normal|High|Urgent — ASSUMED values; an unknown one is
+  refused honestly, never guessed). The case facts are re-read live with getCase inside
+  the action, never trusted from a hidden field.
+- INDEPENDENT OF THE PORTAL'S STATUS: assigning NEVER calls escalate and NEVER changes
+  the complaint's portal status. Concerns stay separate (owner's decision).
+- THE LOCAL RECORD (migration 020, `case_staff_assignments`) LOGS CSS'S OUTBOUND ACTION
+  ONLY — it holds NO complaint data (rule 2 intact): the opaque case id, the staff-portal
+  assignee (email + name), the task id/link, who here assigned it, and when. One row per
+  assignment on success; one audit_log row (CREATE, ids/codes only: case id, task id,
+  priority, replayed — never the assignee's email/name or any client data). The detail
+  lists existing assignments ("Assigned to <name> · <when> · view task"); a DB read
+  failure there degrades and never hides the complaint.
+- NO SILENT DUPLICATE: a repeat assignment is refused unless the user ticks a confirm in
+  the panel (checked in the action against `hasAssignment`). The staff portal's
+  idempotencyKey is the backstop against a replayed request.
+- GATE: any signed-in user (requireSession), matching the complaint screens' current
+  openness. The server action records who assigned via the actingStaff pattern
+  (assigned_by = the session's staff id).
+- ENV: STAFF_PORTAL_BASE_URL, TEAM_SERVICE_KEY and CSS_PUBLIC_ORIGIN are in .env.example;
+  note them for deploy (docs/DEPLOY.md). Verified with `scripts/shots-assign.ts`, a
+  bounded screenshot run whose `prepare()` starts a stand-in for BOTH portals on
+  127.0.0.1 (never the real ones) and captures the detail page and the open Assign panel
+  at desktop and phone; it does NOT submit, so nothing is written and no real task is
+  created (that chain is a live owner test with both dev servers up).
+
 ## Design tokens — from Figma, exact
 
 Source: https://www.figma.com/design/yWUjcYUogDXQqBJ1uKAd1B/CSS-%E2%80%94-Customer-Support-System--GEL-?node-id=3-21
@@ -676,23 +735,26 @@ do not mirror the defect in CSS.
   chip has a short label on a phone (Documents, Contract, Meeting).
 - "Check out" (03, 05) is wired. "Export timesheet" (08) still renders enabled
   and is wired to nothing, with a TODO.
-- Complaint queue (06) lives at /complaints. Complaints are the PORTAL's
-  data. The sample rows mirror the portal's `disputes` row (id, referenceNo
-  shown as CASE-0001, clientId, clientName, raisedByRole CLIENT|ADMIN, channel
-  PORTAL|PHONE|WHATSAPP|IN_PERSON|EMAIL, typeCode and label, subject,
-  description, status OPEN|IN_PROGRESS|AWAITING_CLIENT|RESOLVED|WITHDRAWN,
-  version, raisedAt, lastClientReplyAt, resolvedAt, resolutionNote,
-  escalated), not the mockup's shape. clientName is ASSUMED: the list
-  endpoint's response shape is not specified. NONE of the case endpoints are
-  built yet; only the five read-only CLIENT endpoints exist. The TODO for the
-  portal read is at getComplaintsSample (the data boundary).
-- Writes to the portal (resolving a case) will be POST
-  /support-cases/{id}/actions, with a resolution note and the row's version
-  for compare-and-set. They go to the PORTAL, never to a CSS table, through
-  the case endpoints (rule 4), which read AND write but are not built yet.
-  06 has NO "Mark resolved" control: a
-  one-click control in a list would be a lie. "Open →" renders unwired (TODO)
-  until the complaint detail screen exists (not among the eight, undesigned).
+- Complaint queue (06) lives at /complaints and now reads LIVE from the portal
+  (`listCases()`), not sample data. Complaints are the PORTAL's data. The row
+  shape is the portal's `disputes` row (id, referenceNo shown as CASE-0001,
+  clientId, clientName, raisedByRole CLIENT|ADMIN, channel
+  PORTAL|PHONE|WHATSAPP|IN_PERSON|EMAIL, typeCode and label, subject, description,
+  status OPEN|IN_PROGRESS|AWAITING_CLIENT|RESOLVED|WITHDRAWN, version, raisedAt,
+  resolvedAt, resolutionNote, escalated), typed and runtime-checked in `portal.ts`.
+  `sampleData.ts` is no longer read by 06.
+- Writes to the portal are BUILT and go through the case endpoints (rule 4), never
+  to a CSS table: resolve is POST /support-cases/{id}/resolve (resolution note +
+  the row's version for compare-and-set; a 409 maps to "someone else changed it,
+  refresh"); message, escalate and start are the sibling POSTs. The complaint
+  DETAIL screen (/complaints/{id}) IS built (undesigned, from shared components):
+  it shows the description, the event timeline, and an Actions card with Message /
+  Resolve / Escalate. "Open →" on 06 links to it. There is still no one-click
+  "resolve" in the LIST (that would be a lie); resolving is done on the detail.
+- ASSIGN TO STAFF (built; undesigned): a separate action on the complaint detail
+  that creates a TASK in the STAFF PORTAL (a DIFFERENT system from the client
+  portal) via its team:* API. See "Assign a complaint to staff" below. It is
+  INDEPENDENT of the portal's escalate/status and never changes them.
 - Complaint types are the PORTAL's ten SEEDED dispute_types, mirrored exactly
   in DISPUTE_TYPES (sampleData.ts): ISSUE kind PAYMENT_NOT_REFLECTED,
   WRONG_AMOUNT_CHARGED, DOCUMENT_ISSUE, BOUNDARY_OR_ENCROACHMENT,
@@ -1023,6 +1085,16 @@ in `db/migrations/`. When the server has taken it, the next one covers what come
   pending file, 017, then 018) in throwaway schemas, with every rule tripped on purpose (an
   UPDATE and a DELETE refused by the triggers), and applied to the local `public` schema. The
   server receives it as `db/pending-018-018.sql`.
+  `019_handover_portal_sync.sql` adds the (updatable, NOT append-only) `handover_portal_sync`
+  table beside the append-only handover table, to track portal release-sync and retries.
+  `020_case_staff_assignments.sql` adds `case_staff_assignments` for the "Assign a complaint to
+  staff" feature: CSS's OUTBOUND log only (opaque case id, staff-portal assignee, task id/link,
+  who assigned, when), NO complaint data (rule 2). Not append-only, not a queue; one row per
+  assignment, `case_staff_assignments_pkey` and an inline FK `..._assigned_by_fkey` to staff.
+  Verified from the top and 001-019-then-020 in throwaway schemas and applied to the local
+  `public` schema. PENDING-FILE NOTE: 019 and 020 are NOT YET in any pending file (the last is
+  `pending-018-018.sql`); when the server has taken 018, a new pending file must cover 019-020
+  (bump FIRST/LAST/TAKEN in `db/build-pending.mjs`). `pg10-proof.sql` already includes them.
 - NEVER DROP OR RECREATE THE LOCAL `public` SCHEMA (STANDING RULE). It holds the
   owner's real local login, whose password was typed at a prompt and cannot be
   recreated, and his sessions. Verify migrations in THROWAWAY schemas inside the
@@ -1160,11 +1232,12 @@ PRD requirements the eight screens do NOT cover (six; items 1 and 4 are now part
 1. Document release: recording a handover IS BUILT, on the visit (see "DOCUMENT
    HANDOVERS"). NOT built: a handover history across visits or clients, and
    OTHER (unattached) documents. The gate is the portal's (see Decisions).
-2. Complaint lodging and the admin workflow (6.3, FR-2): lodge mid-visit,
-   status moves, internal notes, reply to the complainant, and the emails to
-   admin. 06 is a read-only list. These go through the portal's case endpoints
-   (not built); who sends the emails is undecided now that the portal owns
-   complaints.
+2. Complaint lodging and the admin workflow (6.3, FR-2): PARTLY BUILT. Create a
+   case, add a message, resolve, escalate and start ARE built through the portal's
+   case endpoints (06 is now a LIVE list with a built detail screen; "Assign to
+   staff" creates a staff-portal task). NOT built: lodging mid-visit from the visit
+   screen, internal notes, a client-facing reply thread, and the admin emails (who
+   sends them is undecided now that the portal owns complaints).
 3. Onboarding Assist (6.4, FR-5): the side-pane portal sign-up and the signup
    webhook. The portal exposes no phone number and has no such webhook.
 4. Acting on visits (6.1, 6.5, FR-1): Check in and Check out ARE BUILT (see "THE

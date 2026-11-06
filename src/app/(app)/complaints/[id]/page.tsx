@@ -7,6 +7,9 @@ import { Notice } from "@/components/Notice/Notice";
 import { PageHeader } from "@/components/PageHeader/PageHeader";
 import { StatusPill } from "@/components/StatusPill/StatusPill";
 import { requireSession } from "@/lib/auth";
+import { loadAssignments } from "@/lib/assignmentStore";
+import { isDbError } from "@/lib/db";
+import type { CaseAssignmentView } from "@/lib/assignments";
 import {
   getCase,
   type CaseChannel,
@@ -14,6 +17,7 @@ import {
   type PortalCaseDetail,
   type PortalCaseEvent,
 } from "@/lib/portal";
+import { AssignToStaff } from "./AssignToStaff";
 import { CaseActions } from "./CaseActions";
 import styles from "./page.module.css";
 
@@ -118,6 +122,17 @@ export default async function ComplaintDetailPage({
     (a, b) => a.seq - b.seq,
   );
 
+  // CSS's own log of "Assign to staff" (independent of the portal's status). A
+  // database read failure here must not hide the complaint, so it degrades.
+  let assignments: CaseAssignmentView[] = [];
+  let assignmentsFailed = false;
+  try {
+    assignments = await loadAssignments(c.id);
+  } catch (caught) {
+    if (isDbError(caught)) assignmentsFailed = true;
+    else throw caught;
+  }
+
   const ledeparts = [c.reference];
   if (clientName) ledeparts.push(clientName);
   ledeparts.push(caseTypeText(c));
@@ -180,6 +195,43 @@ export default async function ComplaintDetailPage({
           />
         </Card>
       ) : null}
+
+      <Card className={styles.actionsCard}>
+        <h2 className={styles.sectionTitle}>Assign to staff</h2>
+        {assignmentsFailed ? (
+          <Notice tone="failure" role="status">
+            <p>Could not load existing assignments. You can still assign below.</p>
+          </Notice>
+        ) : assignments.length > 0 ? (
+          <ul className={styles.assignments}>
+            {assignments.map((a) => (
+              <li key={a.id} className={styles.assignment}>
+                <span className={styles.assignmentWho}>
+                  Assigned to <strong>{a.assigneeName}</strong>
+                  {a.priority ? ` · ${a.priority}` : ""}
+                </span>
+                <span className={styles.assignmentMeta}>
+                  {formatEventTime(a.assignedAt.toISOString())}
+                  {a.assignedByName ? ` · by ${a.assignedByName}` : ""}
+                  {a.taskLink ? (
+                    <>
+                      {" · "}
+                      <a href={a.taskLink} className={styles.backLink} target="_blank" rel="noreferrer">
+                        view task →
+                      </a>
+                    </>
+                  ) : null}
+                </span>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className={styles.description}>Not assigned to anyone yet.</p>
+        )}
+        <div className={styles.assignAction}>
+          <AssignToStaff caseId={c.id} alreadyAssigned={assignments.length > 0} />
+        </div>
+      </Card>
 
       <div className={styles.meta}>
         <span>Raised {formatEventTime(c.raisedAt)}</span>

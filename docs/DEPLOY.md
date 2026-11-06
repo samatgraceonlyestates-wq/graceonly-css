@@ -22,6 +22,9 @@ Four variables are read by the running app. Nothing else is needed at run time.
 | `DATABASE_URL` | yes | CSS's own PostgreSQL database. Read when the first query runs (not at start-up), so a wrong value shows up as a failed sign-in, not as a crash on boot. Never logged. | `postgresql://USER:PASSWORD@HOST:5432/DBNAME` |
 | `CSS_PORTAL_BASE_URL` | yes, for anything that reads the portal | The portal's API base. Must be `https:` (plain `http:` is refused except for localhost). | `https://portal.graceonlyestates.com` (confirm the exact base path with the portal) |
 | `CSS_PORTAL_SERVICE_KEY` | yes, with the above | Sent as `X-Service-Key` on every portal call. | `<id>.<secret>` |
+| `CSS_PUBLIC_ORIGIN` | optional | CSS's own public origin (scheme + host, no path), used ONLY to build the deep link sent to the staff portal as a task's `sourceUrl`. Blank = the task carries no link. Do not hardcode. | `https://frontdesk.graceonlyestates.com` |
+| `STAFF_PORTAL_BASE_URL` | yes, for "Assign to staff" | The STAFF portal's ORIGIN (no path; CSS adds `/api/team/v1/...`). A DIFFERENT system from the client portal. Must be `https:` (plain `http:` only for localhost). | `https://<staff-portal-host>` (dev: `http://localhost:3002`) |
+| `TEAM_SERVICE_KEY` | yes, with the above | Sent as `X-Service-Key` on every STAFF-portal call. NOT `CSS_PORTAL_SERVICE_KEY`; copy the value from the staff portal's own env. Surrounding quotes are stripped. | the staff portal's team service key |
 | `NODE_ENV` | must be `production` | Turns on the `Secure` flag on the session cookie, and Next's production mode. | `production` |
 
 Notes:

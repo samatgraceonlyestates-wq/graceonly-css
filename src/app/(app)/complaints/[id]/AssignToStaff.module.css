@@ -1,0 +1,93 @@
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--fold-space-12);
+}
+
+.formLabel {
+  color: var(--fold-burgundy);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.loading {
+  color: var(--fold-dusk);
+  font-size: 13px;
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--fold-space-12);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--fold-space-6);
+}
+
+.label {
+  color: var(--fold-dusk);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+}
+
+.select {
+  width: 100%;
+  min-height: 48px;
+  padding: var(--fold-space-10) var(--fold-space-16);
+  border: 1px solid var(--fold-silver);
+  border-radius: var(--fold-radius-pill);
+  background: var(--fold-canvas);
+  color: var(--fold-burgundy);
+  font-family: inherit;
+  font-size: 16px;
+}
+
+.confirm {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--fold-space-8);
+  color: var(--fold-dusk);
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.confirm input {
+  margin-top: 2px;
+  accent-color: var(--fold-burgundy);
+}
+
+.formButtons {
+  display: flex;
+  align-items: center;
+  gap: var(--fold-space-12);
+}
+
+.cancel {
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--fold-dusk);
+  font-family: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.cancel:hover {
+  color: var(--fold-burgundy);
+}
+
+.taskLink {
+  color: var(--fold-gold);
+  font-size: 13px;
+  font-weight: 500;
+  text-decoration: none;
+}
+
+.taskLink:hover {
+  text-decoration: underline;
+}

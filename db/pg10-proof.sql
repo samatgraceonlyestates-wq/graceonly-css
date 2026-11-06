@@ -20,24 +20,26 @@
 -- psql reports  psql:pg10-proof.sql:LINE: ERROR: ...  Find LINE below. The line
 -- inside the source file is  LINE - first + 1.  Lines are counted in THIS file.
 --
---   001_foundation.sql               lines    44 -   173
---   002_staff_auth.sql               lines   175 -   263
---   003_visits.sql                   lines   265 -   423
---   004_enquiries.sql                lines   425 -   472
---   005_attendance.sql               lines   474 -   575
---   006_audit_log.sql                lines   577 -   618
---   007_handovers.sql                lines   620 -   707
---   008_case_links.sql               lines   709 -   790
---   009_attendance_device.sql        lines   792 -   862
---   010_roster_movements_backdating.sql lines   864 -  1018
---   011_entered_by_per_event.sql     lines  1020 -  1070
---   012_movement_entered_by_names.sql lines  1072 -  1101
---   013_signout_missing.sql          lines  1103 -  1152
---   014_corrections.sql              lines  1154 -  1217
---   015_movement_corrections.sql     lines  1219 -  1278
---   016_late_threshold_snapshot.sql  lines  1280 -  1329
---   017_visit_corrections.sql        lines  1331 -  1402
---   018_handover_corrections.sql     lines  1404 -  1488
+--   001_foundation.sql               lines    46 -   175
+--   002_staff_auth.sql               lines   177 -   265
+--   003_visits.sql                   lines   267 -   425
+--   004_enquiries.sql                lines   427 -   474
+--   005_attendance.sql               lines   476 -   577
+--   006_audit_log.sql                lines   579 -   620
+--   007_handovers.sql                lines   622 -   709
+--   008_case_links.sql               lines   711 -   792
+--   009_attendance_device.sql        lines   794 -   864
+--   010_roster_movements_backdating.sql lines   866 -  1020
+--   011_entered_by_per_event.sql     lines  1022 -  1072
+--   012_movement_entered_by_names.sql lines  1074 -  1103
+--   013_signout_missing.sql          lines  1105 -  1154
+--   014_corrections.sql              lines  1156 -  1219
+--   015_movement_corrections.sql     lines  1221 -  1280
+--   016_late_threshold_snapshot.sql  lines  1282 -  1331
+--   017_visit_corrections.sql        lines  1333 -  1404
+--   018_handover_corrections.sql     lines  1406 -  1490
+--   019_handover_portal_sync.sql     lines  1492 -  1514
+--   020_case_staff_assignments.sql   lines  1516 -  1565
 -- ============================================================================
 \set ON_ERROR_STOP on
 \echo '>>> applying 001_foundation.sql'
@@ -1484,5 +1486,80 @@ CREATE TRIGGER handover_correction_no_row_change
 CREATE TRIGGER handover_correction_no_truncate
   BEFORE TRUNCATE ON handover_correction
   FOR EACH STATEMENT EXECUTE PROCEDURE forbid_change();
+
+COMMIT;
+\echo '>>> applying 019_handover_portal_sync.sql'
+-- 019_handover_portal_sync.sql
+--
+-- Tracks whether a local handover record has been synced to the portal's document
+-- release endpoint. The handover table itself is append-only (007 triggers refuse
+-- UPDATE/DELETE): this table sits BESIDE it and CAN be updated for retries.
+--
+-- One row per handover. Created when the first portal sync is attempted (right
+-- after the local handover is written). Updated on retry.
+
+BEGIN;
+
+CREATE TABLE handover_portal_sync (
+  handover_id       uuid NOT NULL,
+  portal_release_id text,
+  synced_at         timestamptz,
+  last_error        text,
+  last_attempt_at   timestamptz NOT NULL DEFAULT now(),
+
+  CONSTRAINT handover_portal_sync_pkey PRIMARY KEY (handover_id),
+  CONSTRAINT handover_portal_sync_handover_fkey FOREIGN KEY (handover_id) REFERENCES handover(id)
+);
+
+COMMIT;
+\echo '>>> applying 020_case_staff_assignments.sql'
+-- 020_case_staff_assignments.sql
+--
+-- Logs CSS's OUTBOUND "Assign to staff" action: when the front desk assigns a
+-- complaint/dispute to a colleague, CSS creates a task in the STAFF PORTAL (its
+-- team:* API, a separate system from the client portal) and records HERE that it
+-- did so, and to whom.
+--
+-- THIS TABLE DOES NOT STORE COMPLAINT DATA. The complaint is the client portal's
+-- (CLAUDE.md rule 2): CSS keeps only
+--   - case_id       the portal's opaque case id (a reference, like visit.portal_client_id
+--                   or visit_case_link.case_id; never case content), and
+--   - who it was assigned to in the STAFF portal (email + name: staff-portal people,
+--     not clients), the staff-portal task id/link, and who here did the assigning.
+-- So the "portal owns complaints" rule is intact.
+--
+-- NOT append-only and NOT a queue: one row per assignment, written once on a
+-- successful task creation. A dispute can be assigned more than once (the
+-- application asks for confirmation before a repeat; there is no silent de-dupe
+-- here, and the staff portal's own idempotencyKey guards a replayed request).
+--
+-- Columns are all written by the application, never typed by a person:
+--   id/assigned_at  application-generated;  assigned_by  the signed-in staff id;
+--   assignee_*      picked from the staff portal's own list;  task_*  the portal's
+--   answer;  priority  chosen from a fixed UI list.  None need an error mapping.
+
+BEGIN;
+
+CREATE TABLE case_staff_assignments (
+  id             uuid        NOT NULL,
+  -- The client portal's case id. Opaque text, no local case table to reference.
+  case_id        text        NOT NULL,
+  -- The staff-portal colleague the task was created for.
+  assignee_email text        NOT NULL,
+  assignee_name  text        NOT NULL,
+  -- Optional, from a fixed UI list; NULL when not chosen.
+  priority       text,
+  -- The staff portal's task id and (optional) deep link to it.
+  task_id        text        NOT NULL,
+  task_link      text,
+  -- Who, here, did the assigning (the signed-in user).
+  assigned_by    uuid        NOT NULL REFERENCES staff (id),
+  assigned_at    timestamptz NOT NULL DEFAULT now(),
+
+  CONSTRAINT case_staff_assignments_pkey PRIMARY KEY (id)
+);
+
+-- Read path: a case's assignments, newest first.
+CREATE INDEX case_staff_assignments_case_idx ON case_staff_assignments (case_id, assigned_at DESC);
 
 COMMIT;
