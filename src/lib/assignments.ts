@@ -11,12 +11,13 @@
 // No imports: pure, browser-safe, and the test runs it directly.
 
 /**
- * The priorities the dialog offers, newest-urgent last. ASSUMPTION: the staff
- * portal accepts these exact strings for a task's `priority`. Confirm against the
- * live team:* API; an unknown value is refused honestly (a 400 shown to the user),
- * never guessed or silently dropped.
+ * The priorities the dialog offers. These are the staff portal's OWN set
+ * (team-api PRIORITIES = ["Low", "Medium", "High"]); the UI is restricted to
+ * exactly them because the portal silently DEFAULTS any off-list value to
+ * "Medium" rather than refusing it — so a value the desk cannot pick can never be
+ * stored by surprise.
  */
-export const ASSIGNMENT_PRIORITIES = ["Low", "Normal", "High", "Urgent"] as const;
+export const ASSIGNMENT_PRIORITIES = ["Low", "Medium", "High"] as const;
 export type AssignmentPriority = (typeof ASSIGNMENT_PRIORITIES)[number];
 
 export function isAssignmentPriority(value: string): value is AssignmentPriority {

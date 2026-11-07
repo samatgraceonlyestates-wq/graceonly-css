@@ -96,10 +96,13 @@ describe("buildTaskBody", () => {
 });
 
 describe("isAssignmentPriority", () => {
-  it("accepts the four priorities and rejects anything else", () => {
-    assert.ok(isAssignmentPriority("Urgent"));
-    assert.ok(!isAssignmentPriority("urgent"));
-    assert.ok(!isAssignmentPriority("Critical"));
+  it("accepts the staff portal's three priorities and rejects anything else", () => {
+    assert.ok(isAssignmentPriority("Low"));
+    assert.ok(isAssignmentPriority("Medium"));
+    assert.ok(isAssignmentPriority("High"));
+    assert.ok(!isAssignmentPriority("medium"));
+    assert.ok(!isAssignmentPriority("Normal"));
+    assert.ok(!isAssignmentPriority("Urgent"));
   });
 });
 

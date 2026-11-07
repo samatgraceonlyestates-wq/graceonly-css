@@ -548,9 +548,10 @@ pure rules: title/description/body builders, priorities), `assignmentStore.ts` (
   "Dispute: <subject> (<reference>)", a description (the complaint's own text plus the
   reference/kind/type), source "css", sourceRef = the portal case id, sourceUrl =
   `${CSS_PUBLIC_ORIGIN}/complaints/{id}` (OMITTED when CSS_PUBLIC_ORIGIN is unset), and
-  an optional priority (Low|Normal|High|Urgent — ASSUMED values; an unknown one is
-  refused honestly, never guessed). The case facts are re-read live with getCase inside
-  the action, never trusted from a hidden field.
+  an optional priority (Low|Medium|High — the staff portal's OWN set; the UI is
+  restricted to exactly these because the portal SILENTLY DEFAULTS any off-list value
+  to "Medium" rather than refusing it). The case facts are re-read live with getCase
+  inside the action, never trusted from a hidden field.
 - INDEPENDENT OF THE PORTAL'S STATUS: assigning NEVER calls escalate and NEVER changes
   the complaint's portal status. Concerns stay separate (owner's decision).
 - THE LOCAL RECORD (migration 020, `case_staff_assignments`) LOGS CSS'S OUTBOUND ACTION
