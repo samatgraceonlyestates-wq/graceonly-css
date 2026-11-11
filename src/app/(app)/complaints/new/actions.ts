@@ -3,8 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireSession } from "@/lib/auth";
-import { createCase, searchClients, listCaseTypes, type PortalCaseType, type ActingStaff } from "@/lib/portal";
-import type { CaseSearchState, CreateCaseState } from "./types";
+import { createCase, searchClients, getClientSummary, listCaseTypes, type PortalCaseType, type ActingStaff } from "@/lib/portal";
+import type { CaseSearchState, CreateCaseState, LoadPurchasesResult } from "./types";
 
 export async function searchClientsAction(
   _previous: CaseSearchState,
@@ -24,7 +24,29 @@ export async function searchClientsAction(
     candidates: result.data.candidates.map((c) => ({
       clientId: c.clientId,
       displayName: c.displayName,
-      purchases: c.purchases.map((p) => ({ purchaseId: `${p.estate}:${p.label}`, label: `${p.label} · ${p.estateName}` })),
+      // Labels only: the search brief has no purchaseId. Real ids are loaded, after a
+      // client is picked, by loadClientPurchasesAction.
+      purchases: c.purchases.map((p) => ({ label: `${p.label} · ${p.estateName}` })),
+    })),
+  };
+}
+
+// The REAL purchases of a picked client, from the portal summary (GET /clients/{id}).
+// Their purchaseId is the opaque portal id the create-case endpoint resolves. Called
+// after a client is picked so the purchase dropdown submits a real id, not the old
+// fabricated `${estate}:${label}` composite (which the portal could not resolve -> 404).
+export async function loadClientPurchasesAction(clientId: string): Promise<LoadPurchasesResult> {
+  await requireSession();
+  const result = await getClientSummary(clientId);
+  if (!result.ok) {
+    return { status: "error", message: result.error.message };
+  }
+  return {
+    status: "ok",
+    purchases: result.data.purchases.map((p) => ({
+      purchaseId: p.purchaseId,
+      label: `${p.label} · ${p.estateName}`,
+      status: p.status,
     })),
   };
 }

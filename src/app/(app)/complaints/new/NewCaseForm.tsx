@@ -1,19 +1,22 @@
 "use client";
 
-import { useActionState, useEffect, useState, useTransition } from "react";
+import { useActionState, useEffect, useRef, useState, useTransition } from "react";
 import { Button } from "@/components/Button/Button";
 import { Card } from "@/components/Card/Card";
 import { Notice } from "@/components/Notice/Notice";
 import type { PortalCaseType } from "@/lib/portal";
-import { createCaseAction, loadCaseTypesAction, searchClientsAction } from "./actions";
-import type { CaseSearchCandidate, CaseSearchState, CreateCaseState } from "./types";
+import { createCaseAction, loadCaseTypesAction, loadClientPurchasesAction, searchClientsAction } from "./actions";
+import type { CaseSearchCandidate, CaseSearchState, CreateCaseState, LoadPurchasesResult } from "./types";
 import styles from "./NewCaseForm.module.css";
 
 const IDLE_SEARCH: CaseSearchState = { status: "idle" };
 const IDLE_CREATE: CreateCaseState = { status: "idle" };
 
+type PurchaseState = { status: "idle" } | { status: "loading" } | LoadPurchasesResult;
+
 export function NewCaseForm() {
   const [picked, setPicked] = useState<CaseSearchCandidate | null>(null);
+  const [purchaseState, setPurchaseState] = useState<PurchaseState>({ status: "idle" });
   const [selectedPurchase, setSelectedPurchase] = useState<string>("");
   const [caseTypes, setCaseTypes] = useState<PortalCaseType[]>([]);
   const [selectedType, setSelectedType] = useState("");
@@ -21,10 +24,16 @@ export function NewCaseForm() {
   const [subject, setSubject] = useState("");
   const [description, setDescription] = useState("");
 
+  // Identifies the latest purchase load, so a slow response for a client the desk has
+  // since moved off cannot overwrite the current one.
+  const purchaseReqRef = useRef(0);
+
   const [search, submitSearch, searching] = useActionState(
     async (previous: CaseSearchState, formData: FormData): Promise<CaseSearchState> => {
       setPicked(null);
       setSelectedPurchase("");
+      setPurchaseState({ status: "idle" });
+      purchaseReqRef.current += 1;
       return searchClientsAction(previous, formData);
     },
     IDLE_SEARCH,
@@ -41,8 +50,28 @@ export function NewCaseForm() {
     });
   }, []);
 
+  // Pick a client and load their REAL purchases (with real portal ids) from the summary
+  // endpoint. A single purchase is auto-selected. A stale response is ignored.
+  const pickClient = (c: CaseSearchCandidate) => {
+    setPicked(c);
+    setSelectedPurchase("");
+    setPurchaseState({ status: "loading" });
+    const reqId = (purchaseReqRef.current += 1);
+    void loadClientPurchasesAction(c.clientId).then((res) => {
+      if (purchaseReqRef.current !== reqId) return;
+      setPurchaseState(res);
+      if (res.status === "ok" && res.purchases.length === 1) {
+        setSelectedPurchase(res.purchases[0].purchaseId);
+      }
+    });
+  };
+
   const typeInfo = caseTypes.find((t) => t.code === selectedType);
   const needsPurchase = typeInfo ? typeInfo.targetKind === "PURCHASE" : false;
+  const purchases = purchaseState.status === "ok" ? purchaseState.purchases : [];
+  // Block submit when the type needs a purchase but we cannot supply a real id.
+  const purchaseBlocked =
+    needsPurchase && (purchaseState.status !== "ok" || purchases.length === 0 || !selectedPurchase);
 
   return (
     <div className={styles.wrap}>
@@ -80,10 +109,7 @@ export function NewCaseForm() {
                 <button
                   type="button"
                   className={`${styles.candidateButton} ${picked?.clientId === c.clientId ? styles.candidateSelected : ""}`}
-                  onClick={() => {
-                    setPicked(c);
-                    setSelectedPurchase(c.purchases.length === 1 ? c.purchases[0].purchaseId : "");
-                  }}
+                  onClick={() => pickClient(c)}
                 >
                   <span className={styles.candidateName}>{c.displayName}</span>
                   {c.purchases.length > 0 ? (
@@ -130,24 +156,41 @@ export function NewCaseForm() {
               </select>
             </div>
 
-            {needsPurchase && picked.purchases.length > 1 ? (
-              <div className={styles.fieldGroup}>
-                <label htmlFor="purchaseId" className={styles.label}>Purchase</label>
-                <select
-                  id="purchaseId"
-                  name="purchaseId"
-                  className={styles.select}
-                  value={selectedPurchase}
-                  onChange={(e) => setSelectedPurchase(e.target.value)}
-                >
-                  <option value="">Choose a purchase</option>
-                  {picked.purchases.map((p) => (
-                    <option key={p.purchaseId} value={p.purchaseId}>{p.label}</option>
-                  ))}
-                </select>
-              </div>
-            ) : needsPurchase && picked.purchases.length === 1 ? (
-              <input type="hidden" name="purchaseId" value={picked.purchases[0].purchaseId} />
+            {needsPurchase ? (
+              purchaseState.status === "loading" ? (
+                <p className={styles.hint}>Loading this client’s purchases…</p>
+              ) : purchaseState.status === "error" ? (
+                <Notice tone="failure" role="alert">
+                  <p>Couldn’t load this client’s purchases: {purchaseState.message} This case type needs a purchase, so it can’t be created until the portal answers.</p>
+                </Notice>
+              ) : purchases.length === 0 ? (
+                <Notice tone="failure" role="alert">
+                  <p>This client has no purchases on file, so a purchase-related case can’t be raised here. Choose a different case type, or raise it in the portal.</p>
+                </Notice>
+              ) : purchases.length === 1 ? (
+                <div className={styles.fieldGroup}>
+                  <input type="hidden" name="purchaseId" value={purchases[0].purchaseId} />
+                  <span className={styles.label}>Purchase</span>
+                  <p className={styles.picked}><strong>{purchases[0].label}</strong></p>
+                </div>
+              ) : (
+                <div className={styles.fieldGroup}>
+                  <label htmlFor="purchaseId" className={styles.label}>Purchase</label>
+                  <select
+                    id="purchaseId"
+                    name="purchaseId"
+                    className={styles.select}
+                    value={selectedPurchase}
+                    onChange={(e) => setSelectedPurchase(e.target.value)}
+                    required
+                  >
+                    <option value="">Choose a purchase</option>
+                    {purchases.map((p) => (
+                      <option key={p.purchaseId} value={p.purchaseId}>{p.label}</option>
+                    ))}
+                  </select>
+                </div>
+              )
             ) : null}
 
             <div className={styles.fieldGroup}>
@@ -169,7 +212,7 @@ export function NewCaseForm() {
                     </option>
                   ))}
               </select>
-              {needsPurchase && !selectedPurchase && picked.purchases.length > 0 ? (
+              {needsPurchase && !selectedPurchase && purchases.length > 1 ? (
                 <p className={styles.hint}>This type requires a purchase to be selected.</p>
               ) : null}
             </div>
@@ -209,7 +252,7 @@ export function NewCaseForm() {
               </Notice>
             ) : null}
 
-            <Button type="submit" disabled={creating}>
+            <Button type="submit" disabled={creating || purchaseBlocked}>
               {creating ? "Creating…" : "Create case"}
             </Button>
           </form>
