@@ -381,3 +381,46 @@ export function createStaffTask(body: CreateStaffTaskBody): Promise<StaffPortalR
     },
   });
 }
+
+// ----- POST /api/team/v1/calls -----------------------------------------------
+//
+// Places a real two-way audio call: the team app mints a LiveKit room and a token
+// for CSS's caller, and rings the callee's team-app device. UNLIKE /staff and
+// /tasks above, THIS endpoint wraps its payload in a { data, requestId } envelope
+// (the client portal's shape), so the parser reads `data`. The callerToken and
+// livekitUrl are meant for the browser; TEAM_SERVICE_KEY never leaves the server.
+
+export interface CreateCallBody {
+  /** The team-app staff uuid to ring (from GET /api/team/v1/staff). */
+  calleeStaffId: string;
+  /** How the callee sees who is ringing, e.g. "Front Desk — Ada Okafor". */
+  callerLabel: string;
+  kind: "audio";
+}
+
+export interface CreateCallResult {
+  callId: string;
+  room: string;
+  /** The LiveKit server URL the browser connects to (wss://…). */
+  livekitUrl: string;
+  /** A short-lived, room-scoped LiveKit JWT for the CSS caller. Safe for the browser. */
+  callerToken: string;
+  callee: { id: string; name: string };
+}
+
+const parseCallResult = (raw: unknown): CreateCallResult => {
+  const { data } = object({
+    data: object({
+      callId: str,
+      room: str,
+      livekitUrl: str,
+      callerToken: str,
+      callee: object({ id: str, name: str }),
+    }),
+  })(raw, "");
+  return data;
+};
+
+export function createStaffCall(body: CreateCallBody): Promise<StaffPortalResult<CreateCallResult>> {
+  return send("POST", "/api/team/v1/calls", body, { parse: parseCallResult });
+}

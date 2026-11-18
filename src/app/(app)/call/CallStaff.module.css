@@ -1,0 +1,92 @@
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--fold-space-16);
+  max-width: 420px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--fold-space-6);
+}
+
+.label {
+  color: var(--fold-dusk);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+}
+
+.select {
+  width: 100%;
+  min-height: 48px;
+  padding: var(--fold-space-10) var(--fold-space-16);
+  border: 1px solid var(--fold-silver);
+  border-radius: var(--fold-radius-pill);
+  background: var(--fold-canvas);
+  color: var(--fold-burgundy);
+  font-family: inherit;
+  font-size: 16px;
+}
+
+.empty {
+  color: var(--fold-dusk);
+  font-size: 16px;
+}
+
+.calling {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--fold-space-12);
+  max-width: 420px;
+}
+
+.callingText {
+  color: var(--fold-burgundy);
+  font-size: 24px;
+  font-weight: 600;
+  letter-spacing: -0.72px;
+}
+
+.timer {
+  color: var(--fold-dusk);
+  font-size: 18px;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.54px;
+}
+
+.controls {
+  display: flex;
+  align-items: center;
+  gap: var(--fold-space-12);
+}
+
+/* Two classes so the red wins over the shared Button .primary fill regardless of
+   stylesheet order (the project's rule for overriding a shared component's colour). */
+.calling .hangUp {
+  background: var(--fold-status-red);
+}
+
+.spinner {
+  width: 28px;
+  height: 28px;
+  border: 3px solid var(--fold-mist);
+  border-top-color: var(--fold-burgundy);
+  border-radius: var(--fold-radius-pill);
+  animation: spin 0.9s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spinner {
+    animation: none;
+  }
+}

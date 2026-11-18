@@ -6,6 +6,7 @@ const BASE_ITEMS: NavItem[] = [
   { label: "Complaints", href: "/complaints" },
   { label: "Documents", href: "/documents" },
   { label: "Attendance", href: "/attendance" },
+  { label: "Call staff", href: "/call" },
 ];
 
 export function navItemsFor(roles: string[]): NavItem[] {
